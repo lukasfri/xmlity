@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["xmlity", "xmlity-derive", "xmlity-quick-xml"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.70.0"
+authors = ["Lukas Friman <lukas@dreamplay.net>"]
+readme = "../README.md"
+homepage = "https://github.com/lukasfri/xmlity"
+documentation = "https://docs.rs/xmlity"
+repository = "https://github.com/lukasfri/xmlity"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+thiserror = "^2.0.4"
+pretty_assertions = "^1.4.1"
+rstest = "^0.25.0"
+xmlity-derive = { version = "^0.0.0", path = "./xmlity-derive" }
+xmlity = { version = "^0.0.0", path = "./xmlity" }
+xmlity-quick-xml = { version = "^0.0.0", path = "./xmlity-quick-xml" }

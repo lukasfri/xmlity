@@ -1,0 +1,21 @@
+[package]
+name = "xmlity-quick-xml"
+version = "0.0.0"
+edition = "2021"
+rust-version.workspace = true
+authors.workspace = true
+documentation.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+xmlity.workspace = true
+quick-xml = { version = "0.37.4" }
+
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+rstest.workspace = true
