@@ -1,0 +1,13 @@
+[book]
+authors = ["Lukas Friman"]
+language = "en"
+multilingual = false
+src = "src"
+title = "The XMLity Book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "coal"
+git-repository-url = "https://github.com/lukasfri/xmlity"
+git-repository-icon = "fa-github"
+edit-url-template = "https://github.com/lukasfri/xmlity/edit/main/xmlity-book/{path}"

@@ -1,0 +1,26 @@
+[package]
+name = "xmlity"
+description = "A (de)serialization library for XML"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+documentation.workspace = true
+readme = "../README.md"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+exclude.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+xmlity-derive = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+rstest.workspace = true
+xmlity-derive.workspace = true
+
+[features]
+default = []
+derive = ["dep:xmlity-derive"]

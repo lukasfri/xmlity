@@ -1,0 +1,23 @@
+[package]
+name = "xmlity-quick-xml"
+description = "XMLity implementation of quick-xml."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+exclude.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+xmlity.workspace = true
+quick-xml = { version = "0.37.4" }
+
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+rstest.workspace = true
+xmlity = { workspace = true, features = ["derive"] }
