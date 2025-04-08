@@ -2,7 +2,7 @@ mod element;
 mod group;
 pub use element::derive_deserialize_fn;
 pub use group::derive_deserialization_group_fn;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{Ident, Visibility};
 
@@ -292,7 +292,7 @@ fn builder_attribute_field_visitor<
     if_contributed_to_groups: proc_macro2::TokenStream,
     after_attempt: proc_macro2::TokenStream,
     pop_error: bool,
-) -> impl Iterator<Item: ToTokens> + use<'_, F> {
+) -> impl Iterator<Item = TokenStream> + use<'_, F> {
     fn attribute_field_deserialize_impl(
         access_ident: &Ident,
         builder_field_ident_prefix: impl ToTokens,
@@ -434,7 +434,7 @@ fn builder_element_field_visitor<
     if_contributed_to_groups: proc_macro2::TokenStream,
     after_attempt: proc_macro2::TokenStream,
     pop_error: bool,
-) -> impl Iterator<Item: ToTokens> + use<'_, F> {
+) -> impl Iterator<Item = TokenStream> + use<'_, F> {
     fn element_field_deserialize_impl(
         access_ident: &Ident,
         builder_field_ident_prefix: impl ToTokens,
