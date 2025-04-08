@@ -669,7 +669,10 @@ fn visit_element_unit_fn_impl(ident: &syn::Ident) -> proc_macro2::TokenStream {
     }
 }
 
-fn visit_seq_fn_signature(seq_acces_ident: &syn::Ident, body: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+fn visit_seq_fn_signature(
+    seq_acces_ident: &syn::Ident,
+    body: proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     quote! {
         fn visit_seq<S>(self, mut #seq_acces_ident: S) -> Result<Self::Value, S::Error>
         where
@@ -680,7 +683,10 @@ fn visit_seq_fn_signature(seq_acces_ident: &syn::Ident, body: proc_macro2::Token
     }
 }
 
-fn visit_text_fn_signature(value_ident: &syn::Ident, body: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+fn visit_text_fn_signature(
+    value_ident: &syn::Ident,
+    body: proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     quote! {
         fn visit_text<E, V>(self, #value_ident: V) -> Result<Self::Value, E>
         where
@@ -692,7 +698,10 @@ fn visit_text_fn_signature(value_ident: &syn::Ident, body: proc_macro2::TokenStr
     }
 }
 
-fn visit_cdata_fn_signature(value_ident: &syn::Ident, body: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+fn visit_cdata_fn_signature(
+    value_ident: &syn::Ident,
+    body: proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     quote! {
         fn visit_cdata<E, V>(self, #value_ident: V) -> Result<Self::Value, E>
         where
@@ -724,22 +733,16 @@ fn enum_derive_implementation<'a>(
             match variant_fields {
                 syn::Fields::Named(_fields) => {
                     None
-                    // simple_compile_error(
-                    //         "Named fields in enum variants are not supported"
-                    //     )
                 }
                 syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => {
                     None
-                    // simple_compile_error(
-                    //     "Enum variants with more than one field are not supported"
-                    // )
                 }
                 syn::Fields::Unnamed(fields) => {
                     let Field {
                         ty: field_type,
                         ..
                     } = fields.unnamed.first().expect("This is guaranteed by the check above");
-    
+
                     Some(quote! {
                         if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#field_type>(&mut #sequence_access_ident) {
                             return ::core::result::Result::Ok(#ident::#variant_ident(_v));
@@ -748,17 +751,19 @@ fn enum_derive_implementation<'a>(
                 }
                 syn::Fields::Unit =>{
                     None
-                    // simple_compile_error("Unit enum variants are not supported yet")
                 },
             }
         }).collect::<Option<Vec<_>>>()?;
         let ident_string = ident.to_string();
-    
-        Some(visit_seq_fn_signature(&sequence_access_ident, quote! {
-            #(#variants)*
-    
-            ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
-        }))
+
+        Some(visit_seq_fn_signature(
+            &sequence_access_ident,
+            quote! {
+                #(#variants)*
+
+                ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
+            },
+        ))
     })();
 
     let (visit_text_fn, visit_cdata_fn) = value_opts.map(|value_opts| (|| {
@@ -786,7 +791,7 @@ fn enum_derive_implementation<'a>(
                 },
             }
         }).collect::<Option<Vec<_>>>();
-        
+
         let variants = match variants {
             Some(variants) => variants,
             None => return (None, None),
@@ -796,12 +801,10 @@ fn enum_derive_implementation<'a>(
 
         let fn_body = quote! {
             #(#variants)*
-    
+
             ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
         };
 
-
-    
         (Some(visit_text_fn_signature(&value_ident_owned, quote! {
             let #value_ident = ::xmlity::de::XmlText::as_str(&#value_ident_owned);
             #fn_body
@@ -810,14 +813,13 @@ fn enum_derive_implementation<'a>(
             #fn_body
         })))
     })()).unwrap_or_default();
-    
+
     let formatter_expecting = format!("enum {}", ident);
 
-    let visitor_builder =
-        VisitorBuilder::new(ident, visitor_ident, &formatter_expecting)
-            .visit_seq_fn(visit_seq_fn)
-            .visit_text_fn(visit_text_fn)
-            .visit_cdata_fn(visit_cdata_fn);
+    let visitor_builder = VisitorBuilder::new(ident, visitor_ident, &formatter_expecting)
+        .visit_seq_fn(visit_seq_fn)
+        .visit_text_fn(visit_text_fn)
+        .visit_cdata_fn(visit_cdata_fn);
 
     let visitor_def = visitor_builder.definition();
     let visitor_trait_impl = visitor_builder.trait_impl();
@@ -892,5 +894,9 @@ pub fn derive_deserialize_fn(
         syn::Data::Union(_) => simple_compile_error("Unions are not supported yet"),
     };
 
-    Ok(deserialize_trait_impl(&ast.ident, &deserializer_ident, implementation))
+    Ok(deserialize_trait_impl(
+        &ast.ident,
+        &deserializer_ident,
+        implementation,
+    ))
 }
