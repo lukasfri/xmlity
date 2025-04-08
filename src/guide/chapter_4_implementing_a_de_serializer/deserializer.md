@@ -1,3 +1,0 @@
-# Implementing a deserializer
-
-TODO
