@@ -64,8 +64,6 @@ impl<'i> Deserializer<'i> {
             let Some(Event::Decl(_decl)) = new.next_event() else {
                 unreachable!("peek_event returned Decl but next_event did not")
             };
-
-            //TODO: handle encoding
         }
 
         new
@@ -337,38 +335,6 @@ impl<'de> de::AttributesAccess<'de> for SubAttributesAccess<'_, 'de> {
             self.bytes_start,
             &mut self.attribute_index,
         )
-
-        // let (attribute, key) = loop {
-        //     let Some(attribute) = self.bytes_start.attributes().nth(self.attribute_index) else {
-        //         return Ok(None);
-        //     };
-
-        //     let attribute = attribute?;
-
-        //     let key = self.deserializer.resolve_attribute(&attribute).into_owned();
-
-        //     const XMLNS_NAMESPACE: XmlNamespace<'static> =
-        //         XmlNamespace::new_borrowed("http://www.w3.org/2000/xmlns/");
-
-        //     if key.namespace() == Some(&XMLNS_NAMESPACE) {
-        //         self.attribute_index += 1;
-        //         continue;
-        //     }
-
-        //     break (attribute, key);
-        // };
-
-        // let value = String::from_utf8(attribute.value.into_owned())
-        //     .expect("attribute value should be valid utf8");
-
-        // let deserializer = AttributeDeserializer { name: key, value };
-
-        // let res = T::deserialize(deserializer)?;
-
-        // // Only increment the index if the deserialization was successful
-        // self.attribute_index += 1;
-
-        // Ok(Some(res))
     }
 
     fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
@@ -400,28 +366,6 @@ impl<'de> de::AttributesAccess<'de> for ElementAccess<'_, 'de> {
             &self.bytes_start,
             &mut self.attribute_index,
         )
-        // let Some(attribute) = self.bytes_start.attributes().nth(self.attribute_index) else {
-        //     return Ok(None);
-        // };
-
-        // let attribute = attribute?;
-
-        // let key = self
-        //     .deserializer()
-        //     .resolve_attribute(&attribute)
-        //     .into_owned();
-
-        // let value = String::from_utf8(attribute.value.into_owned())
-        //     .expect("attribute value should be valid utf8");
-
-        // let deserializer = AttributeDeserializer { name: key, value };
-
-        // let res = T::deserialize(deserializer)?;
-
-        // // Only increment the index if the deserialization was successful
-        // self.attribute_index += 1;
-
-        // Ok(Some(res))
     }
 
     fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
@@ -647,7 +591,7 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     type Error = Error;
 
     type SubAccess<'s>
-        = SeqAccess<'s, 'r>
+        = SubSeqAccess<'s, 'r>
     where
         Self: 's;
 
@@ -670,7 +614,10 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     }
 
     fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
-        todo!()
+        Ok(SubSeqAccess::Filled {
+            current: Some(self.deserializer.clone()),
+            parent: self.deserializer,
+        })
     }
 }
 

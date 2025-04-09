@@ -39,7 +39,6 @@ fn simple_wrong_1d_struct_deserialize() {
     let actual: Result<EnumValue, _> =
         quick_xml_deserialize_test(clean_string(SIMPLE_WRONG_1D_STRUCT_TEST_XML).as_str());
     assert!(actual.is_err());
-    println!("{:?}", actual);
     if let xmlity_quick_xml::Error::NoPossibleVariant { ident } = actual.unwrap_err() {
         assert_eq!(ident, "EnumValue");
     } else {

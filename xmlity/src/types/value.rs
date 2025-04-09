@@ -501,7 +501,6 @@ impl Serialize for XmlCData {
     where
         S: Serializer,
     {
-        //TODO: This is not correct.
         serializer.serialize_cdata(str::from_utf8(&self.0).unwrap())
     }
 }

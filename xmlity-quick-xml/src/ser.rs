@@ -44,11 +44,48 @@ impl<'a> NamespaceScope<'a> {
 
 struct NamespaceScopeContainer<'a> {
     scopes: Vec<NamespaceScope<'a>>,
+    prefix_generator: PrefixGenerator,
+}
+
+struct PrefixGenerator {
+    count: usize,
+}
+
+impl PrefixGenerator {
+    pub fn index_to_name(index: usize) -> Prefix<'static> {
+        // 0 = a0
+        // 1 = a1
+        // 26 = b0
+        // 27 = b1
+        // 52 = c0
+        // 53 = c1
+        // ...
+
+        let letter = (index / 26) as u8 + b'a';
+        let number = (index % 26) as u8 + b'0';
+        let mut name = String::with_capacity(2);
+        name.push(letter as char);
+        name.push(number as char);
+        Prefix::new(name).expect("Invalid prefix generated")
+    }
+
+    pub fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    pub fn new_prefix(&mut self) -> Prefix<'static> {
+        let name = Self::index_to_name(self.count);
+        self.count += 1;
+        name
+    }
 }
 
 impl<'a> NamespaceScopeContainer<'a> {
     pub fn new() -> Self {
-        Self { scopes: Vec::new() }
+        Self {
+            scopes: Vec::new(),
+            prefix_generator: PrefixGenerator::new(),
+        }
     }
 
     pub fn push_scope(&mut self) {
@@ -107,7 +144,7 @@ impl<'a> NamespaceScopeContainer<'a> {
             })
             .cloned()
             // If the preferred namespace prefix is not available, use a random prefix.
-            .unwrap_or_else(|| random_namespace_prefix());
+            .unwrap_or_else(|| self.prefix_generator.new_prefix());
 
         let xmlns = XmlnsDeclaration::new(prefix.clone(), namespace.clone());
 
@@ -369,10 +406,6 @@ impl<'s, W: Write> SerializeElement<'s, W> {
 
         (bytes_start, elem_qname, serializer)
     }
-}
-
-fn random_namespace_prefix() -> Prefix<'static> {
-    Prefix::new("test").expect("TODO: generate random prefix")
 }
 
 impl<W: Write> ser::SerializeAttributes for SerializeElement<'_, W> {

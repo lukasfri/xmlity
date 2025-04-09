@@ -5,9 +5,11 @@ mod common;
 use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
 use rstest::rstest;
+use xmlity::{ExpandedName, LocalName};
 use xmlity_derive::{
     DeserializationGroup, Deserialize, SerializationGroup, Serialize, SerializeAttribute,
 };
+use xmlity_quick_xml::Error;
 
 const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
 <note to="Tove" from="Jani">
@@ -91,7 +93,17 @@ fn struct_2d_with_attributes_deserialize_fail() {
         quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML_WRONG_ORDER).as_str());
 
     assert!(actual.is_err());
-    //TODO: assert error type
+    let Error::WrongName { actual, expected } = actual.unwrap_err() else {
+        panic!("Wrong error type");
+    };
+    assert_eq!(
+        *actual,
+        ExpandedName::new(LocalName::new("body").unwrap(), None)
+    );
+    assert_eq!(
+        *expected,
+        ExpandedName::new(LocalName::new("heading").unwrap(), None)
+    );
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
