@@ -32,12 +32,9 @@ xmlity-quick-xml = "0.0.0"
 2. Write defintions and use:
 
 ```rust
-extern crate xmlity;
-extern crate xmlity_derive;
 extern crate xmlity_quick_xml;
 
 use xmlity::{Serialize, Deserialize};;
-use xmlity_derive::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 #[xelement(name = "name")]
