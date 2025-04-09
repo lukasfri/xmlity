@@ -7,7 +7,6 @@ version = "0.0.0"
 edition = "2021"
 rust-version = "1.82.0"
 authors = ["Lukas Friman <lukas@dreamplay.net>"]
-readme = "../README.md"
 homepage = "https://github.com/lukasfri/xmlity"
 documentation = "https://docs.rs/xmlity"
 repository = "https://github.com/lukasfri/xmlity"
