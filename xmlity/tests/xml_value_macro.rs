@@ -1,4 +1,3 @@
-#![feature(trace_macros)]
 use rstest::rstest;
 use std::str::FromStr;
 use xmlity::{
