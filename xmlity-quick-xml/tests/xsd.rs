@@ -237,6 +237,10 @@ fn xsd_struct() -> XmlRoot<Schema> {
 fn xsd_struct_deserialize() {
     let input_xml = fs::read_to_string("./tests/XMLSchema.xsd").unwrap();
 
+    // Windows uses CRLF line endings, but the tests assume LF line endings. This is a hack to make the tests pass on Windows.
+    #[cfg(windows)]
+    let input_xml = input_xml.replace("\r\n", "\n");
+
     let actual: XmlRoot<Schema> = quick_xml_deserialize_test(&input_xml).unwrap();
 
     let expected = xsd_struct();
