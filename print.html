@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>The Xmlity Book</title>
+        <title>The XMLity Book</title>
         <meta name="robots" content="noindex">
 
 
@@ -35,7 +35,7 @@
         <!-- Provide site root to javascript -->
         <script>
             var path_to_root = "";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "coal" : "light";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -121,7 +121,7 @@
                         </button>
                     </div>
 
-                    <h1 class="menu-title">The Xmlity Book</h1>
+                    <h1 class="menu-title">The XMLity Book</h1>
 
                     <div class="right-buttons">
                         <a href="print.html" title="Print this book" aria-label="Print this book">
@@ -153,16 +153,19 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+                        <h1 id="introduction-to-xmlity"><a class="header" href="#introduction-to-xmlity">Introduction to XMLity</a></h1>
+<p>XMLity is a (de)serialization library for XML, inspired by <a href="https://serde.rs/">Serde</a> and improves upon XML (de)serialization libraries such as <a href="https://github.com/media-io/yaserde">yaserde</a> and <a href="https://github.com/tafia/quick-xml">quick-xml</a> by providing a more flexible API that is more powerful, utilising primairly a trial and error approach to parsing XML. This can inherently be a bit slower than other libraries, but it allows for more complex XML structures to be parsed.</p>
+<p>Want to get started? <a href="./1_getting_started/README.html">Click here</a>.</p>
 <h2 id="comparison"><a class="header" href="#comparison">Comparison</a></h2>
-<p>Why does Xmlity need to exist? Doesn't other XML-parsers/deserializers exist in Rust and why should I use/contribute to Xmlity instead? To answer these questions, we've provided a feature chart below that</p>
-<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Xmlity</th><th>Yaserde</th><th>quick-xml (serde)</th></tr></thead><tbody>
-<tr><td>Trial and error deserialization</td><td>☑</td><td>☐</td><td>☑</td></tr>
-<tr><td>Multiple reader/writer implementation support</td><td>☑ *</td><td>☐</td><td>☐</td></tr>
+<p>Why does XMLity need to exist? Doesn't other XML-parsers/deserializers exist in Rust and why should I use/contribute to XMLity instead? To answer these questions, we've provided a feature chart below that</p>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>XMLity</th><th>Yaserde</th><th>quick-xml (serde)</th></tr></thead><tbody>
+<tr><td>Trial and error deserialization</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+<tr><td>Multiple reader/writer implementation support</td><td>Yes *</td><td>No</td><td>Yes</td></tr>
 </tbody></table>
 </div>
-<p>* While Xmlity does have support for multiple readers/writers, the only current one that exists is one using quick-xml, even if others are supported due to the data-model being completely deconnected from any other library. This should change in the near future.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="chapter-1---getting-started"><a class="header" href="#chapter-1---getting-started">Chapter 1 - Getting started</a></h1>
+<p>* While XMLity does have support for multiple readers/writers, the only current one that exists is one using quick-xml, even if others are supported due to the data-model being completely deconnected from any other library. This should change in the near future.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="how-to-get-help"><a class="header" href="#how-to-get-help">How to get help</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="getting-started"><a class="header" href="#getting-started">Getting started</a></h1>
 <ol>
 <li>Add <code>xmlity</code> dependency to your <code>Cargo.toml</code> file:</li>
 </ol>
@@ -211,13 +214,13 @@ let person: Person = xmlity_quick_xml::from_str(&amp;xml).expect("Failed to dese
 assert_eq!(person.name.0, "John");
 assert_eq!(person.age.0, 42);
 <span class="boring">}</span></code></pre></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="chapter-2---the-data-model"><a class="header" href="#chapter-2---the-data-model">Chapter 2 - The data model</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="the-data-model"><a class="header" href="#the-data-model">The data model</a></h1>
 <p>The data model of Xmlity is heavily inspired by serde.</p>
 <h2 id="elements"><a class="header" href="#elements">Elements</a></h2>
 <p>The data-model of elements in Xmlity is built as a two-stage design, where the first stage of (de)serialization handles attributes and the second handles children. This is enforced by types so that both readers and writers can read in a logical direction, not having to jump between handling attributes and child elements.</p>
 <h2 id="attributes"><a class="header" href="#attributes">Attributes</a></h2>
 <h2 id="groups"><a class="header" href="#groups">Groups</a></h2>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="chapter-3---derive-details"><a class="header" href="#chapter-3---derive-details">Chapter 3 - Derive details</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="derive-details"><a class="header" href="#derive-details">Derive details</a></h1>
 <h2 id="serializedeserialize---xelement-on-structs"><a class="header" href="#serializedeserialize---xelement-on-structs"><code>Serialize</code>/<code>Deserialize</code> - <code>#[xelement(...)]</code> on structs</a></h2>
 <p>The <code>#[xelement(...)]</code> attribute can be used to serialize/deserialize a struct as an XML element.</p>
 <h3 id="name---and-namespace--"><a class="header" href="#name---and-namespace--"><code>name = "..."</code> and <code>namespace = "..."</code></a></h3>
@@ -270,11 +273,20 @@ These attributes can be used to require that an element has a specific name and 
 <p>All variants must have exactly one unnamed field, and the type of that field must implement <code>Serialize</code>/<code>Deserialize</code>.</p>
 <p>When serializing, it will try to serialize each type in order of the variants. If it succeeds, it will wrap the serialized value in the variant and return it.</p>
 <p>When deserializing, it deserializes the field and then wraps it in the variant.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="chapter-4---implementing-a-deserializer"><a class="header" href="#chapter-4---implementing-a-deserializer">Chapter 4 - Implementing a (de)serializer</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-a-serializer"><a class="header" href="#implementing-a-serializer">Implementing a serializer</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="custom-serialization"><a class="header" href="#custom-serialization">Custom serialization</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-serialize"><a class="header" href="#implementing-serialize">Implementing <code>Serialize</code></a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-serializeattribute"><a class="header" href="#implementing-serializeattribute">Implementing <code>SerializeAttribute</code></a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-deserialize"><a class="header" href="#implementing-deserialize">Implementing <code>Deserialize</code></a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-a-serializer-or-deserializer"><a class="header" href="#implementing-a-serializer-or-deserializer">Implementing a <code>Serializer</code> or <code>Deserializer</code></a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-a-serializer"><a class="header" href="#implementing-a-serializer">Implementing a <code>Serializer</code></a></h1>
 <p>TODO</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-a-deserializer"><a class="header" href="#implementing-a-deserializer">Implementing a deserializer</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="implementing-a-deserializer"><a class="header" href="#implementing-a-deserializer">Implementing a <code>Deserializer</code></a></h1>
 <p>TODO</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="examples"><a class="header" href="#examples">Examples</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="feature-flags"><a class="header" href="#feature-flags">Feature flags</a></h1>
+<p>Some features of XMLity are not enabled by default but can instead be enabled using feature flags.</p>
+<h2 id="features--derive"><a class="header" href="#features--derive"><code>features = ["derive"]</code></a></h2>
+<p>Enables the proc-macros covered in <a href="7_feature_flags/../3_derive_details/README.html">Derive details</a>.</p>
 
                     </main>
 

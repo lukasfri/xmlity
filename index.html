@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - The Xmlity Book</title>
+        <title>Introduction to Xmlity - The XMLity Book</title>
 
 
         <!-- Custom HTML head -->
@@ -34,7 +34,7 @@
         <!-- Provide site root to javascript -->
         <script>
             var path_to_root = "";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "coal" : "light";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -120,7 +120,7 @@
                         </button>
                     </div>
 
-                    <h1 class="menu-title">The Xmlity Book</h1>
+                    <h1 class="menu-title">The XMLity Book</h1>
 
                     <div class="right-buttons">
                         <a href="print.html" title="Print this book" aria-label="Print this book">
@@ -152,22 +152,24 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+                        <h1 id="introduction-to-xmlity"><a class="header" href="#introduction-to-xmlity">Introduction to XMLity</a></h1>
+<p>XMLity is a (de)serialization library for XML, inspired by <a href="https://serde.rs/">Serde</a> and improves upon XML (de)serialization libraries such as <a href="https://github.com/media-io/yaserde">yaserde</a> and <a href="https://github.com/tafia/quick-xml">quick-xml</a> by providing a more flexible API that is more powerful, utilising primairly a trial and error approach to parsing XML. This can inherently be a bit slower than other libraries, but it allows for more complex XML structures to be parsed.</p>
+<p>Want to get started? <a href="./1_getting_started/README.html">Click here</a>.</p>
 <h2 id="comparison"><a class="header" href="#comparison">Comparison</a></h2>
-<p>Why does Xmlity need to exist? Doesn't other XML-parsers/deserializers exist in Rust and why should I use/contribute to Xmlity instead? To answer these questions, we've provided a feature chart below that</p>
-<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Xmlity</th><th>Yaserde</th><th>quick-xml (serde)</th></tr></thead><tbody>
-<tr><td>Trial and error deserialization</td><td>☑</td><td>☐</td><td>☑</td></tr>
-<tr><td>Multiple reader/writer implementation support</td><td>☑ *</td><td>☐</td><td>☐</td></tr>
+<p>Why does XMLity need to exist? Doesn't other XML-parsers/deserializers exist in Rust and why should I use/contribute to XMLity instead? To answer these questions, we've provided a feature chart below that</p>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>XMLity</th><th>Yaserde</th><th>quick-xml (serde)</th></tr></thead><tbody>
+<tr><td>Trial and error deserialization</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+<tr><td>Multiple reader/writer implementation support</td><td>Yes *</td><td>No</td><td>Yes</td></tr>
 </tbody></table>
 </div>
-<p>* While Xmlity does have support for multiple readers/writers, the only current one that exists is one using quick-xml, even if others are supported due to the data-model being completely deconnected from any other library. This should change in the near future.</p>
+<p>* While XMLity does have support for multiple readers/writers, the only current one that exists is one using quick-xml, even if others are supported due to the data-model being completely deconnected from any other library. This should change in the near future.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
 
-                            <a rel="next prefetch" href="guide/chapter_1_getting_started/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="help.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -178,7 +180,7 @@
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
 
-                    <a rel="next prefetch" href="guide/chapter_1_getting_started/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="help.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
