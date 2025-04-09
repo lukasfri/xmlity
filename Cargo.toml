@@ -5,7 +5,7 @@ members = ["xmlity", "xmlity-derive", "xmlity-quick-xml"]
 [workspace.package]
 version = "0.0.0"
 edition = "2021"
-rust-version = "1.70.0"
+rust-version = "1.80.0"
 authors = ["Lukas Friman <lukas@dreamplay.net>"]
 readme = "../README.md"
 homepage = "https://github.com/lukasfri/xmlity"

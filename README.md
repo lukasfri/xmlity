@@ -1,4 +1,4 @@
-# XMLity &emsp; [![Build Status]][actions] [![Latest Version]][crates.io] [![Latest Docs]][docs.rs] [![xmlity msrv]][Rust 1.70]
+# XMLity &emsp; [![Build Status]][actions] [![Latest Version]][crates.io] [![Latest Docs]][docs.rs] [![xmlity msrv]][Rust 1.80]
 
 [Build Status]: https://img.shields.io/github/actions/workflow/status/lukasfri/xmlity/rust.yaml?branch=main
 [actions]: https://github.com/lukasfri/xmlity/actions?query=branch%3Amain
@@ -6,8 +6,8 @@
 [crates.io]: https://crates.io/crates/xmlity
 [Latest Docs]: https://img.shields.io/badge/docs.rs-Latest-bbbbbb.svg
 [docs.rs]: https://docs.rs/xmlity/latest/xmlity/
-[xmlity msrv]: https://img.shields.io/badge/rustc-1.70.0+-ab6000.svg
-[Rust 1.70]: https://blog.rust-lang.org/2023/06/01/Rust-1.70.0.html
+[xmlity msrv]: https://img.shields.io/badge/rustc-1.80.0+-ab6000.svg
+[Rust 1.80]: https://blog.rust-lang.org/2023/06/01/Rust-1.80.0.html
 
 XMLity is a (de)serialization library for XML, inspired by [Serde](https://serde.rs/) and improves upon XML (de)serialization libraries such as [yaserde](https://github.com/media-io/yaserde) and [quick-xml](https://github.com/tafia/quick-xml) by providing a more flexible API that is more powerful, utilising primairly a trial and error approach to parsing XML. This can inherently be a bit slower than other libraries, but it allows for more complex XML structures to be parsed.
 
