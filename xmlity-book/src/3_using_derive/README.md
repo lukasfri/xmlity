@@ -1,4 +1,4 @@
-# Chapter 3 - Derive details
+# Derive details
 
 ## `Serialize`/`Deserialize` - `#[xelement(...)]` on structs
 

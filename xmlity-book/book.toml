@@ -3,4 +3,8 @@ authors = ["Lukas Friman"]
 language = "en"
 multilingual = false
 src = "src"
-title = "The Xmlity Book"
+title = "The XMLity Book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "coal"

@@ -1,4 +1,4 @@
-# Chapter 1 - Getting started
+# Getting started
 
 1. Add `xmlity` dependency to your `Cargo.toml` file:
 

@@ -1,7 +1,8 @@
 [package]
 name = "xmlity-quick-xml"
+description = "XMLity implementation of quick-xml."
 version = "0.0.0"
-edition = "2021"
+edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 documentation.workspace = true
@@ -9,6 +10,7 @@ readme.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
+exclude.workspace = true
 
 [dependencies]
 thiserror.workspace = true

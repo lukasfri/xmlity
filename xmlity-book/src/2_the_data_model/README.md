@@ -1,4 +1,4 @@
-# Chapter 2 - The data model
+# The data model
 
 The data model of Xmlity is heavily inspired by serde.
 
