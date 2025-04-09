@@ -14,6 +14,10 @@
 //! The library includes derive macros for [`Deserialize`], [`Serialize`], [`SerializeAttribute`], [`DeserializationGroup`] and [`SerializationGroup`] which can be enabled with the `derive` feature. The macros can be used to create nearly any kind of XML structure you want. If there is something it cannot do, please open an issue or a pull request.
 //!
 //! The macro [`xml`] can be used to create [`XmlValues`](`XmlValue`) in a more ergonomic way. It is also possible to create [`XmlValues`](`XmlValue`) manually, but it is quite verbose.
+#[cfg(doctest)]
+#[doc = include_str!("../../README.md")]
+struct _ReadMeDocTests;
+
 use core::str;
 use std::fmt::Display;
 use std::{borrow::Cow, str::FromStr};

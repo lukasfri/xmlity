@@ -1,6 +1,11 @@
 //! # XMLity Quick XML
 //!
 //! This crate contains a reference implementation of the `xmlity` crate using the `quick-xml` crate. It is the intention to keep this crate up to date with the latest version of `quick-xml` and `xmlity`.
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct _ReadMeDocTests;
+
 use ::quick_xml::name::ResolveResult;
 use core::str;
 
