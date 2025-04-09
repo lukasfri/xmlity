@@ -8,4 +8,8 @@ The data-model of elements in Xmlity is built as a two-stage design, where the f
 
 ## Attributes
 
+This section has not been written yet, but you're very welcome to contribute!
+
 ## Groups
+
+This section has not been written yet, but you're very welcome to contribute!

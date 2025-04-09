@@ -1,7 +1,6 @@
 # Overview
 
 [Introduction to Xmlity](./README.md)
-[Help](./help.md)
 
 # User Guide
 
