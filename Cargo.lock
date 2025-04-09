@@ -384,14 +384,9 @@ name = "xmlity-derive"
 version = "0.0.0"
 dependencies = [
  "darling",
- "pretty_assertions",
  "proc-macro2",
- "quick-xml",
  "quote",
- "rstest",
  "syn",
- "xmlity",
- "xmlity-quick-xml",
 ]
 
 [[package]]

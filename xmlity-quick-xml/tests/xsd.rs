@@ -12,7 +12,7 @@ use xmlity::types::{
     utils::{IgnoredAny, XmlRoot},
     value::{XmlComment, XmlDoctype},
 };
-use xmlity_derive::{Deserialize, Serialize, SerializeAttribute};
+use xmlity::{Deserialize, Serialize, SerializeAttribute};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[xelement(name = "sequence", namespace = "http://www.w3.org/2001/XMLSchema")]

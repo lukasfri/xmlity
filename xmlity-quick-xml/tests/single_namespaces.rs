@@ -7,7 +7,7 @@ mod common;
 use common::{clean_string, quick_xml_deserialize_test};
 use rstest::rstest;
 use xmlity::{types::string::Trim, ExpandedName, XmlNamespace};
-use xmlity_derive::{Deserialize, Serialize};
+use xmlity::{Deserialize, Serialize};
 
 const SIMPLE_DEFAULT_NS_1D_STRUCT_TEST_XML: &str = r###"
   <to xmlns="http://my.namespace.example.com/this/is/a/namespace">Tove</to>

@@ -4,7 +4,7 @@ use pretty_assertions::assert_eq;
 mod common;
 use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
-use xmlity_derive::{
+use xmlity::{
     DeserializationGroup, Deserialize, SerializationGroup, Serialize, SerializeAttribute,
 };
 

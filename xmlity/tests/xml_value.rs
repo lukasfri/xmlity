@@ -1,10 +1,10 @@
+#![cfg(feature = "derive")]
 use pretty_assertions::assert_eq;
 
 use xmlity::{
     types::value::{XmlChild, XmlElement, XmlText, XmlValue},
-    Deserialize as _, ExpandedName, LocalName, Serialize as _,
+    Deserialize, ExpandedName, LocalName, Serialize,
 };
-use xmlity_derive::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "to")]

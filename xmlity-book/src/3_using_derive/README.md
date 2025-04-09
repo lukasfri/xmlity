@@ -22,12 +22,6 @@ By default, elements in XMLity are deserialized regardless of the order of the i
 
 <!-- TODO: Some examples -->
 
-For example, the following struct:
-
-```rust
-//TODO
-```
-
 ### `preferred_prefix = "..."`
 
 Thia field is used to specify the preferred prefix for the element. This is used when serializing the element to XML. If the element is not in the default namespace, the preferred prefix will be used. If the element is in the default namespace, the preferred prefix will be ignored.
@@ -65,12 +59,6 @@ By default, groups in XMLity are deserialized regardless of the order of the inp
 - `none`: Elements/groups can be in any order (default).
 
 <!-- TODO: Some examples -->
-
-For example, the following struct:
-
-```rust
-//TODO
-```
 
 This behaviour works on nested levels, so if you have an element with `children_order = "loose"`, and a group with `children_order = "none"` inside it, the elements listed in the group can be in any order, but they must be in order with respect to the other elements in the parent element.
 

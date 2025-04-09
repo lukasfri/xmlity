@@ -53,9 +53,9 @@ const COMPLEX_XML_EXAMPLE_SERIALIZE: &str = r###"
     <from>Jani</from>
     <heading>Reminder</heading>
     <body attribute="value">Don&apos;t forget me this weekend!</body>
-    <test:test xmlns:test="http://testns.com">
+    <a0:test xmlns:a0="http://testns.com">
         Test
-    </test:test>
+    </a0:test>
 </note>
 "###;
 

@@ -5,10 +5,10 @@ mod common;
 use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
 use rstest::rstest;
-use xmlity::{ExpandedName, LocalName};
-use xmlity_derive::{
+use xmlity::{
     DeserializationGroup, Deserialize, SerializationGroup, Serialize, SerializeAttribute,
 };
+use xmlity::{ExpandedName, LocalName};
 use xmlity_quick_xml::Error;
 
 const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"

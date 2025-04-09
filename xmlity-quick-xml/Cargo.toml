@@ -20,3 +20,4 @@ quick-xml = { version = "0.37.4" }
 [dev-dependencies]
 pretty_assertions.workspace = true
 rstest.workspace = true
+xmlity = { workspace = true, features = ["derive"] }

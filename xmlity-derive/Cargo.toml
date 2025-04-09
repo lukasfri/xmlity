@@ -17,12 +17,5 @@ proc-macro2 = "^1.0.80"
 quote = "^1.0.35"
 darling = "0.20.3"
 
-[dev-dependencies]
-quick-xml = { version = "0.37.4" }
-xmlity.workspace = true
-xmlity-quick-xml.workspace = true
-pretty_assertions.workspace = true
-rstest.workspace = true
-
 [lib]
 proc-macro = true

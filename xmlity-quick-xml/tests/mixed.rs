@@ -5,7 +5,7 @@ mod common;
 use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
 use xmlity::types::utils::CData;
-use xmlity_derive::{Deserialize, Serialize};
+use xmlity::{Deserialize, Serialize};
 
 const SIMPLE_MIXED_STRUCT_TEST_XML: &str = r###"
 <mixed>

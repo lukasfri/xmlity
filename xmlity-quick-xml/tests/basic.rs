@@ -4,30 +4,66 @@ use pretty_assertions::assert_eq;
 mod common;
 use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
-use xmlity_derive::{Deserialize, Serialize, SerializeAttribute};
+use xmlity::{Deserialize, Serialize};
 
-const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
-<note to="Tove" from="Jani" heading="Reminder">
-  <body>Don't forget me this weekend!</body>
-</note>
+const SIMPLE_1D_STRUCT_TEST_XML: &str = r###"
+  <to>Tove</to>
 "###;
 
-const SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML: &str = r###"
-<note to="Tove" from="Jani" heading="Reminder">
+const SIMPLE_WRONG_1D_STRUCT_TEST_XML: &str = r###"
+  <toa>Tove</toa>
+"###;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "to")]
+pub struct To(String);
+
+fn simple_1d_struct() -> To {
+    To("Tove".to_string())
+}
+
+#[test]
+fn simple_1d_struct_serialize() {
+    let actual = quick_xml_serialize_test(simple_1d_struct()).unwrap();
+
+    assert_eq!(actual, clean_string(SIMPLE_1D_STRUCT_TEST_XML));
+}
+
+#[test]
+fn simple_1d_struct_deserialize() {
+    let actual: To =
+        quick_xml_deserialize_test(clean_string(SIMPLE_1D_STRUCT_TEST_XML).as_str()).unwrap();
+
+    let expected = simple_1d_struct();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn simple_wrong_1d_struct_deserialize() {
+    let actual: Result<To, _> =
+        quick_xml_deserialize_test(clean_string(SIMPLE_WRONG_1D_STRUCT_TEST_XML).as_str());
+    assert!(matches!(
+        actual,
+        Err(xmlity_quick_xml::Error::WrongName { .. })
+    ));
+}
+
+const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
+<note>
+  <to>Tove</to>
+  <from>Jani</from>
+  <heading>Reminder</heading>
   <body>Don&apos;t forget me this weekend!</body>
 </note>
 "###;
 
-#[derive(Debug, PartialEq, SerializeAttribute, Deserialize)]
-#[xattribute(name = "to")]
-pub struct To(String);
-
-#[derive(Debug, PartialEq, SerializeAttribute, Deserialize)]
-#[xattribute(name = "from")]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "from")]
 pub struct From(String);
 
-#[derive(Debug, PartialEq, SerializeAttribute, Deserialize)]
-#[xattribute(name = "heading")]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "heading")]
 pub struct Heading(String);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -37,16 +73,13 @@ pub struct Body(String);
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "note")]
 pub struct Note {
-    #[xattribute]
     pub to: To,
-    #[xattribute]
     pub from: From,
-    #[xattribute]
     pub heading: Heading,
     pub body: Body,
 }
 
-fn simple_2d_struct_result() -> Note {
+fn simple_2d_struct_serialize_result() -> Note {
     Note {
         to: To("Tove".to_string()),
         from: From("Jani".to_string()),
@@ -55,80 +88,101 @@ fn simple_2d_struct_result() -> Note {
     }
 }
 
-#[test]
-fn struct_2d_with_attributes_serialize() {
-    let actual = quick_xml_serialize_test(simple_2d_struct_result()).unwrap();
+fn simple_2d_struct_deserialize_result() -> Note {
+    Note {
+        to: To("Tove".to_string()),
+        from: From("Jani".to_string()),
+        heading: Heading("Reminder".to_string()),
+        body: Body("Don&apos;t forget me this weekend!".to_string()),
+    }
+}
 
-    let expected = clean_string(SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML);
+#[test]
+fn simple_2d_struct_serialize() {
+    let actual = quick_xml_serialize_test(simple_2d_struct_serialize_result()).unwrap();
+
+    let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
 
     assert_eq!(actual, expected);
 }
 
 #[test]
-fn struct_2d_with_attributes_deserialize() {
+fn simple_2d_struct_deserialize() {
     let actual: Note =
         quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
 
-    let expected = simple_2d_struct_result();
+    let expected = simple_2d_struct_deserialize_result();
 
     assert_eq!(actual, expected);
 }
 
 const SIMPLE_3D_LIST_TEST_XML: &str = r###"
 <breakfast_menu>
-<food name="Belgian Waffles" price="$5.95" calories="650">
+<food>
+    <name>Belgian Waffles</name>
+    <price>$5.95</price>
     <description>
    Two of our famous Belgian Waffles with plenty of real maple syrup
    </description>
+    <calories>650</calories>
 </food>
-<food name="Strawberry Belgian Waffles" price="$7.95" calories="900">
+<food>
+    <name>Strawberry Belgian Waffles</name>
+    <price>$7.95</price>
     <description>
     Light Belgian waffles covered with strawberries and whipped cream
     </description>
+    <calories>900</calories>
 </food>
-<food name="Berry-Berry Belgian Waffles" price="$8.95" calories="900">
+<food>
+    <name>Berry-Berry Belgian Waffles</name>
+    <price>$8.95</price>
     <description>
     Belgian waffles covered with assorted fresh berries and whipped cream
     </description>
+    <calories>900</calories>
 </food>
-<food name="French Toast" price="$4.50" calories="600">
+<food>
+    <name>French Toast</name>
+    <price>$4.50</price>
     <description>
     Thick slices made from our homemade sourdough bread
     </description>
+    <calories>600</calories>
 </food>
-<food name="Homestyle Breakfast" price="$6.95" calories="950">
+<food>
+    <name>Homestyle Breakfast</name>
+    <price>$6.95</price>
     <description>
     Two eggs, bacon or sausage, toast, and our ever-popular hash browns
     </description>
+    <calories>950</calories>
 </food>
 </breakfast_menu>
 "###;
 
-#[derive(Debug, PartialEq, SerializeAttribute, Deserialize)]
-#[xattribute(name = "name")]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "name")]
 pub struct Name(pub String);
 
-#[derive(Debug, PartialEq, SerializeAttribute, Deserialize)]
-#[xattribute(name = "price")]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "price")]
 pub struct Price(pub String);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "description")]
 pub struct Description(pub String);
 
-#[derive(Debug, PartialEq, SerializeAttribute, Deserialize)]
-#[xattribute(name = "calories")]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "calories")]
 pub struct Calories(pub u16);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "food")]
 struct Food {
-    #[xattribute]
     name: Name,
-    #[xattribute]
     price: Price,
     description: Description,
-    #[xattribute]
     calories: Calories,
 }
 
@@ -188,7 +242,7 @@ fn simple_3d_list_test_value() -> BreakfastMenu {
 }
 
 #[test]
-fn struct_3d_with_attributes_serialize() {
+fn simple_3d_struct_serialize() {
     let actual = quick_xml_serialize_test(simple_3d_list_test_value()).unwrap();
 
     let expected = clean_string(SIMPLE_3D_LIST_TEST_XML);
@@ -197,7 +251,7 @@ fn struct_3d_with_attributes_serialize() {
 }
 
 #[test]
-fn struct_3d_with_attributes_deserialize() {
+fn simple_3d_struct_deserialize() {
     let actual: BreakfastMenu =
         quick_xml_deserialize_test(clean_string(SIMPLE_3D_LIST_TEST_XML).as_str()).unwrap();
 
