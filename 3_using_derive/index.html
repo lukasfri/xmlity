@@ -173,11 +173,6 @@ These attributes can be used to require that an element has a specific name and 
 <li><code>none</code>: Elements can be in any order (default).</li>
 </ul>
 <!-- TODO: Some examples -->
-<p>For example, the following struct:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>//TODO
-<span class="boring">}</span></code></pre></pre>
 <h3 id="preferred_prefix--"><a class="header" href="#preferred_prefix--"><code>preferred_prefix = "..."</code></a></h3>
 <p>Thia field is used to specify the preferred prefix for the element. This is used when serializing the element to XML. If the element is not in the default namespace, the preferred prefix will be used. If the element is in the default namespace, the preferred prefix will be ignored.</p>
 <h3 id="enforce_prefix--truefalse"><a class="header" href="#enforce_prefix--truefalse"><code>enforce_prefix = true/false</code></a></h3>
@@ -200,11 +195,6 @@ These attributes can be used to require that an element has a specific name and 
 <li><code>none</code>: Elements/groups can be in any order (default).</li>
 </ul>
 <!-- TODO: Some examples -->
-<p>For example, the following struct:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>//TODO
-<span class="boring">}</span></code></pre></pre>
 <p>This behaviour works on nested levels, so if you have an element with <code>children_order = "loose"</code>, and a group with <code>children_order = "none"</code> inside it, the elements listed in the group can be in any order, but they must be in order with respect to the other elements in the parent element.</p>
 <!-- TODO: Some examples -->
 <h2 id="serializedeserialize---nothing-on-enums"><a class="header" href="#serializedeserialize---nothing-on-enums"><code>Serialize</code>/<code>Deserialize</code> - Nothing on enums</a></h2>
