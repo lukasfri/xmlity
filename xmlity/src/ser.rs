@@ -170,6 +170,8 @@ pub trait AttributeSerializer: Sized {
 }
 
 /// A type that can be serialized. To serialize, you provide it with a [`Serializer`] that then gets instructions from the type on how to serialize itself.
+///
+/// To see the documentation for the derive macro, see [`xmlity_derive::Serialize`].
 pub trait Serialize {
     /// Serialize the type.
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
@@ -220,6 +222,8 @@ pub trait SerializeAttributeAccess: Sized {
 }
 
 /// A type that can be serialized as an attribute. Since this is a separate trait from [`Serialize`], it is possible to choose between serializing a type as an attribute or as an element.
+///
+/// To see the documentation for the derive macro, see [`xmlity_derive::SerializeAttribute`].
 pub trait SerializeAttribute: Sized {
     /// Serialize the attribute.
     fn serialize_attribute<S: AttributeSerializer>(&self, serializer: S)
@@ -227,6 +231,8 @@ pub trait SerializeAttribute: Sized {
 }
 
 /// A trait for serializing sub-elements/sub-attributes of a type. This can be used to more easily include common attributes/elements in multiple types, instead of repeating the same code.
+///
+/// To see the documentation for the derive macro, see [`xmlity_derive::SerializationGroup`].
 pub trait SerializationGroup: Sized {
     /// Serialize the attributes of the type.
     ///
