@@ -235,8 +235,6 @@ pub trait SerializeAttribute: Sized {
 /// To see the documentation for the derive macro, see [`xmlity_derive::SerializationGroup`].
 pub trait SerializationGroup: Sized {
     /// Serialize the attributes of the type.
-    ///
-    /// Returns true if the deserializer made progress
     fn serialize_attributes<S: SerializeAttributes>(&self, serializer: S) -> Result<(), S::Error> {
         let _ = serializer;
 
@@ -244,8 +242,6 @@ pub trait SerializationGroup: Sized {
     }
 
     /// Serialize the children of the type.
-    ///
-    /// Returns true if the deserializer made progress
     fn serialize_children<S: SerializeChildren>(&self, serializer: S) -> Result<(), S::Error> {
         let _ = serializer;
 
