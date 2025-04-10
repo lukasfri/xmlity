@@ -20,7 +20,7 @@ fn visit_element_fn_signature(
     element_access_ident: &Ident,
 ) -> proc_macro2::TokenStream {
     quote! {
-        fn visit_element<A>(self, mut #element_access_ident: A) -> Result<Self::Value, A::Error>
+        fn visit_element<A>(self, mut #element_access_ident: A) -> Result<Self::Value, <A as xmlity::de::AttributesAccess<'de>>::Error>
         where
             A: xmlity::de::ElementAccess<'de>,
         {
@@ -100,7 +100,7 @@ fn element_visit_fn(
     let element_access_ident = syn::Ident::new("__element", ident.span());
     let xml_name_identification = expanded_name.as_ref().map(|qname| {
         quote! {
-            ::xmlity::de::ElementAccessExt::ensure_name::<A::Error>(&#element_access_ident, &#qname)?;
+            ::xmlity::de::ElementAccessExt::ensure_name::<<A as ::xmlity::de::AttributesAccess<'de>>::Error>(&#element_access_ident, &#qname)?;
         }
     });
 
@@ -133,7 +133,7 @@ fn visit_attribute_fn_signature(
     body: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     quote! {
-        fn visit_attribute<A>(self, #attribute_access_ident: A) -> Result<Self::Value, A::Error>
+        fn visit_attribute<A>(self, #attribute_access_ident: A) -> Result<Self::Value, <A as ::xmlity::de::AttributeAccess<'de>>::Error>
         where
             A: ::xmlity::de::AttributeAccess<'de>,
         {
@@ -150,7 +150,7 @@ fn attribute_visit_fn(
     let attribute_access_ident = Ident::new("__attribute", ident.span());
     let xml_name_identification = expanded_name.map(|qname| {
         quote! {
-            ::xmlity::de::AttributeAccessExt::ensure_name::<A::Error>(&#attribute_access_ident, &#qname)?;
+            ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<'de>>::Error>(&#attribute_access_ident, &#qname)?;
         }
     });
 
@@ -361,7 +361,7 @@ fn visit_element_data_fn_impl_constructor(
              ..
          }| {
             let expression = quote! {
-                ::xmlity::de::DeserializationGroupBuilder::finish::<A::Error>(#builder_field_ident)?
+                ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<'de>>::Error>(#builder_field_ident)?
             };
 
             (field_ident, expression)
@@ -674,7 +674,7 @@ fn visit_seq_fn_signature(
     body: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     quote! {
-        fn visit_seq<S>(self, mut #seq_acces_ident: S) -> Result<Self::Value, S::Error>
+        fn visit_seq<S>(self, mut #seq_acces_ident: S) -> Result<Self::Value, <S as xmlity::de::SeqAccess<'de>>::Error>
         where
             S: xmlity::de::SeqAccess<'de>,
         {
@@ -854,7 +854,7 @@ fn deserialize_trait_impl(
 ) -> proc_macro2::TokenStream {
     quote! {
         impl<'de> ::xmlity::Deserialize<'de> for #ident {
-            fn deserialize<D>(#deserializer_ident: D) -> Result<Self, D::Error>
+            fn deserialize<D>(#deserializer_ident: D) -> Result<Self, <D as ::xmlity::Deserializer<'de>>::Error>
             where
                 D: ::xmlity::Deserializer<'de>,
             {

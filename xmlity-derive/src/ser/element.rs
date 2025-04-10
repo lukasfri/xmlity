@@ -110,7 +110,7 @@ fn serialize_trait_impl(
 ) -> proc_macro2::TokenStream {
     quote! {
         impl ::xmlity::Serialize for #ident {
-            fn serialize<S>(&self, mut serializer: S) -> Result<S::Ok, S::Error>
+            fn serialize<S>(&self, mut serializer: S) -> Result<<S as ::xmlity::Serializer>::Ok, <S as ::xmlity::Serializer>::Error>
             where
                 S: ::xmlity::Serializer,
             {

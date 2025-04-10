@@ -47,7 +47,7 @@ fn deserialization_group_builder_trait_impl(
       fn contribute_attributes<D: xmlity::de::AttributesAccess<'de>>(
           &mut self,
           mut #element_access_ident: D,
-      ) -> Result<bool, D::Error> {
+      ) -> Result<bool, <D as xmlity::de::AttributesAccess<'de>>::Error> {
          #contribute_attributes_implementation
       }
 
@@ -58,7 +58,7 @@ fn deserialization_group_builder_trait_impl(
       fn contribute_elements<D: xmlity::de::SeqAccess<'de>>(
           &mut self,
         mut #children_access_ident: D,
-      ) -> Result<bool, D::Error> {
+      ) -> Result<bool, <D as xmlity::de::SeqAccess<'de>>::Error> {
          #contribute_elements_implementation
       }
 
@@ -163,7 +163,7 @@ fn finish_constructor_expr<T: quote::ToTokens>(
     let group_value_expressions_constructors = group_fields.into_iter()
       .map(|DeserializeBuilderField { builder_field_ident, field_ident,  .. }| {
           let expression = quote! {
-              ::xmlity::de::DeserializationGroupBuilder::finish::<A::Error>(self.#builder_field_ident)?
+              ::xmlity::de::DeserializationGroupBuilder::finish::<<A as xmlity::de::AttributesAccess<'de>>::Error>(self.#builder_field_ident)?
           };
 
           (field_ident, expression)
