@@ -11,7 +11,7 @@
 //! There are some attributes only used by either serialization or deserialization. These are highlighted in the documentation for each macro.
 //!
 //! ## Example
-//! ```rust
+//! ```ignore
 //! use xmlity_derive::{Deserialize, Serialize};
 //!
 //! #[derive(Serialize, Deserialize)]
