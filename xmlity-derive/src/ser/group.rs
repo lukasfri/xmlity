@@ -18,14 +18,14 @@ fn deserialize_trait_impl(
         fn serialize_attributes<S: xmlity::ser::SerializeAttributes>(
             &self,
             mut #element_access_ident: S,
-        ) -> Result<(), S::Error> {
+        ) -> Result<(), <S as xmlity::ser::SerializeAttributes>::Error> {
            #serialize_attributes_implementation
         }
 
         fn serialize_children<S: xmlity::ser::SerializeChildren>(
             &self,
             mut #children_access_ident: S,
-        ) -> Result<(), S::Error> {
+        ) -> Result<(), <S as xmlity::ser::SerializeChildren>::Error> {
            #serialize_children_implementation
         }
     }
