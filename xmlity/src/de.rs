@@ -398,6 +398,8 @@ pub trait Deserializer<'de>: Sized {
 }
 
 /// A type that can be deserialized from a deserializer. This type has two methods: [`Deserialize::deserialize`] and [`Deserialize::deserialize_seq`]. The latter is used in cases where types can be constructed from multiple nodes, such as constructing a [`std::vec::Vec`] from multiple elements, or a [`std::string::String`] from multiple text nodes that are concatenated together.
+///
+/// To see the documentation for the derive macro, see [`xmlity_derive::Deserialize`].
 pub trait Deserialize<'de>: Sized {
     /// Deserializes a value from a deserializer.
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error>;
@@ -413,6 +415,8 @@ pub trait DeserializeOwned: for<'de> Deserialize<'de> {}
 impl<T> DeserializeOwned for T where T: for<'de> Deserialize<'de> {}
 
 /// A group of types that can be deserialized together. While this is being built, the type of a [`DeserializationGroup`] is the [`DeserializationGroup::Builder`] type.
+///
+/// To see the documentation for the derive macro, see [`xmlity_derive::DeserializationGroup`].
 pub trait DeserializationGroup<'de> {
     /// The type of the builder for this deserialization group returned by [`DeserializationGroup::builder`].
     type Builder: DeserializationGroupBuilder<'de, Value = Self>;
