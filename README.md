@@ -19,25 +19,22 @@ To get started, we recommend you check out the [XMLity book](https://xmlity.luka
 
 ## Example
 
-1. Add XMLity and XMLity-compatible (de)serializer library. In this example we use `xmlity_quick_xml`.
+1. Add XMLity and XMLity-compatible (de)serializer library. In this example we use `xmlity-quick-xml`.
 
 ```toml
 [dependencies]
 
 xmlity = { version = "0.0.0", features = ["derive"] }
 
-xmlity_quick_xml = "0.0.0"
+xmlity-quick-xml = "0.0.0"
 ```
 
 2. Write defintions and use:
 
 ```rust
-extern crate xmlity;
-extern crate xmlity_derive;
 extern crate xmlity_quick_xml;
 
 use xmlity::{Serialize, Deserialize};;
-use xmlity_derive::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 #[xelement(name = "name")]

@@ -377,6 +377,7 @@ dependencies = [
  "rstest",
  "thiserror",
  "xmlity-derive",
+ "xmlity-quick-xml",
 ]
 
 [[package]]

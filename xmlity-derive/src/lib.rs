@@ -1,3 +1,11 @@
+//! # XMLity Derive
+//!
+//! This crate contains the proc-macros for XMLity, specifically the derive macros for [`Serialize`], [`SerializeAttribute`], [`Deserialize`], [`SerializationGroup`], and [`DeserializationGroup`].
+
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct _ReadMeDocTests;
+
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 

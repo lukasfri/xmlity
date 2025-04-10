@@ -20,6 +20,7 @@ xmlity-derive = { workspace = true, optional = true }
 pretty_assertions.workspace = true
 rstest.workspace = true
 xmlity-derive.workspace = true
+xmlity-quick-xml.workspace = true
 
 [features]
 default = []
