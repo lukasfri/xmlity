@@ -224,8 +224,9 @@ fn constructor_expr<I: ToTokens, T: ToTokens>(
     }
 }
 
-fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
+fn named_struct_definition_expr<I: ToTokens, U: ToTokens, K: ToTokens, V: ToTokens>(
     ident: I,
+    lifetimes: U,
     fields: impl IntoIterator<Item = (K, V)>,
     visibility: Visibility,
 ) -> proc_macro2::TokenStream {
@@ -236,28 +237,30 @@ fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
     });
 
     quote! {
-        #visibility struct #ident {
+        #visibility struct #ident #lifetimes {
             #(#field_tokens)*
         }
     }
 }
 
-fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
+fn unnamed_struct_definition_expr<I: ToTokens, U: ToTokens, T: ToTokens>(
     ident: I,
+    lifetimes: U,
     fields: impl IntoIterator<Item = T>,
     visibility: Visibility,
 ) -> proc_macro2::TokenStream {
     let fields = fields.into_iter();
 
     quote! {
-        #visibility struct #ident (
+        #visibility struct #ident #lifetimes (
             #(#fields,)*
         )
     }
 }
 
-fn struct_definition_expr<I: ToTokens, T: ToTokens>(
+fn struct_definition_expr<I: ToTokens, U: ToTokens, T: ToTokens>(
     ident: I,
+    lifetimes: U,
     fields: impl IntoIterator<Item = (FieldIdent, T)>,
     constructor_type: StructType,
     visibility: Visibility,
@@ -266,11 +269,13 @@ fn struct_definition_expr<I: ToTokens, T: ToTokens>(
     match constructor_type {
         StructType::Unnamed => unnamed_struct_definition_expr(
             ident,
+            lifetimes,
             fields.map(|(_, value_expression)| value_expression),
             visibility,
         ),
         StructType::Named => named_struct_definition_expr(
             ident,
+            lifetimes,
             fields.filter_map(|(a, value_expression)| match a {
                 FieldIdent::Named(field_ident) => Some((field_ident, value_expression)),
                 FieldIdent::Indexed(_) => None,
@@ -495,7 +500,7 @@ fn builder_element_field_visitor<
 
         if pop_error {
             quote! {
-                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident) {
+                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
                     let #contributed_to_elements_ident = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)?;
                     if #contributed_to_elements_ident {
                         #if_contributed_to_groups
@@ -505,7 +510,7 @@ fn builder_element_field_visitor<
             }
         } else {
             quote! {
-                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident) {
+                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
                     if let ::core::result::Result::Ok(#contributed_to_elements_ident) = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?) {
                         if #contributed_to_elements_ident {
                             #if_contributed_to_groups

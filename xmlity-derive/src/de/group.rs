@@ -12,14 +12,15 @@ use crate::{
 
 use super::{all_attributes_done, all_elements_done, constructor_expr, StructType};
 
-fn deserialize_trait_impl(
+fn deserialize_trait_impl<T: quote::ToTokens>(
     ident: &proc_macro2::Ident,
     builder_ident: &proc_macro2::Ident,
     builder_constructor: proc_macro2::TokenStream,
+    builder_lifetimes: T,
 ) -> proc_macro2::TokenStream {
     quote! {
       impl<'de> ::xmlity::de::DeserializationGroup<'de> for #ident {
-        type Builder = #builder_ident;
+        type Builder = #builder_ident #builder_lifetimes;
 
         fn builder() -> Self::Builder {
             #builder_constructor
@@ -32,6 +33,7 @@ fn deserialize_trait_impl(
 fn deserialization_group_builder_trait_impl(
     ident: &proc_macro2::Ident,
     builder_ident: &proc_macro2::Ident,
+    builder_lifetimes: &proc_macro2::TokenStream,
     element_access_ident: &proc_macro2::Ident,
     contribute_attributes_implementation: proc_macro2::TokenStream,
     attributes_done_implementation: proc_macro2::TokenStream,
@@ -41,7 +43,7 @@ fn deserialization_group_builder_trait_impl(
     finish_implementation: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     quote! {
-    impl<'de> ::xmlity::de::DeserializationGroupBuilder<'de> for #builder_ident {
+    impl<'de> ::xmlity::de::DeserializationGroupBuilder<'de> for #builder_ident #builder_lifetimes {
       type Value = #ident;
 
       fn contribute_attributes<D: xmlity::de::AttributesAccess<'de>>(
@@ -81,9 +83,8 @@ fn builder_struct_definition_expr<T: quote::ToTokens>(
     attribute_fields: impl IntoIterator<
         Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
     >,
-    group_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-    >,
+    group_fields: impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>>
+        + Clone,
     constructor_type: StructType,
     visibility: Visibility,
 ) -> proc_macro2::TokenStream {
@@ -107,14 +108,14 @@ fn builder_struct_definition_expr<T: quote::ToTokens>(
                 (builder_field_ident, expression)
             },
         );
-    let group_value_expressions_constructors = group_fields.into_iter().map(
+    let group_value_expressions_constructors = group_fields.clone().into_iter().map(
         |DeserializeBuilderField {
              builder_field_ident,
              field_type,
              ..
          }| {
             let expression = quote! {
-                <#field_type as ::xmlity::de::DeserializationGroup>::Builder
+                <#field_type as ::xmlity::de::DeserializationGroup<'de>>::Builder
             };
 
             (builder_field_ident, expression)
@@ -126,6 +127,12 @@ fn builder_struct_definition_expr<T: quote::ToTokens>(
 
     super::struct_definition_expr(
         ident,
+        // Builder only needs lifetime if there are groups
+        if group_fields.into_iter().next().is_some() {
+            quote! {<'de>}
+        } else {
+            quote! {}
+        },
         value_expressions_constructors,
         constructor_type,
         visibility,
@@ -160,14 +167,19 @@ fn finish_constructor_expr<T: quote::ToTokens>(
           };
           (field_ident, expression)
       });
-    let group_value_expressions_constructors = group_fields.into_iter()
-      .map(|DeserializeBuilderField { builder_field_ident, field_ident,  .. }| {
-          let expression = quote! {
-              ::xmlity::de::DeserializationGroupBuilder::finish::<<A as xmlity::de::AttributesAccess<'de>>::Error>(self.#builder_field_ident)?
-          };
+    let group_value_expressions_constructors = group_fields.into_iter().map(
+        |DeserializeBuilderField {
+             builder_field_ident,
+             field_ident,
+             ..
+         }| {
+            let expression = quote! {
+                ::xmlity::de::DeserializationGroupBuilder::finish::<E>(self.#builder_field_ident)?
+            };
 
-          (field_ident, expression)
-      });
+            (field_ident, expression)
+        },
+    );
 
     let value_expressions_constructors =
         local_value_expressions_constructors.chain(group_value_expressions_constructors);
@@ -209,7 +221,7 @@ fn builder_constructor_expr<T: quote::ToTokens>(
              ..
          }| {
             let expression = quote! {
-                <#field_type as ::xmlity::de::DeserializationGroup>::builder()?
+                <#field_type as ::xmlity::de::DeserializationGroup>::builder()
             };
 
             (field_ident, expression)
@@ -385,9 +397,16 @@ pub fn derive_struct_deserialize_fn(
         visibility,
     );
 
+    let builder_lifetimes = if group_fields.clone().next().is_some() {
+        quote! {<'de>}
+    } else {
+        quote! {}
+    };
+
     let builder_impl = deserialization_group_builder_trait_impl(
         ident,
         builder_ident,
+        &builder_lifetimes,
         &element_access_ident,
         contribute_attributes_implementation,
         attributes_done_implementation,
@@ -405,7 +424,12 @@ pub fn derive_struct_deserialize_fn(
         constructor_type,
     );
 
-    let deserialize_impl = deserialize_trait_impl(ident, builder_ident, builder_constructor);
+    let deserialize_impl = deserialize_trait_impl(
+        ident,
+        builder_ident,
+        builder_constructor,
+        &builder_lifetimes,
+    );
 
     Ok(quote! {
         #builder_def
