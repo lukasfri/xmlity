@@ -17,7 +17,9 @@ macro_rules! impl_serialize_for_primitive {
   };
 }
 
-impl_serialize_for_primitive!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
+impl_serialize_for_primitive!(
+    u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, usize, isize, f32, f64
+);
 
 macro_rules! impl_deserialize_for_primitive {
   ($($t:ty),*) => {
@@ -31,7 +33,9 @@ macro_rules! impl_deserialize_for_primitive {
   };
 }
 
-impl_deserialize_for_primitive!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
+impl_deserialize_for_primitive!(
+    u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, usize, isize, f32, f64
+);
 
 impl<'de> Deserialize<'de> for bool {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
