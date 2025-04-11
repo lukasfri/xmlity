@@ -90,11 +90,14 @@ pub fn derive_serialize_fn(
 ) -> proc_macro2::TokenStream {
     let ident_name = ast.ident.to_string();
     let expanded_name = ExpandedName::new(
-        opts.name.0.as_ref().unwrap_or(&ident_name),
-        opts.namespace.0.as_deref(),
+        opts.name
+            .as_ref()
+            .map(|a| a.0.as_str())
+            .unwrap_or(&ident_name),
+        opts.namespace.as_ref().map(|a| a.0.as_str()),
     );
 
-    let preferred_prefix = opts.preferred_prefix.0.as_deref();
+    let preferred_prefix = opts.preferred_prefix.as_ref().map(|a| a.0.as_str());
 
     let implementation = match &ast.data {
         syn::Data::Struct(DataStruct { fields, .. }) => match fields {
