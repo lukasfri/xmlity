@@ -1,5 +1,5 @@
 use darling::{FromAttributes, FromMeta};
-use syn::DeriveInput;
+use syn::{DeriveInput, Ident};
 
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
@@ -84,32 +84,32 @@ pub enum TextSerializationFormat {
 }
 
 #[derive(Debug, Default)]
-pub struct LocalNameOption(pub Option<String>);
+pub struct LocalName(pub String);
 
-impl FromMeta for LocalNameOption {
+impl FromMeta for LocalName {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate local name
-        Ok(LocalNameOption(Some(value.to_owned())))
+        Ok(LocalName(value.to_owned()))
     }
 }
 
 #[derive(Debug, Default)]
-pub struct XmlNamespaceOption(pub Option<String>);
+pub struct XmlNamespace(pub String);
 
-impl FromMeta for XmlNamespaceOption {
+impl FromMeta for XmlNamespace {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate namespace
-        Ok(XmlNamespaceOption(Some(value.to_owned())))
+        Ok(XmlNamespace(value.to_owned()))
     }
 }
 
 #[derive(Debug, Default)]
-pub struct PrefferedPrefixOption(pub Option<String>);
+pub struct PrefferedPrefix(pub String);
 
-impl FromMeta for PrefferedPrefixOption {
+impl FromMeta for PrefferedPrefix {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate prefix
-        Ok(PrefferedPrefixOption(Some(value.to_owned())))
+        Ok(PrefferedPrefix(value.to_owned()))
     }
 }
 
@@ -117,11 +117,13 @@ impl FromMeta for PrefferedPrefixOption {
 #[darling(attributes(xelement))]
 pub struct XmlityRootElementDeriveOpts {
     #[darling(default)]
-    pub name: LocalNameOption,
+    pub name: Option<LocalName>,
     #[darling(default)]
-    pub namespace: XmlNamespaceOption,
+    pub namespace: Option<XmlNamespace>,
     #[darling(default)]
-    pub preferred_prefix: PrefferedPrefixOption,
+    pub namespace_path: Option<Ident>,
+    #[darling(default)]
+    pub preferred_prefix: Option<PrefferedPrefix>,
     #[darling(default)]
     pub enforce_prefix: bool,
     #[darling(default)]
@@ -147,6 +149,11 @@ impl XmlityRootElementDeriveOpts {
         };
 
         let opts = Self::from_attributes(&[attr.clone()])?;
+        if opts.namespace_path.is_some() && opts.namespace.is_some() {
+            return Err(darling::Error::custom(
+                "Cannot specify both `namespace` and `namespace_path`",
+            ));
+        }
         Ok(Some(opts))
     }
 }
@@ -155,11 +162,11 @@ impl XmlityRootElementDeriveOpts {
 #[darling(attributes(xattribute))]
 pub struct XmlityRootAttributeDeriveOpts {
     #[darling(default)]
-    pub name: LocalNameOption,
+    pub name: Option<LocalName>,
     #[darling(default)]
-    pub namespace: XmlNamespaceOption,
+    pub namespace: Option<XmlNamespace>,
     #[darling(default)]
-    pub preferred_prefix: PrefferedPrefixOption,
+    pub preferred_prefix: Option<PrefferedPrefix>,
     #[darling(default)]
     pub enforce_prefix: bool,
     #[darling(default)]

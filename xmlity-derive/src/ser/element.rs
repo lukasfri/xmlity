@@ -129,14 +129,16 @@ pub fn derive_serialize_fn(
     let expanded_name = ExpandedName::new(
         element_opts
             .as_ref()
-            .and_then(|o| o.name.0.as_ref())
+            .and_then(|o| o.name.as_ref().map(|a| a.0.as_str()))
             .unwrap_or(&ident_name),
-        element_opts.as_ref().and_then(|o| o.namespace.0.as_deref()),
+        element_opts
+            .as_ref()
+            .and_then(|o| o.namespace.as_ref().map(|a| a.0.as_str())),
     );
 
     let preferred_prefix = element_opts
         .as_ref()
-        .and_then(|o| o.preferred_prefix.0.as_deref());
+        .and_then(|o| o.preferred_prefix.as_ref().map(|a| a.0.as_str()));
 
     let implementation = match ast.data {
         syn::Data::Struct(DataStruct { fields, .. }) => {

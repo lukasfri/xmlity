@@ -203,8 +203,8 @@ fn struct_derive_implementation(
          }| {
             let ident_name = ident.to_string();
             let expanded_name = ExpandedName::new(
-                name.0.as_ref().unwrap_or(&ident_name),
-                namespace.0.as_deref(),
+                name.as_ref().map(|a| a.0.as_str()).unwrap_or(&ident_name),
+                namespace.as_ref().map(|a| a.0.as_str()),
             );
             let expanded_name = if *deserialize_any_name {
                 None
@@ -238,8 +238,8 @@ fn struct_derive_implementation(
          }| {
             let ident_name = ident.to_string();
             let expanded_name = ExpandedName::new(
-                name.0.as_ref().unwrap_or(&ident_name),
-                namespace.0.as_deref(),
+                name.as_ref().map(|a| a.0.as_str()).unwrap_or(&ident_name),
+                namespace.as_ref().map(|a| a.0.as_str()),
             );
             let expanded_name = if *deserialize_any_name {
                 None
