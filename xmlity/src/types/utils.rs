@@ -5,6 +5,8 @@ use std::{marker::PhantomData, str::FromStr};
 
 use crate::{
     de::{self, Visitor, XmlCData, XmlText},
+    ser::SerializeSeq,
+    types::value::XmlDecl,
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
@@ -14,24 +16,29 @@ use super::value::{XmlComment, XmlDoctype, XmlPI};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[non_exhaustive]
 pub struct XmlRoot<T> {
-    /// The root element of the XML document.
-    pub value: T,
-    /// The comments in the XML document.
-    pub comments: Vec<XmlComment>,
-    /// The processing instructions in the XML document.
-    pub pis: Vec<XmlPI>,
-    /// The doctype declarations in the XML document.
-    pub doctype: Vec<XmlDoctype>,
+    /// The declaration of the XML document.
+    pub decl: Option<XmlDecl>,
+    pub top: Vec<XmlRootTop<T>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum XmlRootTop<T> {
+    /// An element of the XML document.
+    Value(T),
+    /// A comment in the XML document.
+    Comment(XmlComment),
+    /// A processing instructions in the XML document.
+    PI(XmlPI),
+    /// A doctype declarations in the XML document.
+    Doctype(XmlDoctype),
 }
 
 impl<T> XmlRoot<T> {
     /// Creates a new `XmlRoot` with the given value.
     pub fn new(value: T) -> Self {
         Self {
-            value,
-            comments: Vec::new(),
-            pis: Vec::new(),
-            doctype: Vec::new(),
+            decl: None,
+            top: Vec::new(),
         }
     }
     /// Adds a comment to the XML document.
@@ -75,6 +82,12 @@ impl<T> XmlRoot<T> {
         self.doctype.extend(doctypes.into_iter().map(Into::into));
         self
     }
+
+    /// Adds a declaration to the XML document.
+    pub fn with_decl<U: Into<XmlDecl>>(mut self, decl: U) -> Self {
+        self.decl.replace(decl.into());
+        self
+    }
 }
 
 impl<'de, T: Deserialize<'de> + 'de> Deserialize<'de> for XmlRoot<T> {
@@ -98,43 +111,37 @@ impl<'de, T: Deserialize<'de> + 'de> Deserialize<'de> for XmlRoot<T> {
             where
                 S: crate::de::SeqAccess<'v>,
             {
-                let mut value: Option<T> = None;
-                let mut comments = Vec::new();
-                let mut pis = Vec::new();
-                let mut doctype = Vec::new();
+                let mut decl = None;
+
+                if let Ok(Some(v_decl)) = sequence.next_element_seq::<XmlDecl>() {
+                    decl = Some(v_decl);
+                }
+
+                let mut top = Vec::new();
 
                 loop {
-                    if let Ok(Some(new_value)) = sequence.next_element_seq::<T>() {
-                        if value.is_some() {
-                            return Err(crate::de::Error::custom("Multiple root elements"));
-                        }
-
-                        value = Some(new_value);
+                    if let Ok(Some(value)) = sequence.next_element_seq::<T>() {
+                        top.push(XmlRootTop::Value(value));
                         continue;
                     }
 
                     if let Ok(Some(comment)) = sequence.next_element_seq::<XmlComment>() {
-                        comments.push(comment);
+                        top.push(XmlRootTop::Comment(comment));
                         continue;
                     }
                     if let Ok(Some(pi)) = sequence.next_element_seq::<XmlPI>() {
-                        pis.push(pi);
+                        top.push(XmlRootTop::PI(pi));
                         continue;
                     }
-                    if let Ok(Some(pi)) = sequence.next_element_seq::<XmlDoctype>() {
-                        doctype.push(pi);
+                    if let Ok(Some(doctype)) = sequence.next_element_seq::<XmlDoctype>() {
+                        top.push(XmlRootTop::Doctype(doctype));
                         continue;
                     }
 
                     break;
                 }
 
-                Ok(XmlRoot {
-                    value: value.ok_or_else(|| crate::de::Error::custom("No root element"))?,
-                    comments,
-                    pis,
-                    doctype,
-                })
+                Ok(XmlRoot { decl, top })
             }
         }
 
@@ -142,6 +149,17 @@ impl<'de, T: Deserialize<'de> + 'de> Deserialize<'de> for XmlRoot<T> {
             lifetime: ::core::marker::PhantomData,
             marker: ::core::marker::PhantomData,
         })
+    }
+}
+
+impl<T> Serialize for XmlRoot<T> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut seq = serializer.serialize_seq()?;
+
+        seq.serialize_element(&self.decl)?;
+        seq.serialize_element(&self.top)?;
+
+        seq.end()
     }
 }
 
