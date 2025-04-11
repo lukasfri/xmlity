@@ -418,7 +418,7 @@ fn visit_element_data_fn_impl_attribute(
                     if #condition {
                         break;
                     } else {
-                        return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
+                        return ::core::result::Result::Err(::xmlity::de::Error::unknown_attribute());
                     }
                 }
             };
@@ -446,7 +446,7 @@ fn visit_element_data_fn_impl_attribute(
                     if #all_some_condition {
                         break;
                     } else {
-                        return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
+                        return ::core::result::Result::Err(::xmlity::de::Error::unknown_attribute());
                     }
                 }
             };

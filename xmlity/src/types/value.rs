@@ -1888,6 +1888,9 @@ pub enum XmlValueDeserializerError {
     /// Error for when a field is missing.
     #[error("Missing field: {0}")]
     MissingField(String),
+    /// Error for when an attribute cannot be identified, and ignoring it is not allowed.
+    #[error("Unknown attribute")]
+    UnknownAttribute,
     /// Error for when a child cannot be identified, and ignoring it is not allowed.
     #[error("Unknown child")]
     UnknownChild,
@@ -1936,6 +1939,10 @@ impl de::Error for XmlValueDeserializerError {
 
     fn missing_data() -> Self {
         Self::MissingData
+    }
+
+    fn unknown_attribute() -> Self {
+        Self::UnknownAttribute
     }
 
     fn unknown_child() -> Self {

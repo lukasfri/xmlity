@@ -35,6 +35,8 @@ pub enum Error {
         actual: Box<ExpandedName<'static>>,
         expected: Box<ExpandedName<'static>>,
     },
+    #[error("Unknown attribute")]
+    UnknownAttribute,
     #[error("Unknown child")]
     UnknownChild,
     #[error("Invalid UTF-8: {0}")]
@@ -79,6 +81,10 @@ impl xmlity::de::Error for Error {
 
     fn missing_data() -> Self {
         Error::MissingData
+    }
+
+    fn unknown_attribute() -> Self {
+        Error::UnknownAttribute
     }
 
     fn unknown_child() -> Self {

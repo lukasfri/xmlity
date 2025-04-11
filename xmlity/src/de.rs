@@ -30,6 +30,9 @@ pub trait Error: Sized + StdError {
     /// Error for when a type is missing data that is required to deserialize it.
     fn missing_data() -> Self;
 
+    /// Error for when an attribute cannot be identified, and ignoring it is not allowed.
+    fn unknown_attribute() -> Self;
+
     /// Error for when a child cannot be identified, and ignoring it is not allowed.
     fn unknown_child() -> Self;
 
