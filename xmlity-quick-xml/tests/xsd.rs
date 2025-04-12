@@ -196,41 +196,42 @@ const XSD_XML_DOCTYPE: &str = r###"xs:schema PUBLIC "-//W3C//DTD XMLSCHEMA 20010
         ]"###;
 
 fn xsd_struct() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema {
-        sequence: vec![
-            SchemaEntry::Annotation(Annotation {}),
-            SchemaEntry::Annotation(Annotation {}),
-            SchemaEntry::Annotation(Annotation {}),
-        ],
-    })
-    .with_comments([
-        XmlComment::new(
-            " XML Schema schema for XML Schemas: Part 1: Structures "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " Note this schema is NOT the normative structures schema. "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " The prose copy in the structures REC is the normative "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " version (which shouldn't differ from this one except for "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " this comment and entity expansions, but just in case "
-                .as_bytes()
-                .to_owned(),
-        ),
-    ])
-    .with_doctype(XmlDoctype::new(XSD_XML_DOCTYPE.as_bytes()))
+    XmlRoot::new()
+        .with_element(Schema {
+            sequence: vec![
+                SchemaEntry::Annotation(Annotation {}),
+                SchemaEntry::Annotation(Annotation {}),
+                SchemaEntry::Annotation(Annotation {}),
+            ],
+        })
+        .with_comments([
+            XmlComment::new(
+                " XML Schema schema for XML Schemas: Part 1: Structures "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " Note this schema is NOT the normative structures schema. "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " The prose copy in the structures REC is the normative "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " version (which shouldn't differ from this one except for "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " this comment and entity expansions, but just in case "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+        ])
+        .with_doctype(XmlDoctype::new(XSD_XML_DOCTYPE.as_bytes()))
 }
 
 #[test]
@@ -255,7 +256,7 @@ const EMPTY_SCHEMA: &str = r####"
 "####;
 
 fn empty_schema() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema { sequence: vec![] })
+    XmlRoot::new().with_element(Schema { sequence: vec![] })
 }
 
 #[test]
@@ -275,7 +276,7 @@ const SCHEMA_WITH_SINGLE_ANNOTATION: &str = r####"
 "####;
 
 fn schema_with_single_annotation() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema {
+    XmlRoot::new().with_element(Schema {
         sequence: vec![SchemaEntry::Annotation(Annotation {})],
     })
 }
@@ -751,7 +752,7 @@ const SCHEMA_WITH_SINGLE_ELEMENT: &str = r####"
 "####;
 
 fn schema_with_single_element() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema {
+    XmlRoot::new().with_element(Schema {
         sequence: vec![SchemaEntry::Element(single_element())],
     })
 }
