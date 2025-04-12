@@ -70,10 +70,13 @@ fn derive_enum_serialize(
 
 fn serialize_trait_impl(
     ident: &proc_macro2::Ident,
+    generics: &syn::Generics,
     implementation: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
+    let non_bound_generics = crate::non_bound_generics(generics);
+
     quote! {
-        impl ::xmlity::SerializeAttribute for #ident {
+        impl #generics ::xmlity::SerializeAttribute for #ident #non_bound_generics {
             fn serialize_attribute<S>(&self, mut serializer: S) -> Result<<S as ::xmlity::AttributeSerializer>::Ok, <S as ::xmlity::AttributeSerializer>::Error>
             where
                 S: ::xmlity::AttributeSerializer,
@@ -112,5 +115,5 @@ pub fn derive_serialize_fn(
         syn::Data::Union(_) => unreachable!(),
     };
 
-    serialize_trait_impl(&ast.ident, implementation)
+    serialize_trait_impl(&ast.ident, &ast.generics, implementation)
 }
