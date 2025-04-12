@@ -696,9 +696,9 @@ fn visit_seq_fn_signature(
     body: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     quote! {
-        fn visit_seq<S>(self, mut #seq_acces_ident: S) -> Result<Self::Value, <S as xmlity::de::SeqAccess<#visitor_lifetime>>::Error>
+        fn visit_seq<S>(self, mut #seq_acces_ident: S) -> Result<Self::Value, <S as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error>
         where
-            S: xmlity::de::SeqAccess<#visitor_lifetime>,
+            S: ::xmlity::de::SeqAccess<#visitor_lifetime>,
         {
             #body
         }
