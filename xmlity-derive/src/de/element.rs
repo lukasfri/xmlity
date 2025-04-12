@@ -1,6 +1,6 @@
 use proc_macro2::Span;
 use quote::quote;
-use syn::{spanned::Spanned, DataEnum, DataStruct, Field, Ident, Variant};
+use syn::{spanned::Spanned, DataEnum, DataStruct, Field, Ident, Lifetime, Variant};
 
 use crate::{
     de::{
@@ -13,16 +13,17 @@ use crate::{
     XmlityFieldElementDeriveOpts, XmlityFieldElementGroupDeriveOpts, XmlityFieldGroupDeriveOpts,
 };
 
-use super::{StructType, VisitorBuilder};
+use super::{common::DeserializeTraitImplBuilder, common::VisitorBuilder, StructType};
 
 fn visit_element_fn_signature(
     body: proc_macro2::TokenStream,
     element_access_ident: &Ident,
+    visitor_lifetime: &syn::Lifetime,
 ) -> proc_macro2::TokenStream {
     quote! {
-        fn visit_element<A>(self, mut #element_access_ident: A) -> Result<Self::Value, <A as xmlity::de::AttributesAccess<'de>>::Error>
+        fn visit_element<A>(self, mut #element_access_ident: A) -> Result<Self::Value, <A as xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>
         where
-            A: xmlity::de::ElementAccess<'de>,
+            A: xmlity::de::ElementAccess<#visitor_lifetime>,
         {
             #body
         }
@@ -30,7 +31,8 @@ fn visit_element_fn_signature(
 }
 
 fn visit_element_data_fn_impl(
-    ident: &proc_macro2::Ident,
+    ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
     fields: &syn::Fields,
     children_order: ElementOrder,
     allow_unknown_children: bool,
@@ -79,6 +81,7 @@ fn visit_element_data_fn_impl(
 
     Ok(struct_fields_visitor_end(
         ident,
+        visitor_lifetime,
         fields,
         constructor_type,
         children_order,
@@ -89,7 +92,8 @@ fn visit_element_data_fn_impl(
 }
 
 fn element_visit_fn(
-    ident: &proc_macro2::Ident,
+    ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
     expanded_name: Option<ExpandedName>,
     data_struct: &DataStruct,
     children_order: ElementOrder,
@@ -100,7 +104,7 @@ fn element_visit_fn(
     let element_access_ident = syn::Ident::new("__element", ident.span());
     let xml_name_identification = expanded_name.as_ref().map(|qname| {
         quote! {
-            ::xmlity::de::ElementAccessExt::ensure_name::<<A as ::xmlity::de::AttributesAccess<'de>>::Error>(&#element_access_ident, &#qname)?;
+            ::xmlity::de::ElementAccessExt::ensure_name::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
         }
     });
 
@@ -108,6 +112,7 @@ fn element_visit_fn(
         fields @ syn::Fields::Named(_) | fields @ syn::Fields::Unnamed(_) => {
             visit_element_data_fn_impl(
                 ident,
+                visitor_lifetime,
                 fields,
                 children_order,
                 allow_unknown_children,
@@ -125,17 +130,19 @@ fn element_visit_fn(
             #deserialization_impl
         },
         &element_access_ident,
+        visitor_lifetime,
     ))
 }
 
 fn visit_attribute_fn_signature(
     attribute_access_ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
     body: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     quote! {
-        fn visit_attribute<A>(self, #attribute_access_ident: A) -> Result<Self::Value, <A as ::xmlity::de::AttributeAccess<'de>>::Error>
+        fn visit_attribute<A>(self, #attribute_access_ident: A) -> Result<Self::Value, <A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>
         where
-            A: ::xmlity::de::AttributeAccess<'de>,
+            A: ::xmlity::de::AttributeAccess<#visitor_lifetime>,
         {
             #body
         }
@@ -143,14 +150,15 @@ fn visit_attribute_fn_signature(
 }
 
 fn attribute_visit_fn(
-    ident: &proc_macro2::Ident,
+    ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
     expanded_name: Option<ExpandedName>,
     data_struct: &DataStruct,
 ) -> darling::Result<proc_macro2::TokenStream> {
     let attribute_access_ident = Ident::new("__attribute", ident.span());
     let xml_name_identification = expanded_name.map(|qname| {
         quote! {
-            ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<'de>>::Error>(&#attribute_access_ident, &#qname)?;
+            ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
         }
     });
 
@@ -171,6 +179,7 @@ fn attribute_visit_fn(
 
     Ok(visit_attribute_fn_signature(
         &attribute_access_ident,
+        visitor_lifetime,
         quote! {
             #xml_name_identification
 
@@ -180,9 +189,11 @@ fn attribute_visit_fn(
 }
 
 fn struct_derive_implementation(
-    ident: &proc_macro2::Ident,
-    visitor_ident: &proc_macro2::Ident,
-    deserializer_ident: &proc_macro2::Ident,
+    ident: &syn::Ident,
+    generics: &syn::Generics,
+    visitor_ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
+    deserializer_ident: &syn::Ident,
     data_struct: &DataStruct,
     element_opts: Option<&crate::XmlityRootElementDeriveOpts>,
     attribute_opts: Option<&crate::XmlityRootAttributeDeriveOpts>,
@@ -214,6 +225,7 @@ fn struct_derive_implementation(
 
             element_visit_fn(
                 ident,
+                visitor_lifetime,
                 expanded_name,
                 data_struct,
                 *children_order,
@@ -247,7 +259,7 @@ fn struct_derive_implementation(
                 Some(expanded_name)
             };
 
-            attribute_visit_fn(ident, expanded_name, data_struct)
+            attribute_visit_fn(ident, visitor_lifetime, expanded_name, data_struct)
         },
     );
 
@@ -256,9 +268,15 @@ fn struct_derive_implementation(
         None => None,
     };
 
-    let visitor_builder = VisitorBuilder::new(ident, visitor_ident, &formatter_expecting)
-        .visit_element_fn(visit_element_fn.unwrap_or_default())
-        .visit_attribute_fn(visit_attribute_fn.unwrap_or_default());
+    let visitor_builder = VisitorBuilder::new(
+        ident,
+        generics,
+        visitor_ident,
+        visitor_lifetime,
+        &formatter_expecting,
+    )
+    .visit_element_fn(visit_element_fn.unwrap_or_default())
+    .visit_attribute_fn(visit_attribute_fn.unwrap_or_default());
 
     let visitor_def = visitor_builder.definition();
     let visitor_trait_impl = visitor_builder.trait_impl();
@@ -327,7 +345,8 @@ fn visit_element_data_fn_impl_builder_field_decl(
 }
 
 fn visit_element_data_fn_impl_constructor(
-    ident: &proc_macro2::Ident,
+    ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
     element_fields: impl IntoIterator<
         Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>,
     >,
@@ -361,7 +380,7 @@ fn visit_element_data_fn_impl_constructor(
              ..
          }| {
             let expression = quote! {
-                ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<'de>>::Error>(#builder_field_ident)?
+                ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
             };
 
             (field_ident, expression)
@@ -371,7 +390,7 @@ fn visit_element_data_fn_impl_constructor(
     let value_expressions_constructors =
         local_value_expressions_constructors.chain(group_value_expressions_constructors);
 
-    constructor_expr(ident, value_expressions_constructors, constructor_type)
+    constructor_expr(ident, value_expressions_constructors, &constructor_type)
 }
 
 fn visit_element_data_fn_impl_attribute(
@@ -462,7 +481,7 @@ fn visit_element_data_fn_impl_attribute(
 }
 
 fn visit_element_data_fn_impl_children(
-    element_access_ident: &proc_macro2::Ident,
+    element_access_ident: &syn::Ident,
     fields: impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
         + Clone,
     allow_unknown_children: bool,
@@ -556,7 +575,8 @@ fn visit_element_data_fn_impl_children(
 }
 
 fn struct_fields_visitor_end<T>(
-    struct_ident: &proc_macro2::Ident,
+    struct_ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
     fields: T,
     constructor_type: StructType,
     children_order: ElementOrder,
@@ -646,6 +666,7 @@ where
 
     let constructor = visit_element_data_fn_impl_constructor(
         struct_ident,
+        visitor_lifetime,
         element_fields.clone(),
         attribute_fields.clone(),
         group_fields.clone(),
@@ -671,12 +692,13 @@ fn visit_element_unit_fn_impl(ident: &syn::Ident) -> proc_macro2::TokenStream {
 
 fn visit_seq_fn_signature(
     seq_acces_ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
     body: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     quote! {
-        fn visit_seq<S>(self, mut #seq_acces_ident: S) -> Result<Self::Value, <S as xmlity::de::SeqAccess<'de>>::Error>
+        fn visit_seq<S>(self, mut #seq_acces_ident: S) -> Result<Self::Value, <S as xmlity::de::SeqAccess<#visitor_lifetime>>::Error>
         where
-            S: xmlity::de::SeqAccess<'de>,
+            S: xmlity::de::SeqAccess<#visitor_lifetime>,
         {
             #body
         }
@@ -714,9 +736,11 @@ fn visit_cdata_fn_signature(
 }
 
 fn enum_derive_implementation<'a>(
-    ident: &proc_macro2::Ident,
-    visitor_ident: &proc_macro2::Ident,
-    deserializer_ident: &proc_macro2::Ident,
+    ident: &syn::Ident,
+    generics: &syn::Generics,
+    visitor_ident: &syn::Ident,
+    visitor_lifetime: &syn::Lifetime,
+    deserializer_ident: &syn::Ident,
     variants: impl IntoIterator<Item = &'a syn::Variant> + Clone,
     _element_opts: Option<&crate::XmlityRootElementDeriveOpts>,
     _attribute_opts: Option<&crate::XmlityRootAttributeDeriveOpts>,
@@ -758,6 +782,7 @@ fn enum_derive_implementation<'a>(
 
         Some(visit_seq_fn_signature(
             &sequence_access_ident,
+            visitor_lifetime,
             quote! {
                 #(#variants)*
 
@@ -816,10 +841,16 @@ fn enum_derive_implementation<'a>(
 
     let formatter_expecting = format!("enum {}", ident);
 
-    let visitor_builder = VisitorBuilder::new(ident, visitor_ident, &formatter_expecting)
-        .visit_seq_fn(visit_seq_fn)
-        .visit_text_fn(visit_text_fn)
-        .visit_cdata_fn(visit_cdata_fn);
+    let visitor_builder = VisitorBuilder::new(
+        ident,
+        generics,
+        visitor_ident,
+        visitor_lifetime,
+        &formatter_expecting,
+    )
+    .visit_seq_fn(visit_seq_fn)
+    .visit_text_fn(visit_text_fn)
+    .visit_cdata_fn(visit_cdata_fn);
 
     let visitor_def = visitor_builder.definition();
     let visitor_trait_impl = visitor_builder.trait_impl();
@@ -847,23 +878,6 @@ fn enum_derive_implementation<'a>(
     }
 }
 
-fn deserialize_trait_impl(
-    ident: &proc_macro2::Ident,
-    deserializer_ident: &proc_macro2::Ident,
-    implementation: proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
-    quote! {
-        impl<'de> ::xmlity::Deserialize<'de> for #ident {
-            fn deserialize<D>(#deserializer_ident: D) -> Result<Self, <D as ::xmlity::Deserializer<'de>>::Error>
-            where
-                D: ::xmlity::Deserializer<'de>,
-            {
-                #implementation
-            }
-        }
-    }
-}
-
 pub fn derive_deserialize_fn(
     ast: syn::DeriveInput,
     element_opts: Option<crate::XmlityRootElementDeriveOpts>,
@@ -871,11 +885,15 @@ pub fn derive_deserialize_fn(
     value_opts: Option<crate::XmlityRootValueDeriveOpts>,
 ) -> darling::Result<proc_macro2::TokenStream> {
     let visitor_ident = Ident::new(format!("__{}Visitor", ast.ident).as_str(), ast.ident.span());
+    let visitor_lifetime = Lifetime::new("'__visitor", ast.ident.span());
     let deserializer_ident = Ident::new("__deserializer", ast.ident.span());
+    let deserialize_lifetime = Lifetime::new("'__deserialize", ast.ident.span());
     let implementation = match &ast.data {
         syn::Data::Struct(data_struct) => struct_derive_implementation(
             &ast.ident,
+            &ast.generics,
             &visitor_ident,
+            &visitor_lifetime,
             &deserializer_ident,
             data_struct,
             element_opts.as_ref(),
@@ -884,7 +902,9 @@ pub fn derive_deserialize_fn(
         )?,
         syn::Data::Enum(DataEnum { variants, .. }) => enum_derive_implementation(
             &ast.ident,
+            &ast.generics,
             &visitor_ident,
+            &visitor_lifetime,
             &deserializer_ident,
             variants.iter(),
             element_opts.as_ref(),
@@ -894,9 +914,13 @@ pub fn derive_deserialize_fn(
         syn::Data::Union(_) => simple_compile_error("Unions are not supported yet"),
     };
 
-    Ok(deserialize_trait_impl(
+    let trait_impl_builder = DeserializeTraitImplBuilder::new(
         &ast.ident,
+        &ast.generics,
         &deserializer_ident,
+        &deserialize_lifetime,
         implementation,
-    ))
+    );
+
+    Ok(trait_impl_builder.trait_impl())
 }
