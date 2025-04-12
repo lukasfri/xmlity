@@ -230,3 +230,16 @@ impl quote::ToTokens for ExpandedName<'_> {
         tokens.extend(Self::to_expression(self))
     }
 }
+
+fn non_bound_generics(generics: &syn::Generics) -> syn::Generics {
+    let mut non_bound_generics = generics.to_owned();
+    non_bound_generics.where_clause = None;
+    non_bound_generics
+        .lifetimes_mut()
+        .for_each(|a| a.bounds.clear());
+    non_bound_generics
+        .type_params_mut()
+        .for_each(|a| a.bounds.clear());
+
+    non_bound_generics
+}

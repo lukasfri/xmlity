@@ -8,13 +8,16 @@ use crate::{
 
 fn deserialize_trait_impl(
     ident: &proc_macro2::Ident,
+    generics: &syn::Generics,
     element_access_ident: &proc_macro2::Ident,
     serialize_attributes_implementation: proc_macro2::TokenStream,
     children_access_ident: &proc_macro2::Ident,
     serialize_children_implementation: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
+    let non_bound_generics = crate::non_bound_generics(generics);
+
     quote! {
-    impl ::xmlity::ser::SerializationGroup for #ident {
+    impl #generics ::xmlity::ser::SerializationGroup for #ident #non_bound_generics {
         fn serialize_attributes<S: xmlity::ser::SerializeAttributes>(
             &self,
             mut #element_access_ident: S,
@@ -115,6 +118,7 @@ pub fn derive_serialize_fn(
 
             Ok(deserialize_trait_impl(
                 &ast.ident,
+                &ast.generics,
                 &element_access_ident,
                 serialize_attributes_implementation,
                 &children_access_ident,
