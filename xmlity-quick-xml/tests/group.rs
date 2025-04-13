@@ -215,3 +215,60 @@ fn struct_3d_using_group_deserialize() {
 
     assert_eq!(actual, expected);
 }
+
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+pub struct NoteGroup2 {
+    #[xattribute]
+    pub heading: Heading,
+    pub body: Body,
+}
+
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+pub struct NoteGroup1 {
+    #[xattribute]
+    pub to: To,
+    #[xattribute]
+    pub from: From,
+    #[xgroup]
+    pub group: NoteGroup2,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "note")]
+pub struct Note2 {
+    #[xgroup]
+    pub group: NoteGroup1,
+}
+
+fn multi_level_group_2d_struct_using_group_result() -> Note2 {
+    Note2 {
+        group: NoteGroup1 {
+            to: To("Tove".to_string()),
+            from: From("Jani".to_string()),
+            group: NoteGroup2 {
+                heading: Heading("Reminder".to_string()),
+                body: Body("Don't forget me this weekend!".to_string()),
+            },
+        },
+    }
+}
+
+#[test]
+fn multi_level_group_struct_2d_using_group_serialize() {
+    let actual =
+        quick_xml_serialize_test(multi_level_group_2d_struct_using_group_result()).unwrap();
+
+    let expected = clean_string(SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML);
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn multi_level_group_struct_2d_using_group_deserialize() {
+    let actual: Note2 =
+        quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
+
+    let expected = multi_level_group_2d_struct_using_group_result();
+
+    assert_eq!(actual, expected);
+}

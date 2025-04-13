@@ -15,158 +15,7 @@ use crate::{
     XmlityFieldElementGroupDeriveOpts,
 };
 
-struct VisitorBuilder<'a> {
-    ident: &'a proc_macro2::Ident,
-    visitor_ident: &'a proc_macro2::Ident,
-    formatter_expecting: &'a str,
-    visit_text_fn: Option<proc_macro2::TokenStream>,
-    visit_cdata_fn: Option<proc_macro2::TokenStream>,
-    visit_element_fn: Option<proc_macro2::TokenStream>,
-    visit_attribute_fn: Option<proc_macro2::TokenStream>,
-    visit_seq_fn: Option<proc_macro2::TokenStream>,
-    visit_pi_fn: Option<proc_macro2::TokenStream>,
-    visit_decl_fn: Option<proc_macro2::TokenStream>,
-    visit_comment_fn: Option<proc_macro2::TokenStream>,
-    visit_doctype_fn: Option<proc_macro2::TokenStream>,
-    visit_none_fn: Option<proc_macro2::TokenStream>,
-}
-
-#[allow(dead_code)]
-impl<'a> VisitorBuilder<'a> {
-    fn new(ident: &'a Ident, visitor_ident: &'a Ident, formatter_expecting: &'a str) -> Self {
-        Self {
-            ident,
-            visitor_ident,
-            formatter_expecting,
-            visit_text_fn: None,
-            visit_cdata_fn: None,
-            visit_element_fn: None,
-            visit_attribute_fn: None,
-            visit_seq_fn: None,
-            visit_pi_fn: None,
-            visit_decl_fn: None,
-            visit_comment_fn: None,
-            visit_doctype_fn: None,
-            visit_none_fn: None,
-        }
-    }
-
-    fn visit_text_fn(mut self, visit_text_fn: impl Into<Option<proc_macro2::TokenStream>>) -> Self {
-        self.visit_text_fn = visit_text_fn.into();
-        self
-    }
-    fn visit_cdata_fn(
-        mut self,
-        visit_cdata_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
-        self.visit_cdata_fn = visit_cdata_fn.into();
-        self
-    }
-
-    fn visit_element_fn(
-        mut self,
-        visit_element_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
-        self.visit_element_fn = visit_element_fn.into();
-        self
-    }
-
-    fn visit_attribute_fn(
-        mut self,
-        visit_attribute_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
-        self.visit_attribute_fn = visit_attribute_fn.into();
-        self
-    }
-
-    fn visit_seq_fn(mut self, visit_seq_fn: impl Into<Option<proc_macro2::TokenStream>>) -> Self {
-        self.visit_seq_fn = visit_seq_fn.into();
-        self
-    }
-
-    fn visit_pi_fn(mut self, visit_pi_fn: impl Into<Option<proc_macro2::TokenStream>>) -> Self {
-        self.visit_pi_fn = visit_pi_fn.into();
-        self
-    }
-
-    fn visit_decl_fn(mut self, visit_decl_fn: impl Into<Option<proc_macro2::TokenStream>>) -> Self {
-        self.visit_decl_fn = visit_decl_fn.into();
-        self
-    }
-
-    fn visit_comment_fn(
-        mut self,
-        visit_comment_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
-        self.visit_comment_fn = visit_comment_fn.into();
-        self
-    }
-
-    fn visit_doctype_fn(
-        mut self,
-        visit_doctype_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
-        self.visit_doctype_fn = visit_doctype_fn.into();
-        self
-    }
-
-    fn visit_none_fn(mut self, visit_none_fn: impl Into<Option<proc_macro2::TokenStream>>) -> Self {
-        self.visit_none_fn = visit_none_fn.into();
-        self
-    }
-
-    fn definition(&self) -> proc_macro2::TokenStream {
-        let Self {
-            ident,
-            visitor_ident,
-            ..
-        } = self;
-
-        quote! {
-            struct #visitor_ident<'de> {
-                marker: ::core::marker::PhantomData<#ident>,
-                lifetime: ::core::marker::PhantomData<&'de ()>,
-            }
-        }
-    }
-
-    fn trait_impl(&self) -> proc_macro2::TokenStream {
-        let Self {
-            ident,
-            visitor_ident,
-            formatter_expecting,
-            visit_text_fn,
-            visit_cdata_fn,
-            visit_element_fn,
-            visit_attribute_fn,
-            visit_seq_fn,
-            visit_pi_fn,
-            visit_decl_fn,
-            visit_comment_fn,
-            visit_doctype_fn,
-            visit_none_fn,
-        } = self;
-
-        quote! {
-            impl<'de> ::xmlity::de::Visitor<'de> for #visitor_ident<'de> {
-                type Value = #ident;
-                fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                    ::core::fmt::Formatter::write_str(formatter, #formatter_expecting)
-                }
-                #visit_text_fn
-                #visit_cdata_fn
-                #visit_element_fn
-                #visit_attribute_fn
-                #visit_seq_fn
-                #visit_pi_fn
-                #visit_decl_fn
-                #visit_comment_fn
-                #visit_doctype_fn
-                #visit_none_fn
-            }
-        }
-    }
-}
+mod common;
 
 #[derive(Clone, Copy)]
 enum StructType {
@@ -207,7 +56,7 @@ fn unnamed_constructor_expr<I: ToTokens, T: ToTokens>(
 fn constructor_expr<I: ToTokens, T: ToTokens>(
     ident: I,
     fields: impl IntoIterator<Item = (FieldIdent, T)>,
-    constructor_type: StructType,
+    constructor_type: &StructType,
 ) -> proc_macro2::TokenStream {
     let fields = fields.into_iter();
     match constructor_type {
@@ -226,8 +75,9 @@ fn constructor_expr<I: ToTokens, T: ToTokens>(
 
 fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
     ident: I,
+    generics: Option<&syn::Generics>,
     fields: impl IntoIterator<Item = (K, V)>,
-    visibility: Visibility,
+    visibility: &Visibility,
 ) -> proc_macro2::TokenStream {
     let field_tokens = fields.into_iter().map(|(ident, expression)| {
         quote! {
@@ -236,7 +86,7 @@ fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
     });
 
     quote! {
-        #visibility struct #ident {
+        #visibility struct #ident #generics {
             #(#field_tokens)*
         }
     }
@@ -244,13 +94,14 @@ fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
 
 fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
     ident: I,
+    generics: Option<&syn::Generics>,
     fields: impl IntoIterator<Item = T>,
-    visibility: Visibility,
+    visibility: &Visibility,
 ) -> proc_macro2::TokenStream {
     let fields = fields.into_iter();
 
     quote! {
-        #visibility struct #ident (
+        #visibility struct #ident #generics (
             #(#fields,)*
         )
     }
@@ -258,19 +109,22 @@ fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
 
 fn struct_definition_expr<I: ToTokens, T: ToTokens>(
     ident: I,
+    generics: Option<&syn::Generics>,
     fields: impl IntoIterator<Item = (FieldIdent, T)>,
-    constructor_type: StructType,
-    visibility: Visibility,
+    constructor_type: &StructType,
+    visibility: &Visibility,
 ) -> proc_macro2::TokenStream {
     let fields = fields.into_iter();
     match constructor_type {
         StructType::Unnamed => unnamed_struct_definition_expr(
             ident,
+            generics,
             fields.map(|(_, value_expression)| value_expression),
             visibility,
         ),
         StructType::Named => named_struct_definition_expr(
             ident,
+            generics,
             fields.filter_map(|(a, value_expression)| match a {
                 FieldIdent::Named(field_ident) => Some((field_ident, value_expression)),
                 FieldIdent::Indexed(_) => None,
@@ -495,7 +349,7 @@ fn builder_element_field_visitor<
 
         if pop_error {
             quote! {
-                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident) {
+                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
                     let #contributed_to_elements_ident = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)?;
                     if #contributed_to_elements_ident {
                         #if_contributed_to_groups
@@ -505,7 +359,7 @@ fn builder_element_field_visitor<
             }
         } else {
             quote! {
-                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident) {
+                if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
                     if let ::core::result::Result::Ok(#contributed_to_elements_ident) = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?) {
                         if #contributed_to_elements_ident {
                             #if_contributed_to_groups
@@ -585,21 +439,23 @@ fn attribute_done(
 
 fn all_attributes_done(
     fields: impl IntoIterator<
-            Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
-        > + Clone,
+        Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
+    >,
 
     builder_field_ident_prefix: impl ToTokens,
 ) -> proc_macro2::TokenStream {
-    if fields.clone().into_iter().next().is_none() {
-        return quote! { true };
-    }
-
     let conditions = fields
         .into_iter()
         .map(|field| attribute_done(field, &builder_field_ident_prefix));
 
-    quote! {
+    let conditions = quote! {
         #(#conditions)&&*
+    };
+
+    if conditions.is_empty() {
+        quote! {true}
+    } else {
+        quote! {#conditions}
     }
 }
 

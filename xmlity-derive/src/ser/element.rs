@@ -1,5 +1,5 @@
 use quote::quote;
-use syn::{DataEnum, DataStruct, DeriveInput, Ident};
+use syn::{DataEnum, DataStruct, DeriveInput, Generics, Ident};
 
 use crate::{
     simple_compile_error, FieldIdent, SerializeField, XmlityFieldAttributeGroupDeriveOpts,
@@ -106,10 +106,13 @@ fn derive_enum_serialize(
 
 fn serialize_trait_impl(
     ident: &proc_macro2::Ident,
+    generics: &Generics,
     implementation: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
+    let non_bound_generics = crate::non_bound_generics(generics);
+
     quote! {
-        impl ::xmlity::Serialize for #ident {
+        impl #generics ::xmlity::Serialize for #ident #non_bound_generics {
             fn serialize<S>(&self, mut serializer: S) -> Result<<S as ::xmlity::Serializer>::Ok, <S as ::xmlity::Serializer>::Error>
             where
                 S: ::xmlity::Serializer,
@@ -210,5 +213,9 @@ pub fn derive_serialize_fn(
         syn::Data::Union(_) => unreachable!(),
     };
 
-    Ok(serialize_trait_impl(&ast.ident, implementation))
+    Ok(serialize_trait_impl(
+        &ast.ident,
+        &ast.generics,
+        implementation,
+    ))
 }
