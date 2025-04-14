@@ -11,8 +11,8 @@ use crate::{
         XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldGroupDeriveOpts,
     },
     utils::{self},
-    DeserializeBuilderField, FieldIdent, XmlityFieldAttributeGroupDeriveOpts,
-    XmlityFieldElementGroupDeriveOpts,
+    DeriveError, DeserializeBuilderField, FieldIdent, XmlityFieldAttributeGroupDeriveOpts,
+    XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
 };
 
 mod common;
@@ -499,4 +499,132 @@ fn all_elements_done(
     } else {
         parse_quote! {#conditions}
     }
+}
+
+pub fn fields(
+    ast: &syn::DeriveInput,
+) -> Result<
+    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldDeriveOpts>>,
+    DeriveError,
+> {
+    let data_struct = match ast.data {
+        syn::Data::Struct(ref data_struct) => data_struct,
+        _ => unreachable!(),
+    };
+
+    Ok(match &data_struct.fields {
+        syn::Fields::Named(fields) => fields
+            .named
+            .iter()
+            .map(|f| {
+                let field_ident = f.ident.clone().expect("Named struct");
+
+                darling::Result::Ok(DeserializeBuilderField {
+                    builder_field_ident: FieldIdent::Named(field_ident.clone()),
+                    field_ident: FieldIdent::Named(field_ident),
+                    options: XmlityFieldDeriveOpts::from_field(f)?,
+                    field_type: f.ty.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        syn::Fields::Unnamed(fields) => fields
+            .unnamed
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                darling::Result::Ok(DeserializeBuilderField {
+                    builder_field_ident: FieldIdent::Indexed(syn::Index::from(i)),
+                    field_ident: FieldIdent::Indexed(syn::Index::from(i)),
+                    options: XmlityFieldDeriveOpts::from_field(f)?,
+                    field_type: f.ty.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => unreachable!(),
+    })
+}
+
+fn element_fields(
+    ast: &syn::DeriveInput,
+) -> Result<
+    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>>
+        + use<'_>,
+    DeriveError,
+> {
+    Ok(fields(ast)?.into_iter().filter_map(|field| {
+        field.map_options_opt(|opt| match opt {
+            XmlityFieldDeriveOpts::Element(opts) => Some(opts),
+            _ => None,
+        })
+    }))
+}
+
+fn attribute_fields(
+    ast: &syn::DeriveInput,
+) -> Result<
+    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>>
+        + use<'_>,
+    DeriveError,
+> {
+    Ok(fields(ast)?.into_iter().filter_map(|field| {
+        field.map_options_opt(|opt| match opt {
+            XmlityFieldDeriveOpts::Attribute(opts) => Some(opts),
+            _ => None,
+        })
+    }))
+}
+
+fn group_fields(
+    ast: &syn::DeriveInput,
+) -> Result<
+    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>> + use<'_>,
+    DeriveError,
+> {
+    Ok(fields(ast)?.into_iter().filter_map(|field| {
+        field.clone().map_options_opt(|opt| match opt {
+            XmlityFieldDeriveOpts::Group(opts) => Some(opts),
+            _ => None,
+        })
+    }))
+}
+
+fn attribute_group_fields(
+    ast: &syn::DeriveInput,
+) -> Result<
+    impl IntoIterator<
+            Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
+        > + use<'_>,
+    DeriveError,
+> {
+    Ok(fields(ast)?.into_iter().filter_map(|field| {
+        field.clone().map_options_opt(|opt| match opt {
+            XmlityFieldDeriveOpts::Attribute(opts) => {
+                Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
+            }
+            XmlityFieldDeriveOpts::Group(opts) => {
+                Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
+            }
+            XmlityFieldDeriveOpts::Element(_) => None,
+        })
+    }))
+}
+
+fn element_group_fields(
+    ast: &syn::DeriveInput,
+) -> Result<
+    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
+        + use<'_>,
+    DeriveError,
+> {
+    Ok(fields(ast)?.into_iter().filter_map(|field| {
+        field.clone().map_options_opt(|opt| match opt {
+            XmlityFieldDeriveOpts::Element(opts) => {
+                Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
+            }
+            XmlityFieldDeriveOpts::Group(opts) => {
+                Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
+            }
+            XmlityFieldDeriveOpts::Attribute(_) => None,
+        })
+    }))
 }

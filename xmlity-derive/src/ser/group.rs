@@ -1,11 +1,7 @@
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DataEnum, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt};
 
-use crate::{
-    options::XmlityRootGroupDeriveOpts, simple_compile_error, DeriveError, DeriveMacro, FieldIdent,
-    SerializeField, XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts,
-    XmlityFieldElementGroupDeriveOpts,
-};
+use crate::{options::XmlityRootGroupDeriveOpts, simple_compile_error, DeriveError, DeriveMacro};
 
 trait SerializationGroupBuilder {
     fn serialize_attributes_fn_body(
@@ -75,6 +71,7 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
     }
 }
 
+#[allow(unused)]
 pub struct DeriveGroupStruct<'a> {
     opts: &'a XmlityRootGroupDeriveOpts,
 }
@@ -82,79 +79,6 @@ pub struct DeriveGroupStruct<'a> {
 impl<'a> DeriveGroupStruct<'a> {
     fn new(opts: &'a XmlityRootGroupDeriveOpts) -> Self {
         Self { opts }
-    }
-
-    fn fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldDeriveOpts>>, DeriveError> {
-        let syn::Data::Struct(DataStruct { fields, .. }) = &ast.data else {
-            unreachable!()
-        };
-
-        match fields {
-            syn::Fields::Named(fields) => fields
-                .named
-                .iter()
-                .map(|f| {
-                    Ok(SerializeField {
-                        field_ident: FieldIdent::Named(f.ident.clone().expect("Named struct")),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>(),
-            syn::Fields::Unnamed(fields) => fields
-                .unnamed
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    Ok(SerializeField {
-                        field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>(),
-            syn::Fields::Unit => unreachable!(),
-        }
-    }
-
-    fn attribute_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldAttributeGroupDeriveOpts>>, DeriveError> {
-        Ok(Self::fields(ast)?
-            .into_iter()
-            .filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Attribute(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Element(_) => None,
-                })
-            })
-            .collect())
-    }
-
-    fn element_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldElementGroupDeriveOpts>>, DeriveError> {
-        Ok(Self::fields(ast)?
-            .into_iter()
-            .filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Element(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Attribute(_) => None,
-                })
-            })
-            .collect())
     }
 }
 
@@ -166,7 +90,7 @@ impl SerializationGroupBuilder for DeriveGroupStruct<'_> {
     ) -> Result<Vec<Stmt>, DeriveError> {
         let serialize_attributes_implementation = super::attribute_group_field_serializer(
             quote! {&mut #element_access_ident},
-            Self::attribute_group_fields(ast)?,
+            crate::ser::attribute_group_fields(ast)?,
         );
 
         Ok(parse_quote! {
@@ -182,7 +106,7 @@ impl SerializationGroupBuilder for DeriveGroupStruct<'_> {
     ) -> Result<Vec<Stmt>, DeriveError> {
         let serialize_children_implementation = super::element_group_field_serializer(
             quote! {&mut #children_access_ident},
-            Self::element_group_fields(ast)?,
+            crate::ser::element_group_fields(ast)?,
         );
 
         Ok(parse_quote! {

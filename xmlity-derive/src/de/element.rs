@@ -1,8 +1,8 @@
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
-    parse_quote, spanned::Spanned, Data, DataEnum, DeriveInput, Expr, Field, Ident, Lifetime,
-    LifetimeParam, Stmt, Variant,
+    parse_quote, spanned::Spanned, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Ident,
+    Lifetime, LifetimeParam, Stmt, Variant,
 };
 
 use crate::{
@@ -34,6 +34,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         Self { opts }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn struct_fields_visitor_end<T>(
         struct_ident: &Ident,
         element_access_ident: &Ident,
@@ -102,7 +103,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
         let attribute_loop = if attribute_group_fields.clone().next().is_some() {
             visit_element_data_fn_impl_attribute(
-                &element_access_ident,
+                element_access_ident,
                 struct_ident.span(),
                 attribute_group_fields,
                 allow_unknown_attributes,
@@ -114,7 +115,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
         let children_loop = if element_group_fields.clone().next().is_some() {
             visit_element_data_fn_impl_children(
-                &element_access_ident,
+                element_access_ident,
                 element_group_fields,
                 allow_unknown_children,
                 children_order,
@@ -143,6 +144,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn visit_element_data_fn_impl(
         ident: &Ident,
         element_access_ident: &Ident,
@@ -303,6 +305,106 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
 }
 
 impl DeserializeBuilder for StructElementVisitorBuilder<'_> {
+    fn deserialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        deserializer_ident: &Ident,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let formatter_expecting = format!("struct {}", ast.ident);
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+
+        let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(
+            self,
+            ast,
+            &visitor_ident,
+            &formatter_expecting,
+        )?;
+
+        Ok(parse_quote! {
+            #visitor_def
+
+            #visitor_trait_impl
+
+            ::xmlity::de::Deserializer::deserialize_any(#deserializer_ident, #visitor_ident {
+                lifetime: ::core::marker::PhantomData,
+                marker: ::core::marker::PhantomData,
+            })
+        })
+    }
+}
+
+pub struct SerializeNoneStructBuilder;
+
+impl SerializeNoneStructBuilder {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+impl VisitorBuilder for SerializeNoneStructBuilder {
+    fn visit_seq_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        _visitor_lifetime: &Lifetime,
+        seq_access_ident: &Ident,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let Data::Struct(DataStruct { fields, .. }) = &ast.data else {
+            unreachable!()
+        };
+
+        let constructor_type = match &fields {
+            syn::Fields::Named(_) => StructType::Named,
+            syn::Fields::Unnamed(_) => StructType::Unnamed,
+            _ => unreachable!(),
+        };
+
+        let fields = crate::de::fields(ast)?.into_iter()
+        .map::<(_, Expr), _>(|DeserializeBuilderField { field_ident,  field_type, .. }| {
+
+            (field_ident, parse_quote! {
+                ::core::option::Option::ok_or_else(
+                    ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #seq_access_ident)?,
+                    ::xmlity::de::Error::missing_data,
+                )?
+            })
+        });
+
+        let constructor = constructor_expr(&ast.ident, fields, &constructor_type);
+
+        Ok(Some(parse_quote! {
+            ::core::result::Result::Ok(#constructor)
+        }))
+    }
+
+    fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
+        let DeriveInput {
+            ident, generics, ..
+        } = ast;
+        let non_bound_generics = crate::non_bound_generics(generics);
+
+        let mut deserialize_generics = (*generics).to_owned();
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+        let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());
+
+        deserialize_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new(visitor_lifetime.clone())),
+        );
+
+        Ok(parse_quote! {
+            struct #visitor_ident #deserialize_generics {
+                marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
+                lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
+            }
+        })
+    }
+}
+
+impl DeserializeBuilder for SerializeNoneStructBuilder {
     fn deserialize_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -718,7 +820,7 @@ impl<
                     }
                 } else {
                     let condition = element_done(field, quote! {});
-    
+
                     parse_quote! {
                         if #condition {
                             break;
@@ -727,8 +829,7 @@ impl<
                         }
                     }
                 };
-    
-    
+
                 parse_quote! {
                     loop {
                         #field_visit
@@ -747,7 +848,7 @@ impl<
                     }
                 } else {
                     let all_some_condition = all_elements_done(fields.clone(), quote! {});
-    
+
                     parse_quote! {
                         if #all_some_condition {
                             break;
@@ -756,7 +857,7 @@ impl<
                         }
                     }
                 };
-    
+
                 parse_quote! {
                     loop {
                         #(#field_visits)*
@@ -1079,6 +1180,11 @@ impl DeriveMacro for DeriveDeserialize {
                     .deserialize_trait_impl(ast)
                     .map(|a| a.to_token_stream())
             }
+            (syn::Data::Struct(_), DeriveDeserializeOption::None) => {
+                SerializeNoneStructBuilder::new()
+                    .deserialize_trait_impl(ast)
+                    .map(|a| a.to_token_stream())
+            }
             (syn::Data::Struct(_), DeriveDeserializeOption::Value(_opts)) => Ok(
                 simple_compile_error("Structs with value options are not supported yet"),
             ),
@@ -1091,7 +1197,9 @@ impl DeriveMacro for DeriveDeserialize {
                     .map(|a| a.to_token_stream())
             }
             (syn::Data::Union(_), _) => Ok(simple_compile_error("Unions are not supported yet")),
-            _ => Ok(simple_compile_error("Wrong options")),
+            _ => Ok(simple_compile_error(
+                "Wrong options. Unsupported deserialize.",
+            )),
         }
     }
 }

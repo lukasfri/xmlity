@@ -13,40 +13,40 @@ use crate::{
         XmlityFieldGroupDeriveOpts, XmlityRootGroupDeriveOpts,
     },
     simple_compile_error, DeriveError, DeriveMacro, DeserializeBuilderField, FieldIdent,
-    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+    XmlityFieldDeriveOpts,
 };
 
 use super::{all_attributes_done, all_elements_done, constructor_expr, StructType};
 
 trait DeserializationGroupBuilderBuilder {
     /// Returns the content inside the `DeserializationGroupBuilder::contribute_attributes` function.
-    fn contribute_attributes_content(
+    fn contribute_attributes_fn_body(
         &self,
         ast: &syn::DeriveInput,
         attributes_access_ident: &Ident,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
-    fn attributes_done_content(
+    fn attributes_done_fn_body(
         &self,
         ast: &syn::DeriveInput,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
-    fn contribute_elements_content(
+    fn contribute_elements_fn_body(
         &self,
         ast: &syn::DeriveInput,
         elements_access_ident: &Ident,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
-    fn elements_done_content(
+    fn elements_done_fn_body(
         &self,
         ast: &syn::DeriveInput,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
-    fn finish_content(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError>;
+    fn finish_fn_body(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError>;
 
     fn builder_definition(
         &self,
@@ -112,7 +112,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let attributes_access_ident = syn::Ident::new("__element", proc_macro2::Span::call_site());
 
-        let content = self.contribute_attributes_content(
+        let content = self.contribute_attributes_fn_body(
             ast,
             &attributes_access_ident,
             deserialize_lifetime,
@@ -137,7 +137,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         ast: &syn::DeriveInput,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
-        let content = self.attributes_done_content(ast, deserialize_lifetime)?;
+        let content = self.attributes_done_fn_body(ast, deserialize_lifetime)?;
 
         let Some(content) = content else {
             return Ok(None);
@@ -158,7 +158,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         let elements_access_ident = syn::Ident::new("__children", proc_macro2::Span::call_site());
 
         let content =
-            self.contribute_elements_content(ast, &elements_access_ident, deserialize_lifetime)?;
+            self.contribute_elements_fn_body(ast, &elements_access_ident, deserialize_lifetime)?;
 
         let Some(content) = content else {
             return Ok(None);
@@ -179,7 +179,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         ast: &syn::DeriveInput,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
-        let content = self.elements_done_content(ast, deserialize_lifetime)?;
+        let content = self.elements_done_fn_body(ast, deserialize_lifetime)?;
 
         let Some(content) = content else {
             return Ok(None);
@@ -193,7 +193,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
     }
 
     fn finish_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
-        let content = self.finish_content(ast)?;
+        let content = self.finish_fn_body(ast)?;
 
         Ok(parse_quote! {
         fn finish<E: ::xmlity::de::Error>(self) -> Result<Self::Value, E> {
@@ -329,140 +329,10 @@ impl<'a> StructGroup<'a> {
             _ => unreachable!(),
         }
     }
-
-    pub fn fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<
-        impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldDeriveOpts>>,
-        DeriveError,
-    > {
-        let data_struct = match ast.data {
-            syn::Data::Struct(ref data_struct) => data_struct,
-            _ => unreachable!(),
-        };
-
-        Ok(match &data_struct.fields {
-            syn::Fields::Named(fields) => fields
-                .named
-                .iter()
-                .map(|f| {
-                    let field_ident = f.ident.clone().expect("Named struct");
-
-                    darling::Result::Ok(DeserializeBuilderField {
-                        builder_field_ident: FieldIdent::Named(field_ident.clone()),
-                        field_ident: FieldIdent::Named(field_ident),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-            syn::Fields::Unnamed(fields) => fields
-                .unnamed
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    darling::Result::Ok(DeserializeBuilderField {
-                        builder_field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-            _ => unreachable!(),
-        })
-    }
-
-    fn element_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<
-        impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>>
-            + use<'_>,
-        DeriveError,
-    > {
-        Ok(Self::fields(ast)?.into_iter().filter_map(|field| {
-            field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Element(opts) => Some(opts),
-                _ => None,
-            })
-        }))
-    }
-
-    fn attribute_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<
-        impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>>
-            + use<'_>,
-        DeriveError,
-    > {
-        Ok(Self::fields(ast)?.into_iter().filter_map(|field| {
-            field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Attribute(opts) => Some(opts),
-                _ => None,
-            })
-        }))
-    }
-
-    fn group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<
-        impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>>
-            + use<'_>,
-        DeriveError,
-    > {
-        Ok(Self::fields(ast)?.into_iter().filter_map(|field| {
-            field.clone().map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Group(opts) => Some(opts),
-                _ => None,
-            })
-        }))
-    }
-
-    fn attribute_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<
-        impl IntoIterator<
-                Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
-            > + use<'_>,
-        DeriveError,
-    > {
-        Ok(Self::fields(ast)?.into_iter().filter_map(|field| {
-            field.clone().map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Attribute(opts) => {
-                    Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                }
-                XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                }
-                XmlityFieldDeriveOpts::Element(_) => None,
-            })
-        }))
-    }
-
-    fn element_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<
-        impl IntoIterator<
-                Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
-            > + use<'_>,
-        DeriveError,
-    > {
-        Ok(Self::fields(ast)?.into_iter().filter_map(|field| {
-            field.clone().map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Element(opts) => {
-                    Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
-                }
-                XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
-                }
-                XmlityFieldDeriveOpts::Attribute(_) => None,
-            })
-        }))
-    }
 }
 
 impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
-    fn contribute_attributes_content(
+    fn contribute_attributes_fn_body(
         &self,
         ast: &syn::DeriveInput,
         attributes_access_ident: &Ident,
@@ -471,7 +341,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         let attribute_visit = super::builder_attribute_field_visitor(
             attributes_access_ident,
             quote! {self.},
-            Self::attribute_group_fields(ast)?,
+            crate::de::attribute_group_fields(ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
             parse_quote! {return ::core::result::Result::Ok(true);},
             parse_quote! {return ::core::result::Result::Ok(true);},
@@ -491,19 +361,19 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         }))
     }
 
-    fn attributes_done_content(
+    fn attributes_done_fn_body(
         &self,
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_attributes_done(Self::attribute_group_fields(ast)?, quote! {self.});
+        let expr = all_attributes_done(crate::de::attribute_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
         )))
     }
 
-    fn contribute_elements_content(
+    fn contribute_elements_fn_body(
         &self,
         ast: &syn::DeriveInput,
         elements_access_ident: &Ident,
@@ -512,7 +382,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         let element_visit = super::builder_element_field_visitor(
             elements_access_ident,
             quote! {self.},
-            Self::element_group_fields(ast)?,
+            crate::de::element_group_fields(ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
             parse_quote! {return ::core::result::Result::Ok(true);},
             parse_quote! {return ::core::result::Result::Ok(true);},
@@ -534,24 +404,24 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         }))
     }
 
-    fn elements_done_content(
+    fn elements_done_fn_body(
         &self,
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_elements_done(Self::element_group_fields(ast)?, quote! {self.});
+        let expr = all_elements_done(crate::de::element_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
         )))
     }
 
-    fn finish_content(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError> {
+    fn finish_fn_body(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError> {
         let finish_constructor = finish_constructor_expr(
             quote! {Self::Value},
-            Self::element_fields(ast)?,
-            Self::attribute_fields(ast)?,
-            Self::group_fields(ast)?,
+            crate::de::element_fields(ast)?,
+            crate::de::attribute_fields(ast)?,
+            crate::de::group_fields(ast)?,
             &Self::constructor_type(ast),
         );
 
@@ -566,7 +436,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         builder_ident: &Ident,
         deserialize_lifetime: &Lifetime,
     ) -> Result<ItemStruct, DeriveError> {
-        let local_value_expressions_constructors = Self::attribute_fields(ast)?
+        let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
             .into_iter()
             .map(
                 |DeserializeBuilderField {
@@ -580,7 +450,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
                     (builder_field_ident, expression)
                 },
             )
-            .chain(Self::element_fields(ast)?.into_iter().map(
+            .chain(crate::de::element_fields(ast)?.into_iter().map(
                 |DeserializeBuilderField {
                      builder_field_ident,
                      field_type,
@@ -592,7 +462,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
                     (builder_field_ident, expression)
                 },
             ));
-        let group_value_expressions_constructors = Self::group_fields(ast)?.into_iter().map(
+        let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
             |DeserializeBuilderField {
                  builder_field_ident,
                  field_type,
@@ -641,7 +511,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         ast: &syn::DeriveInput,
         builder_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let local_value_expressions_constructors = Self::attribute_fields(ast)?
+        let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
             .into_iter()
             .map(|DeserializeBuilderField { field_ident, .. }| {
                 let expression = quote! {
@@ -649,7 +519,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
                 };
                 (field_ident, expression)
             })
-            .chain(Self::element_fields(ast)?.into_iter().map(
+            .chain(crate::de::element_fields(ast)?.into_iter().map(
                 |DeserializeBuilderField { field_ident, .. }| {
                     let expression = quote! {
                         ::core::option::Option::None
@@ -657,7 +527,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
                     (field_ident, expression)
                 },
             ));
-        let group_value_expressions_constructors = Self::group_fields(ast)?.into_iter().map(
+        let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
             |DeserializeBuilderField {
                  field_ident,
                  field_type,

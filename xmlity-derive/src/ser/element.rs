@@ -4,13 +4,8 @@ use syn::{
     parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt,
 };
 
-use crate::options::{
-    XmlityFieldElementDeriveOpts, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
-};
-use crate::{
-    DeriveError, DeriveMacro, FieldIdent, SerializeField, XmlityFieldAttributeGroupDeriveOpts,
-    XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
-};
+use crate::options::{XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
+use crate::{DeriveError, DeriveMacro};
 
 use crate::ExpandedName;
 
@@ -68,79 +63,6 @@ impl<'a> DeriveElementStruct<'a> {
     fn new(opts: &'a XmlityRootElementDeriveOpts) -> Self {
         Self { opts }
     }
-
-    fn fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldDeriveOpts>>, DeriveError> {
-        let syn::Data::Struct(DataStruct { fields, .. }) = &ast.data else {
-            unreachable!()
-        };
-
-        match fields {
-            syn::Fields::Named(fields) => fields
-                .named
-                .iter()
-                .map(|f| {
-                    Ok(SerializeField {
-                        field_ident: FieldIdent::Named(f.ident.clone().expect("Named struct")),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>(),
-            syn::Fields::Unnamed(fields) => fields
-                .unnamed
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    Ok(SerializeField {
-                        field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>(),
-            syn::Fields::Unit => unreachable!(),
-        }
-    }
-
-    fn attribute_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldAttributeGroupDeriveOpts>>, DeriveError> {
-        Ok(Self::fields(ast)?
-            .into_iter()
-            .filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Attribute(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Element(_) => None,
-                })
-            })
-            .collect())
-    }
-
-    fn element_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldElementGroupDeriveOpts>>, DeriveError> {
-        Ok(Self::fields(ast)?
-            .into_iter()
-            .filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Element(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Attribute(_) => None,
-                })
-            })
-            .collect())
-    }
 }
 
 impl SerializeBuilder for DeriveElementStruct<'_> {
@@ -175,12 +97,12 @@ impl SerializeBuilder for DeriveElementStruct<'_> {
             syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
                 let attribute_fields = super::attribute_group_field_serializer(
                     quote! {#element_access_ident},
-                    Self::attribute_group_fields(ast)?,
+                    crate::ser::attribute_group_fields(ast)?,
                 );
 
                 let element_fields = super::element_group_field_serializer(
                     quote! {#children_access_ident},
-                    Self::element_group_fields(ast)?,
+                    crate::ser::element_group_fields(ast)?,
                 );
 
                 let preferred_prefix_setting = preferred_prefix.0.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
@@ -219,93 +141,6 @@ impl DeriveNoneStruct {
     fn new() -> Self {
         Self {}
     }
-
-    fn fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldDeriveOpts>>, DeriveError> {
-        let syn::Data::Struct(DataStruct { fields, .. }) = &ast.data else {
-            unreachable!()
-        };
-
-        match fields {
-            syn::Fields::Named(fields) => fields
-                .named
-                .iter()
-                .map(|f| {
-                    Ok(SerializeField {
-                        field_ident: FieldIdent::Named(f.ident.clone().expect("Named struct")),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>(),
-            syn::Fields::Unnamed(fields) => fields
-                .unnamed
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    Ok(SerializeField {
-                        field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>(),
-            syn::Fields::Unit => unreachable!(),
-        }
-    }
-
-    fn attribute_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldAttributeGroupDeriveOpts>>, DeriveError> {
-        Ok(Self::fields(ast)?
-            .into_iter()
-            .filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Attribute(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Element(_) => None,
-                })
-            })
-            .collect())
-    }
-
-    fn element_group_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldElementGroupDeriveOpts>>, DeriveError> {
-        Ok(Self::fields(ast)?
-            .into_iter()
-            .filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Element(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Attribute(_) => None,
-                })
-            })
-            .collect())
-    }
-
-    fn element_fields(
-        ast: &syn::DeriveInput,
-    ) -> Result<Vec<SerializeField<XmlityFieldElementDeriveOpts>>, DeriveError> {
-        Ok(Self::fields(ast)?
-            .into_iter()
-            .filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Element(opts) => Some(opts),
-                    XmlityFieldDeriveOpts::Group(_) | XmlityFieldDeriveOpts::Attribute(_) => None,
-                })
-            })
-            .collect())
-    }
 }
 
 impl SerializeBuilder for DeriveNoneStruct {
@@ -322,9 +157,9 @@ impl SerializeBuilder for DeriveNoneStruct {
 
         match fields {
             syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
-                let value_fields = super::element_field_serializer(
+                let value_fields = super::seq_field_serializer(
                     quote! {#seq_access_ident},
-                    Self::element_fields(ast)?,
+                    crate::ser::element_fields(ast)?,
                 );
 
                 Ok(parse_quote! {
@@ -433,7 +268,6 @@ impl SerializeBuilder for DeriveValueEnum<'_> {
                             ::xmlity::Serialize::serialize(&#variant_ident_string, #serializer_access)
                         },
                     }),
-                    
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
