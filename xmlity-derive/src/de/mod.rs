@@ -2,9 +2,9 @@ mod element;
 mod group;
 pub use element::DeriveDeserialize;
 pub use group::DeriveDeserializationGroup;
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{parse_quote, Ident, Stmt, Type, Visibility};
+use syn::{parse_quote, Expr, Ident, Stmt, Type, Visibility};
 
 use crate::{
     options::{
@@ -236,7 +236,7 @@ fn builder_attribute_field_visitor<
             if_contributed_to_groups,
             after_attempt,
         )))
-        .map(
+        .flat_map(
             move |(
                 var_field,
                 (
@@ -274,7 +274,6 @@ fn builder_attribute_field_visitor<
                 ),
             },
         )
-        .flatten()
         .collect::<Vec<_>>()
 }
 
@@ -382,7 +381,7 @@ fn builder_element_field_visitor<
             if_contributed_to_groups,
             after_attempt,
         )))
-        .map(
+        .flat_map(
             move |(
                 var_field,
                 (
@@ -418,24 +417,23 @@ fn builder_element_field_visitor<
                 ),
             },
         )
-        .flatten()
         .collect::<Vec<_>>()
 }
 
 fn attribute_done(
     field: DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
     builder_field_ident_prefix: impl ToTokens,
-) -> proc_macro2::TokenStream {
+) -> Expr {
     let DeserializeBuilderField {
         builder_field_ident,
         options,
         ..
     } = field;
     match options {
-        XmlityFieldAttributeGroupDeriveOpts::Attribute(_) => quote! {
+        XmlityFieldAttributeGroupDeriveOpts::Attribute(_) => parse_quote! {
             ::core::option::Option::is_some(&#builder_field_ident_prefix #builder_field_ident)
         },
-        XmlityFieldAttributeGroupDeriveOpts::Group(_) => quote! {
+        XmlityFieldAttributeGroupDeriveOpts::Group(_) => parse_quote! {
             ::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident)
         },
     }
@@ -447,7 +445,7 @@ fn all_attributes_done(
     >,
 
     builder_field_ident_prefix: impl ToTokens,
-) -> proc_macro2::TokenStream {
+) -> Expr {
     let conditions = fields
         .into_iter()
         .map(|field| attribute_done(field, &builder_field_ident_prefix));
@@ -457,26 +455,26 @@ fn all_attributes_done(
     };
 
     if conditions.is_empty() {
-        quote! {true}
+        parse_quote! {true}
     } else {
-        quote! {#conditions}
+        parse_quote! {#conditions}
     }
 }
 
 fn element_done(
     field: DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
     builder_field_ident_prefix: impl ToTokens,
-) -> proc_macro2::TokenStream {
+) -> Expr {
     let DeserializeBuilderField {
         builder_field_ident,
         options,
         ..
     } = field;
     match options {
-        XmlityFieldElementGroupDeriveOpts::Element(_) => quote! {
+        XmlityFieldElementGroupDeriveOpts::Element(_) => parse_quote! {
             ::core::option::Option::is_some(&#builder_field_ident_prefix #builder_field_ident)
         },
-        XmlityFieldElementGroupDeriveOpts::Group(_) => quote! {
+        XmlityFieldElementGroupDeriveOpts::Group(_) => parse_quote! {
             ::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident)
         },
     }
@@ -487,7 +485,7 @@ fn all_elements_done(
         Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
     >,
     builder_field_ident_prefix: impl ToTokens,
-) -> proc_macro2::TokenStream {
+) -> Expr {
     let conditions = fields
         .into_iter()
         .map(|field| element_done(field, &builder_field_ident_prefix));
@@ -497,8 +495,8 @@ fn all_elements_done(
     };
 
     if conditions.is_empty() {
-        quote! {true}
+        parse_quote! {true}
     } else {
-        quote! {#conditions}
+        parse_quote! {#conditions}
     }
 }

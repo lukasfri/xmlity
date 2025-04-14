@@ -1,63 +1,15 @@
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Expr, Field, Ident, ImplItemFn, ItemImpl, Lifetime, Stmt, Variant};
+use syn::{parse_quote, spanned::Spanned, Data, DataEnum, DeriveInput, Expr, Field, Ident, Lifetime, LifetimeParam, Stmt, Variant};
 
 use crate::{
     de::{
         all_attributes_done, all_elements_done, attribute_done, builder_attribute_field_visitor,
         builder_element_field_visitor, constructor_expr, element_done,
-    }, options::{ElementOrder,  XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts}, simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro, DeserializeBuilderField, ExpandedName, FieldIdent, XmlityFieldAttributeDeriveOpts, XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldElementGroupDeriveOpts, XmlityFieldGroupDeriveOpts
+    }, options::{ElementOrder, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts}, simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro, DeserializeBuilderField, ExpandedName, FieldIdent, XmlityFieldAttributeDeriveOpts, XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldElementGroupDeriveOpts, XmlityFieldGroupDeriveOpts
 };
 
-use super::{common::DeserializeTraitImplBuilder, common::VisitorBuilder, StructType};
-
-trait DeserializeContent {
-    /// Returns the content inside the `Deserialize::deserialize` function.
-    fn deserialize_content(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_ident: &Ident,
-        visitor_lifetime: &Lifetime,
-        deserializer_ident: &Ident,
-    ) -> Result<Vec<Stmt>, DeriveError>;
-}
-
-trait DeserializeContentExt: DeserializeContent {
-    fn deserialize_impl(
-        &self,
-        ast: &syn::DeriveInput,
-    ) -> Result<ItemImpl, DeriveError>;
-}
-
-impl<T: DeserializeContent> DeserializeContentExt for T {
-    fn deserialize_impl(
-        &self,
-        ast @ DeriveInput {
-            ident,
-            generics,
-            ..
-        }: &syn::DeriveInput,
-    ) -> Result<ItemImpl, DeriveError> {
-        let visitor_ident =
-            Ident::new("__Visitor", ident.span());
-        let visitor_lifetime = Lifetime::new("'__visitor", ident.span());
-        let deserializer_ident = Ident::new("__deserializer", ident.span());
-        let deserialize_lifetime = Lifetime::new("'__deserialize", ident.span());
-
-        let implementation =
-            self.deserialize_content(ast, &visitor_ident, &visitor_lifetime, &deserializer_ident)?;
-
-        let trait_impl_builder = DeserializeTraitImplBuilder::new(
-            ident,
-            generics,
-            &deserializer_ident,
-            &deserialize_lifetime,
-            implementation,
-        );
-
-        Ok(trait_impl_builder.trait_impl())
-    }
-}
+use super::{common::{DeserializeBuilder, DeserializeBuilderExt, VisitorBuilder, VisitorBuilderExt}, StructType};
 
 pub struct StructElementVisitorBuilder<'a> {
     opts: &'a XmlityRootElementDeriveOpts,
@@ -75,6 +27,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
     fn struct_fields_visitor_end<T>(
         struct_ident: &Ident,
+        element_access_ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
         fields: T,
         constructor_type: StructType,
@@ -86,9 +39,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
     where
         T: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldDeriveOpts>> + Clone,
         T::IntoIter: Clone,
-    {
-        let element_access_ident = Ident::new("__element", struct_ident.span());
-    
+    {    
         let element_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 XmlityFieldDeriveOpts::Element(opts) => Some(opts),
@@ -185,11 +136,12 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
     fn visit_element_data_fn_impl(
         ident: &Ident,
+        element_access_ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
         fields: &syn::Fields,
         children_order: ElementOrder,
         allow_unknown_children: bool,
-        attributes_order: ElementOrder,
+        attribute_order: ElementOrder,
         allow_unknown_attributes: bool,
     ) -> Result<Vec<Stmt>, darling::Error> {
         let constructor_type = match fields {
@@ -234,12 +186,13 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
         Ok(Self::struct_fields_visitor_end(
             ident,
+            element_access_ident,
             visitor_lifetime,
             fields,
             constructor_type,
             children_order,
             allow_unknown_children,
-            attributes_order,
+            attribute_order,
             allow_unknown_attributes,
         ))
     }
@@ -250,17 +203,44 @@ impl<'a> StructElementVisitorBuilder<'a> {
         }
     }
 
-    fn element_visit_fn(
-        ident: &Ident,
-        visitor_lifetime: &syn::Lifetime,
-        expanded_name: Option<ExpandedName>,
-        data_struct: &DataStruct,
-        children_order: ElementOrder,
-        allow_unknown_children: bool,
-        attributes_order: ElementOrder,
-        allow_unknown_attributes: bool,
-    ) -> Result<ImplItemFn, darling::Error> {
-        let element_access_ident = Ident::new("__element", ident.span());
+}
+
+impl VisitorBuilder for StructElementVisitorBuilder<'_> {
+    fn visit_element_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        visitor_lifetime: &Lifetime,
+        element_access_ident: &Ident,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let DeriveInput { ident, data, .. } = ast;
+        let XmlityRootElementDeriveOpts {
+            name,
+            namespace,
+            deserialize_any_name,
+            allow_unknown_attributes,
+            allow_unknown_children,
+            children_order,
+            attribute_order,
+            ..
+        } = self.opts;
+
+        let data_struct = match data {
+            syn::Data::Struct(data_struct) => data_struct,
+            _ => unreachable!(),
+        };
+        
+    
+        let ident_name = ident.to_string();
+        let expanded_name = ExpandedName::new(
+            name.0.as_ref().unwrap_or(&ident_name),
+            namespace.0.as_deref(),
+        );
+        let expanded_name = if *deserialize_any_name {
+            None
+        } else {
+            Some(expanded_name)
+        };
+
         let xml_name_identification = expanded_name.as_ref().map::<Stmt, _>(|qname| {
             parse_quote! {
                 ::xmlity::de::ElementAccessExt::ensure_name::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
@@ -271,99 +251,61 @@ impl<'a> StructElementVisitorBuilder<'a> {
             fields @ syn::Fields::Named(_) | fields @ syn::Fields::Unnamed(_) => {
                 Self::visit_element_data_fn_impl(
                     ident,
+                    element_access_ident,
                     visitor_lifetime,
                     fields,
-                    children_order,
-                    allow_unknown_children,
-                    attributes_order,
-                    allow_unknown_attributes,
+                    *children_order,
+                    *allow_unknown_children,
+                    *attribute_order,
+                    *allow_unknown_attributes,
                 )?
             }
             syn::Fields::Unit => Self::visit_element_unit_fn_impl(ident),
         };
 
-        let body : Vec<Stmt> = parse_quote! {
+        Ok(Some( parse_quote! {
             #xml_name_identification
 
             #(#deserialization_impl)*
-        };
+        }))  
+    }
 
-        Ok(VisitorBuilder::visit_element_fn_signature(
-            &element_access_ident,
-            visitor_lifetime,
-            body,
-        ))
+    fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
+        let DeriveInput { ident, generics,  .. } = ast;
+        let non_bound_generics = crate::non_bound_generics(generics);
+
+        let mut deserialize_generics = (*generics).to_owned();
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+        let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());
+
+        deserialize_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new(visitor_lifetime.clone())),
+        );
+
+        Ok(parse_quote! {
+            struct #visitor_ident #deserialize_generics {
+                marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
+                lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
+            }
+        })   
     }
 }
 
-impl DeserializeContent for StructElementVisitorBuilder<'_> {
-    fn deserialize_content(
+impl DeserializeBuilder for StructElementVisitorBuilder<'_> {
+    fn deserialize_fn_body(
         &self,
-        ast @ DeriveInput { ident, generics, data, .. }: &syn::DeriveInput,
-        visitor_ident: &Ident,
-        visitor_lifetime: &Lifetime,
+        ast: &syn::DeriveInput,
         deserializer_ident: &Ident,
+        _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let Self {
-            opts,
-        } = self;
-        let formatter_expecting = format!("struct {}", ident);
-        let data_struct = match data {
-            syn::Data::Struct(data_struct) => data_struct,
-            _ => {
-                return Err(darling::Error::custom(format!(
-                    "{} can only be derived for structs",
-                    formatter_expecting
-                ))
-                .with_span(ast))?;
-            }
-        };
+        let formatter_expecting = format!("struct {}", ast.ident);
 
-        let XmlityRootElementDeriveOpts {
-            name,
-            namespace,
-            children_order,
-            allow_unknown_attributes,
-            attribute_order,
-            allow_unknown_children,
-            deserialize_any_name,
-            ..
-        } = opts;
-        let visit_element_fn = {
-            let ident_name = ident.to_string();
-            let expanded_name = ExpandedName::new(
-                name.0.as_ref().unwrap_or(&ident_name),
-                namespace.0.as_deref(),
-            );
-            let expanded_name = if *deserialize_any_name {
-                None
-            } else {
-                Some(expanded_name)
-            };
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
-            Self::element_visit_fn(
-                ident,
-                visitor_lifetime,
-                expanded_name,
-                data_struct,
-                *children_order,
-                *allow_unknown_children,
-                *attribute_order,
-                *allow_unknown_attributes,
-            )?
-        };
-
-        let visitor_builder = VisitorBuilder::new(
-            ident,
-            generics,
-            visitor_ident,
-            visitor_lifetime,
-            &formatter_expecting,
-        )
-        .visit_element_fn(visit_element_fn);
-
-        let visitor_def = visitor_builder.definition();
-        let visitor_trait_impl = visitor_builder.trait_impl();
+        let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
 
         Ok(parse_quote! {
             #visitor_def
@@ -386,77 +328,22 @@ impl<'a> StructAttributeVisitorBuilder<'a> {
     fn new(opts: &'a crate::XmlityRootAttributeDeriveOpts) -> Self {
         Self { opts }
     }
-
-    fn attribute_visit_fn(
-        ident: &Ident,
-        visitor_lifetime: &syn::Lifetime,
-        expanded_name: Option<ExpandedName>,
-        data_struct: &DataStruct,
-    ) -> darling::Result<ImplItemFn> {
-        let attribute_access_ident = Ident::new("__attribute", ident.span());
-        let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
-            parse_quote! {
-                ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
-            }
-        });
-
-        let deserialization_impl = match &data_struct.fields {
-            syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => simple_compile_error("Only tuple structs with 1 element are supported"),
-            syn::Fields::Unnamed(_) => {
-                parse_quote! {
-                    ::core::str::FromStr::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
-                        .map(#ident)
-                        .map_err(::xmlity::de::Error::custom)
-                }
-            }
-            syn::Fields::Named(_) =>
-                simple_compile_error("Named fields in structs are not supported. Only tuple structs with 1 element are supported"),
-            syn::Fields::Unit =>
-                simple_compile_error("Unit structs are not supported. Only tuple structs with 1 element are supported"),
-        };
-
-        let body: Vec<Stmt> = parse_quote! {
-            #xml_name_identification
-
-            #deserialization_impl
-        };
-
-        Ok(VisitorBuilder::visit_attribute_fn_signature(
-            &attribute_access_ident,
-            visitor_lifetime,
-            body,
-        ))
-    }
 }
 
-impl DeserializeContent for StructAttributeVisitorBuilder<'_> {
-    fn deserialize_content(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_ident: &Ident,
-        visitor_lifetime: &Lifetime,
-        deserializer_ident: &Ident,
-    ) -> Result<Vec<Stmt>, DeriveError> {
-        let data_struct = match ast.data {
-            syn::Data::Struct(ref data_struct) => data_struct,
-            _ => {
-                return Err(darling::Error::custom("Only structs are supported").with_span(ast))?;
-            }
-        };
+impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
+    fn visit_attribute_fn_body(
+            &self,
+            ast: &syn::DeriveInput,
+            visitor_lifetime: &Lifetime,
+            attribute_access_ident: &Ident,
+        ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+            let DeriveInput { ident, data, .. } = ast;
 
-        let Self { opts } = self;
-
-        let formatter_expecting = format!("struct {}", ast.ident);
-
-        let crate::XmlityRootAttributeDeriveOpts {
-            name,
-            namespace,
-            deserialize_any_name,
-            ..
-        } = opts;
-
-        let visit_attribute_fn = {
-            let ident_name = ast.ident.to_string();
+            let Data::Struct(data_struct) = data else {
+                unreachable!()
+            };
+            let XmlityRootAttributeDeriveOpts { name, namespace, deserialize_any_name, .. } = self.opts;
+            let ident_name = ident.to_string();
             let expanded_name = if *deserialize_any_name {
                 None
             } else {
@@ -465,21 +352,73 @@ impl DeserializeContent for StructAttributeVisitorBuilder<'_> {
                     namespace.0.as_deref(),
                 ))
             };
+            
+            let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
+                parse_quote! {
+                    ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
+                }
+            });
+    
+            let deserialization_impl = match &data_struct.fields {
+                syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => simple_compile_error("Only tuple structs with 1 element are supported"),
+                syn::Fields::Unnamed(_) => {
+                    parse_quote! {
+                        ::core::str::FromStr::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
+                            .map(#ident)
+                            .map_err(::xmlity::de::Error::custom)
+                    }
+                }
+                syn::Fields::Named(_) =>
+                    simple_compile_error("Named fields in structs are not supported. Only tuple structs with 1 element are supported"),
+                syn::Fields::Unit =>
+                    simple_compile_error("Unit structs are not supported. Only tuple structs with 1 element are supported"),
+            };
+    
+            Ok(Some( parse_quote! {
+                #xml_name_identification
+    
+                #deserialization_impl
+            }))
+        
+    }
+    
+    fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
+        let DeriveInput { ident, generics,  .. } = ast;
+        let non_bound_generics = crate::non_bound_generics(generics);
 
-            Self::attribute_visit_fn(&ast.ident, visitor_lifetime, expanded_name, data_struct)?
-        };
+        let mut deserialize_generics = (*generics).to_owned();
 
-        let visitor_builder = VisitorBuilder::new(
-            &ast.ident,
-            &ast.generics,
-            visitor_ident,
-            visitor_lifetime,
-            &formatter_expecting,
-        )
-        .visit_attribute_fn(visit_attribute_fn);
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+        let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());
 
-        let visitor_def = visitor_builder.definition();
-        let visitor_trait_impl = visitor_builder.trait_impl();
+        deserialize_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new(visitor_lifetime.clone())),
+        );
+
+        Ok(parse_quote! {
+            struct #visitor_ident #deserialize_generics {
+                marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
+                lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
+            }
+        })
+        
+    }
+}
+
+impl DeserializeBuilder for StructAttributeVisitorBuilder<'_> {
+    fn deserialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        deserializer_ident: &Ident,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let formatter_expecting = format!("struct {}", ast.ident);
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+
+        let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
 
         Ok(parse_quote! {
             #visitor_def
@@ -833,97 +772,103 @@ impl EnumNoneVisitorBuilder {
     }
 }
 
-impl DeserializeContent for EnumNoneVisitorBuilder {
-    fn deserialize_content(
+impl VisitorBuilder for EnumNoneVisitorBuilder {
+    fn visit_seq_fn_body(
         &self,
-        DeriveInput {
-            ident,
-            generics,
-            data,
-            ..
-        }: &syn::DeriveInput,
-        visitor_ident: &Ident,
-        visitor_lifetime: &Lifetime,
-        deserializer_ident: &Ident,
-    ) -> Result<Vec<Stmt>, DeriveError> {
+        DeriveInput { ident, data, .. }: &syn::DeriveInput,
+        _visitor_lifetime: &Lifetime,
+        seq_access_ident: &Ident,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let data_enum = match &data {
             syn::Data::Enum(data_enum) => data_enum,
             _ => panic!("Wrong options. Only enums can be used for xelement."),
         };
         let variants = data_enum.variants.iter().collect::<Vec<_>>();
 
-        let visit_seq_fn = (|| {
-            let sequence_access_ident = Ident::new("__sequence", Span::mixed_site());
-    
-            let variants = variants.clone().into_iter().map(|Variant {
-                ident: variant_ident,
-                fields: variant_fields,
-                ..
-            }| {
-                match variant_fields {
-                    syn::Fields::Named(_fields) => {
-                        None
-                    }
-                    syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => {
-                        None
-                    }
-                    syn::Fields::Unnamed(fields) => {
-                        let Field {
-                            ty: field_type,
-                            ..
-                        } = fields.unnamed.first().expect("This is guaranteed by the check above");
-    
-                        Some(quote! {
-                            if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#field_type>(&mut #sequence_access_ident) {
-                                return ::core::result::Result::Ok(#ident::#variant_ident(_v));
-                            }
-                        })
-                    }
-                    syn::Fields::Unit =>{
-                        None
-                    },
+        let variants = variants.clone().into_iter().map(|Variant {
+            ident: variant_ident,
+            fields: variant_fields,
+            ..
+        }| {
+            match variant_fields {
+                syn::Fields::Named(_fields) => {
+                    None
                 }
-            }).collect::<Option<Vec<_>>>()?;
-            let ident_string = ident.to_string();
+                syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => {
+                    None
+                }
+                syn::Fields::Unnamed(fields) => {
+                    let Field {
+                        ty: field_type,
+                        ..
+                    } = fields.unnamed.first().expect("This is guaranteed by the check above");
 
-            let body: Vec<Stmt> = parse_quote! {
-                #(#variants)*
+                    Some(quote! {
+                        if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#field_type>(&mut #seq_access_ident) {
+                            return ::core::result::Result::Ok(#ident::#variant_ident(_v));
+                        }
+                    })
+                }
+                syn::Fields::Unit =>{
+                    None
+                },
+            }
+        }).collect::<Option<Vec<_>>>().unwrap_or_default();
+        let ident_string = ident.to_string();
 
-                ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
-            };
-    
-            Some(VisitorBuilder::visit_seq_fn_signature(
-                &sequence_access_ident,
-                visitor_lifetime,
-                body,
-            ))
-        })();
-    
-        let formatter_expecting = format!("enum {}", ident);
-    
-        let visitor_builder = VisitorBuilder::new(
-            ident,
-            generics,
-            visitor_ident,
-            visitor_lifetime,
-            &formatter_expecting,
-        )
-        .visit_seq_fn(visit_seq_fn);
-    
-        let visitor_def = visitor_builder.definition();
-        let visitor_trait_impl = visitor_builder.trait_impl();
-    
-        let deserialize_stmt: Vec<Stmt> = parse_quote! {
+        Ok(Some( parse_quote! {
+            #(#variants)*
+
+            ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
+        }))
+    }
+
+    fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
+        let DeriveInput { ident, generics,  .. } = ast;
+        let non_bound_generics = crate::non_bound_generics(generics);
+
+        let mut deserialize_generics = (*generics).to_owned();
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+        let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());
+
+        deserialize_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new(visitor_lifetime.clone())),
+        );
+
+        Ok(parse_quote! {
+            struct #visitor_ident #deserialize_generics {
+                marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
+                lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
+            }
+        })
+    }
+}
+
+impl DeserializeBuilder for EnumNoneVisitorBuilder {
+    fn deserialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        deserializer_ident: &Ident,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let formatter_expecting = format!("enum {}", ast.ident);
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+
+        let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
+
+        Ok(parse_quote! {
+            #visitor_def
+
+            #visitor_trait_impl
+
             ::xmlity::de::Deserializer::deserialize_seq(#deserializer_ident, #visitor_ident {
                 lifetime: ::core::marker::PhantomData,
                 marker: ::core::marker::PhantomData,
             })
-        };
-    
-        Ok(parse_quote! {
-            #visitor_def
-            #visitor_trait_impl
-            #(#deserialize_stmt)*
         })
     }
 }
@@ -936,33 +881,23 @@ impl<'a> EnumValueVisitorBuilder<'a> {
     fn new(opts: &'a XmlityRootValueDeriveOpts) -> Self {
         Self { opts }
     }
-}
 
-impl DeserializeContent for EnumValueVisitorBuilder<'_> {
-    fn deserialize_content(
+    fn str_value_body(
         &self,
-        DeriveInput {  ident, generics, data, .. }: &syn::DeriveInput,
-        visitor_ident: &Ident,
-        visitor_lifetime: &Lifetime,
-        deserializer_ident: &Ident,
-    ) -> Result<Vec<Stmt>, DeriveError>
+        ast: &syn::DeriveInput,
+        value_ident: &Ident,
+    ) ->Result<Option<Vec<Stmt>>, DeriveError> {
+        let DeriveInput { ident, data, .. } = ast;
+        let syn::Data::Enum(DataEnum { variants, .. }) = data else {
+            panic!("This is guaranteed by the caller");
+        };
 
-{
-    let syn::Data::Enum(DataEnum { variants, .. }) = data else {
-        panic!("This is guaranteed by the caller");
-    };
-
-    let Self { opts } = self;
-
-    let (visit_text_fn, visit_cdata_fn) = (|| {
-        let value_ident_owned = Ident::new("__valueowned", Span::mixed_site());
-        let value_ident = Ident::new("__value", Span::mixed_site());
         let variants = variants.clone().into_iter().map(|Variant {
             ident: variant_ident,
             fields: variant_fields,
             ..
         }| {
-            let variant_ident_string = opts.rename_all.apply_to_variant(&variant_ident.to_string());
+            let variant_ident_string = self.opts.rename_all.apply_to_variant(&variant_ident.to_string());
             match variant_fields {
                 syn::Fields::Named(_fields) => {
                     None
@@ -982,67 +917,115 @@ impl DeserializeContent for EnumValueVisitorBuilder<'_> {
 
         let variants = match variants {
             Some(variants) => variants,
-            None => return (None, None),
+            None => return Ok(None),
         };
 
         let ident_string = ident.to_string();
 
-        let fn_body: Vec<Stmt> = parse_quote! {
+        Ok(Some(parse_quote! {
             #(#variants)*
 
             ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
-        };
+        }))
 
-        let text_fn_body: Vec<Stmt> = parse_quote! {
-            let #value_ident = ::xmlity::de::XmlText::as_str(&#value_ident_owned);
-            #(#fn_body)*
-        };
-
-        let cdata_fn_body: Vec<Stmt> = parse_quote! {
-            let #value_ident = ::xmlity::de::XmlCData::as_str(&#value_ident_owned);
-            #(#fn_body)*
-        };
-
-        (
-            Some(VisitorBuilder::visit_text_fn_signature(
-                &value_ident_owned,
-                text_fn_body,
-            )),
-            Some(VisitorBuilder::visit_cdata_fn_signature(
-                &value_ident_owned,
-                cdata_fn_body,
-            )),
-        )
-    })();
-
-    let formatter_expecting = format!("enum {}", ident);
-
-    let visitor_builder = VisitorBuilder::new(
-        ident,
-        generics,
-        visitor_ident,
-        visitor_lifetime,
-        &formatter_expecting,
-    )
-    .visit_text_fn(visit_text_fn)
-    .visit_cdata_fn(visit_cdata_fn);
-
-    let visitor_def = visitor_builder.definition();
-    let visitor_trait_impl = visitor_builder.trait_impl();
-
-    let deserialize_stmt: Vec<Stmt> = parse_quote! {
-        ::xmlity::de::Deserializer::deserialize_any(#deserializer_ident, #visitor_ident {
-            lifetime: ::core::marker::PhantomData,
-            marker: ::core::marker::PhantomData,
-        })
-    };
-
-    Ok(parse_quote! {
-        #visitor_def
-        #visitor_trait_impl
-        #(#deserialize_stmt)*
-    })
+    }
 }
+
+impl VisitorBuilder for EnumValueVisitorBuilder<'_> {
+    fn visit_text_fn_body(
+            &self,
+            ast: &syn::DeriveInput,
+            _visitor_lifetime: &Lifetime,
+            value_ident: &Ident,
+        ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+            let str_ident = Ident::new("__value_str", Span::mixed_site());
+
+            let str_body = self.str_value_body(ast, &str_ident)?;
+
+            let Some(str_body) = str_body else {
+                return Ok(None)
+            };
+
+            Ok(Some(
+                 parse_quote! {
+                    let #str_ident = ::xmlity::de::XmlText::as_str(&#value_ident);
+                    #(#str_body)*
+                }
+            ))
+            
+        
+    }
+
+    fn visit_cdata_fn_body(
+            &self,
+            ast: &syn::DeriveInput,
+            _visitor_lifetime: &Lifetime,
+            value_ident: &Ident,
+        ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+            let str_ident = Ident::new("__value_str", Span::mixed_site());
+
+            let str_body = self.str_value_body(ast, &str_ident)?;
+
+            let Some(str_body) = str_body else {
+                return Ok(None)
+            };
+
+            Ok(Some(
+                 parse_quote! {
+                    let #str_ident = ::xmlity::de::XmlCData::as_str(&#value_ident);
+                    #(#str_body)*
+                }
+            ))
+    }
+
+    fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
+        let DeriveInput { ident, generics,  .. } = ast;
+        let non_bound_generics = crate::non_bound_generics(generics);
+
+        let mut deserialize_generics = (*generics).to_owned();
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+        let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());
+
+        deserialize_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new(visitor_lifetime.clone())),
+        );
+
+        Ok(parse_quote! {
+            struct #visitor_ident #deserialize_generics {
+                marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
+                lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
+            }
+        })
+    }
+}
+
+impl DeserializeBuilder for EnumValueVisitorBuilder<'_> {
+    fn deserialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        deserializer_ident: &Ident,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let formatter_expecting = format!("enum {}", ast.ident);
+
+        let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
+
+        let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
+
+        Ok(parse_quote! {
+            #visitor_def
+
+            #visitor_trait_impl
+
+            ::xmlity::de::Deserializer::deserialize_any(#deserializer_ident, #visitor_ident {
+                lifetime: ::core::marker::PhantomData,
+                marker: ::core::marker::PhantomData,
+            })
+        })
+    }
 }
 
 pub struct DeriveDeserialize;
@@ -1054,11 +1037,11 @@ impl DeriveMacro for DeriveDeserialize {
         match (&ast.data, &opts) {
             (syn::Data::Struct(_), DeriveDeserializeOption::Element(opts)) => {
                 StructElementVisitorBuilder::new(opts)
-                    .deserialize_impl(ast)
+                    .deserialize_trait_impl(ast)
                     .map(|a| a.to_token_stream())
             }
             (syn::Data::Struct(_), DeriveDeserializeOption::Attribute(opts)) => {
-                StructAttributeVisitorBuilder::new(opts).deserialize_impl(ast)
+                StructAttributeVisitorBuilder::new(opts).deserialize_trait_impl(ast)
                 .map(|a| a.to_token_stream())
             }
             (syn::Data::Struct(_), DeriveDeserializeOption::Value(_opts)) => {
@@ -1066,13 +1049,13 @@ impl DeriveMacro for DeriveDeserialize {
                 Ok(simple_compile_error("Structs with value options are not supported yet"))
             }
             (syn::Data::Enum(_), DeriveDeserializeOption::None) => {
-                EnumNoneVisitorBuilder::new().deserialize_impl(ast).map(|a| a.to_token_stream())
+                EnumNoneVisitorBuilder::new().deserialize_trait_impl(ast).map(|a| a.to_token_stream())
             }
             (
                 syn::Data::Enum(_),
                 DeriveDeserializeOption::Value(value_opts),
             ) => EnumValueVisitorBuilder::new(value_opts)
-                .deserialize_impl(ast)
+                .deserialize_trait_impl(ast)
                 .map(|a| a.to_token_stream()),
             (syn::Data::Union(_), _) => Ok(simple_compile_error("Unions are not supported yet")),
             _ => Ok(simple_compile_error("Wrong options")),

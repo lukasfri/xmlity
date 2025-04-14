@@ -4,7 +4,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
     parse_quote, DeriveInput, Ident, ImplItemFn, Index, ItemImpl, ItemStruct, Lifetime,
-    LifetimeParam,
+    LifetimeParam, Stmt,
 };
 
 use crate::{
@@ -25,31 +25,28 @@ trait DeserializationGroupBuilderContent {
         ast: &syn::DeriveInput,
         attributes_access_ident: &Ident,
         deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError>;
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
     fn attributes_done_content(
         &self,
         ast: &syn::DeriveInput,
         deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError>;
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
     fn contribute_elements_content(
         &self,
         ast: &syn::DeriveInput,
         elements_access_ident: &Ident,
         deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError>;
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
     fn elements_done_content(
         &self,
         ast: &syn::DeriveInput,
         deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError>;
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
-    fn finish_content(
-        &self,
-        ast: &syn::DeriveInput,
-    ) -> Result<proc_macro2::TokenStream, DeriveError>;
+    fn finish_content(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError>;
 
     fn builder_definition(
         &self,
@@ -62,7 +59,7 @@ trait DeserializationGroupBuilderContent {
         &self,
         ast: &syn::DeriveInput,
         builder_ident: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError>;
+    ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
 trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderContent {
@@ -103,6 +100,8 @@ trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderContent 
     ) -> Result<ItemImpl, DeriveError>;
 
     fn deserialize_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError>;
+
+    fn total_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError>;
 }
 
 impl<T: DeserializationGroupBuilderContent> DeserializationGroupBuilderContentExt for T {
@@ -128,7 +127,7 @@ impl<T: DeserializationGroupBuilderContent> DeserializationGroupBuilderContentEx
                 &mut self,
                 mut #attributes_access_ident: A,
             ) -> Result<bool, <A as ::xmlity::de::AttributesAccess<#deserialize_lifetime>>::Error> {
-                #content
+                #(#content)*
             }
         }))
     }
@@ -146,7 +145,7 @@ impl<T: DeserializationGroupBuilderContent> DeserializationGroupBuilderContentEx
 
         Ok(Some(parse_quote! {
             fn attributes_done(&self) -> bool {
-                #content
+                #(#content)*
             }
         }))
     }
@@ -170,7 +169,7 @@ impl<T: DeserializationGroupBuilderContent> DeserializationGroupBuilderContentEx
                 &mut self,
               mut #elements_access_ident: A,
             ) -> Result<bool, <A as ::xmlity::de::SeqAccess<#deserialize_lifetime>>::Error> {
-                #content
+                #(#content)*
             }
         }))
     }
@@ -188,16 +187,17 @@ impl<T: DeserializationGroupBuilderContent> DeserializationGroupBuilderContentEx
 
         Ok(Some(parse_quote! {
             fn elements_done(&self) -> bool {
-                #content
+                #(#content)*
             }
         }))
     }
 
     fn finish_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
-        let finish_content = self.finish_content(ast)?;
+        let content = self.finish_content(ast)?;
+
         Ok(parse_quote! {
         fn finish<E: ::xmlity::de::Error>(self) -> Result<Self::Value, E> {
-           #finish_content
+           #(#content)*
           }
         })
     }
@@ -263,24 +263,44 @@ impl<T: DeserializationGroupBuilderContent> DeserializationGroupBuilderContentEx
     }
 
     fn deserialize_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError> {
+        let syn::DeriveInput {
+            ident, generics, ..
+        } = ast;
+
         let builder_ident =
             Ident::new(format!("__{}Builder", ast.ident).as_str(), ast.ident.span());
 
+        let deserialize_lifetime = Lifetime::new("'__deserialize", Span::call_site());
+
+        let non_bound_generics = crate::non_bound_generics(generics);
+
+        let mut builder_generics = (*generics).to_owned();
+
+        builder_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new((deserialize_lifetime).clone())),
+        );
+        let non_bound_builder_generics = crate::non_bound_generics(&builder_generics);
+
+        let builder_constructor = self.builder_constructor(ast, &builder_ident)?;
+
+        Ok(parse_quote! {
+            impl #builder_generics ::xmlity::de::DeserializationGroup<#deserialize_lifetime> for #ident #non_bound_generics {
+                type Builder = #builder_ident #non_bound_builder_generics;
+
+                fn builder() -> Self::Builder {
+                    #(#builder_constructor)*
+                }
+            }
+        })
+    }
+
+    fn total_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError> {
         let builder_def = self.deserialization_group_builder_def(ast)?;
 
         let builder_impl = self.deserialization_group_builder_impl(ast)?;
 
-        let deserialize_lifetime = Lifetime::new("'__deserialize", Span::call_site());
-
-        let deserialize_impl = DeserializeGroupTraitImplBuilder::new(
-            &ast.ident,
-            &ast.generics,
-            &deserialize_lifetime,
-            &builder_ident,
-            &self.builder_constructor(ast, &builder_ident)?,
-        )
-        .trait_impl();
-
+        let deserialize_impl = self.deserialize_impl(ast)?;
         Ok(quote! {
             #builder_def
             #builder_impl
@@ -447,7 +467,7 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
         ast: &syn::DeriveInput,
         attributes_access_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError> {
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let attribute_visit = super::builder_attribute_field_visitor(
             attributes_access_ident,
             quote! {self.},
@@ -463,7 +483,7 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
             false,
         );
 
-        Ok(Some(quote! {
+        Ok(Some(parse_quote! {
                 #(#attribute_visit)*
 
                 Ok(false)
@@ -475,10 +495,11 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
         &self,
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError> {
-        Ok(Some(all_attributes_done(
-            Self::attribute_group_fields(ast)?,
-            quote! {self.},
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let expr = all_attributes_done(Self::attribute_group_fields(ast)?, quote! {self.});
+
+        Ok(Some(parse_quote!(
+            #expr
         )))
     }
 
@@ -487,7 +508,7 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
         ast: &syn::DeriveInput,
         elements_access_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError> {
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let element_visit = super::builder_element_field_visitor(
             elements_access_ident,
             quote! {self.},
@@ -506,7 +527,7 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
             },
         );
 
-        Ok(Some(quote! {
+        Ok(Some(parse_quote! {
             #(#element_visit)*
 
             ::core::result::Result::Ok(false)
@@ -517,17 +538,15 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
         &self,
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<proc_macro2::TokenStream>, DeriveError> {
-        Ok(Some(all_elements_done(
-            Self::element_group_fields(ast)?,
-            quote! {self.},
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let expr = all_elements_done(Self::element_group_fields(ast)?, quote! {self.});
+
+        Ok(Some(parse_quote!(
+            #expr
         )))
     }
 
-    fn finish_content(
-        &self,
-        ast: &syn::DeriveInput,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    fn finish_content(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError> {
         let finish_constructor = finish_constructor_expr(
             quote! {Self::Value},
             Self::element_fields(ast)?,
@@ -536,7 +555,7 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
             &Self::constructor_type(ast),
         );
 
-        Ok(quote! {
+        Ok(parse_quote! {
           ::std::result::Result::Ok(#finish_constructor)
         })
     }
@@ -622,7 +641,7 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
         &self,
         ast: &syn::DeriveInput,
         builder_ident: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let local_value_expressions_constructors = Self::attribute_fields(ast)?
             .into_iter()
             .map(|DeserializeBuilderField { field_ident, .. }| {
@@ -667,69 +686,52 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
                 },
             )));
 
-        Ok(constructor_expr(
+        let expr = constructor_expr(
             builder_ident,
             value_expressions_constructors,
             &Self::constructor_type(ast),
-        ))
-    }
-}
-
-pub struct DeserializeGroupTraitImplBuilder<'a> {
-    ident: &'a proc_macro2::Ident,
-    generics: &'a syn::Generics,
-    deserialize_lifetime: &'a Lifetime,
-    builder_ident: &'a proc_macro2::Ident,
-    builder_constructor: &'a proc_macro2::TokenStream,
-}
-
-impl<'a> DeserializeGroupTraitImplBuilder<'a> {
-    pub fn new(
-        ident: &'a proc_macro2::Ident,
-        generics: &'a syn::Generics,
-        deserialize_lifetime: &'a Lifetime,
-        builder_ident: &'a proc_macro2::Ident,
-        builder_constructor: &'a proc_macro2::TokenStream,
-    ) -> Self {
-        Self {
-            ident,
-            generics,
-            deserialize_lifetime,
-            builder_ident,
-            builder_constructor,
-        }
-    }
-
-    pub fn trait_impl(&self) -> ItemImpl {
-        let Self {
-            ident,
-            generics,
-            deserialize_lifetime,
-            builder_ident,
-            builder_constructor,
-        } = self;
-
-        let non_bound_generics = crate::non_bound_generics(generics);
-
-        let mut builder_generics = (*generics).to_owned();
-
-        builder_generics.params.insert(
-            0,
-            syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
         );
-        let non_bound_builder_generics = crate::non_bound_generics(&builder_generics);
 
-        parse_quote! {
-            impl #builder_generics ::xmlity::de::DeserializationGroup<#deserialize_lifetime> for #ident #non_bound_generics {
-                type Builder = #builder_ident #non_bound_builder_generics;
-
-                fn builder() -> Self::Builder {
-                    #builder_constructor
-                }
-            }
-        }
+        Ok(parse_quote!(#expr))
     }
 }
+
+// pub struct DeserializeGroupTraitImplBuilder<'a> {
+//     ident: &'a proc_macro2::Ident,
+//     generics: &'a syn::Generics,
+//     deserialize_lifetime: &'a Lifetime,
+//     builder_ident: &'a proc_macro2::Ident,
+//     builder_constructor: &'a proc_macro2::TokenStream,
+// }
+
+// impl<'a> DeserializeGroupTraitImplBuilder<'a> {
+//     pub fn new(
+//         ident: &'a proc_macro2::Ident,
+//         generics: &'a syn::Generics,
+//         deserialize_lifetime: &'a Lifetime,
+//         builder_ident: &'a proc_macro2::Ident,
+//         builder_constructor: &'a proc_macro2::TokenStream,
+//     ) -> Self {
+//         Self {
+//             ident,
+//             generics,
+//             deserialize_lifetime,
+//             builder_ident,
+//             builder_constructor,
+//         }
+//     }
+
+//     pub fn trait_impl(&self) -> ItemImpl {
+//         let Self {
+//             ident,
+//             generics,
+//             deserialize_lifetime,
+//             builder_ident,
+//             builder_constructor,
+//         } = self;
+
+//     }
+// }
 
 fn finish_constructor_expr<T: quote::ToTokens>(
     ident: T,
@@ -786,7 +788,7 @@ impl DeriveMacro for DeriveDeserializationGroup {
         let opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
 
         match &ast.data {
-            syn::Data::Struct(_) => StructGroup::new(&opts).deserialize_impl(ast),
+            syn::Data::Struct(_) => StructGroup::new(&opts).total_impl(ast),
             syn::Data::Enum(_) => {
                 Ok(simple_compile_error("Enums are not supported yet").to_token_stream())
             }
