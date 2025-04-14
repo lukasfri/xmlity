@@ -1,7 +1,7 @@
 mod element;
 mod group;
-pub use element::derive_deserialize_fn;
-pub use group::derive_deserialization_group_fn;
+pub use element::DeriveDeserialize;
+pub use group::DeriveDeserializationGroup;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{Ident, Visibility};
@@ -479,20 +479,22 @@ fn element_done(
 }
 
 fn all_elements_done(
-    fields: impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
-        + Clone,
-
+    fields: impl IntoIterator<
+        Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
+    >,
     builder_field_ident_prefix: impl ToTokens,
 ) -> proc_macro2::TokenStream {
-    if fields.clone().into_iter().next().is_none() {
-        return quote! { true };
-    }
-
     let conditions = fields
         .into_iter()
         .map(|field| element_done(field, &builder_field_ident_prefix));
 
-    quote! {
+    let conditions = quote! {
         #(#conditions)&&*
+    };
+
+    if conditions.is_empty() {
+        quote! {true}
+    } else {
+        quote! {#conditions}
     }
 }

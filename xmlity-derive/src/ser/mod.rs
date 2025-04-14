@@ -1,9 +1,9 @@
 mod attribute;
 mod element;
 mod group;
-pub use attribute::derive_serialize_fn as derive_attribute_serialize_fn;
-pub use element::derive_serialize_fn as derive_element_serialize_fn;
-pub use group::derive_serialize_fn as derive_group_serialize_fn;
+pub use attribute::DeriveSerializeAttribute;
+pub use element::DeriveSerialize;
+pub use group::DeriveSerializationGroup;
 
 use crate::{
     SerializeField, XmlityFieldAttributeGroupDeriveOpts, XmlityFieldElementGroupDeriveOpts,

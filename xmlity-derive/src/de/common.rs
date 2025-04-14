@@ -2,9 +2,9 @@ use quote::quote;
 use syn::{Ident, LifetimeParam};
 
 pub struct VisitorBuilder<'a> {
-    ident: &'a syn::Ident,
+    ident: &'a Ident,
     generics: &'a syn::Generics,
-    visitor_ident: &'a syn::Ident,
+    visitor_ident: &'a Ident,
     visitor_lifetime: &'a syn::Lifetime,
     formatter_expecting: &'a str,
     visit_text_fn: Option<proc_macro2::TokenStream>,
@@ -123,6 +123,81 @@ impl<'a> VisitorBuilder<'a> {
         self
     }
 
+    pub fn visit_seq_fn_signature(
+        seq_acces_ident: &Ident,
+        visitor_lifetime: &syn::Lifetime,
+        body: proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
+        quote! {
+            fn visit_seq<S>(self, mut #seq_acces_ident: S) -> ::core::result::Result<Self::Value, <S as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error>
+            where
+                S: ::xmlity::de::SeqAccess<#visitor_lifetime>,
+            {
+                #body
+            }
+        }
+    }
+
+    pub fn visit_text_fn_signature(
+        value_ident: &Ident,
+        body: proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
+        quote! {
+            fn visit_text<E, V>(self, #value_ident: V) -> ::core::result::Result<Self::Value, E>
+            where
+                E: ::xmlity::de::Error,
+                V: ::xmlity::de::XmlText,
+            {
+                #body
+            }
+        }
+    }
+
+    pub fn visit_cdata_fn_signature(
+        value_ident: &Ident,
+        body: proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
+        quote! {
+            fn visit_cdata<E, V>(self, #value_ident: V) -> ::core::result::Result<Self::Value, E>
+            where
+                E: ::xmlity::de::Error,
+                V: ::xmlity::de::XmlCData,
+            {
+                #body
+            }
+        }
+    }
+
+    pub fn visit_attribute_fn_signature(
+        attribute_access_ident: &Ident,
+        visitor_lifetime: &syn::Lifetime,
+        body: proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
+        quote! {
+            fn visit_attribute<A>(self, #attribute_access_ident: A) -> ::core::result::Result<Self::Value, <A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>
+            where
+                A: ::xmlity::de::AttributeAccess<#visitor_lifetime>,
+            {
+                #body
+            }
+        }
+    }
+
+    pub fn visit_element_fn_signature(
+        body: proc_macro2::TokenStream,
+        element_access_ident: &Ident,
+        visitor_lifetime: &syn::Lifetime,
+    ) -> proc_macro2::TokenStream {
+        quote! {
+            fn visit_element<A>(self, mut #element_access_ident: A) -> ::core::result::Result<Self::Value, <A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>
+            where
+                A: xmlity::de::ElementAccess<#visitor_lifetime>,
+            {
+                #body
+            }
+        }
+    }
+
     pub fn definition(&self) -> proc_macro2::TokenStream {
         let Self {
             ident,
@@ -198,18 +273,18 @@ impl<'a> VisitorBuilder<'a> {
 }
 
 pub struct DeserializeTraitImplBuilder<'a> {
-    ident: &'a syn::Ident,
+    ident: &'a Ident,
     generics: &'a syn::Generics,
-    deserializer_ident: &'a syn::Ident,
+    deserializer_ident: &'a Ident,
     deserialize_lifetime: &'a syn::Lifetime,
     implementation: proc_macro2::TokenStream,
 }
 
 impl<'a> DeserializeTraitImplBuilder<'a> {
     pub fn new(
-        ident: &'a syn::Ident,
+        ident: &'a Ident,
         generics: &'a syn::Generics,
-        deserializer_ident: &'a syn::Ident,
+        deserializer_ident: &'a Ident,
         deserialize_lifetime: &'a syn::Lifetime,
         implementation: proc_macro2::TokenStream,
     ) -> Self {

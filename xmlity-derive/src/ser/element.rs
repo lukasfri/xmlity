@@ -1,9 +1,10 @@
 use quote::quote;
 use syn::{DataEnum, DataStruct, DeriveInput, Generics, Ident};
 
+use crate::options::{XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
 use crate::{
-    simple_compile_error, FieldIdent, SerializeField, XmlityFieldAttributeGroupDeriveOpts,
-    XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+    simple_compile_error, DeriveError, DeriveMacro, FieldIdent, SerializeField,
+    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
 };
 
 use crate::ExpandedName;
@@ -55,7 +56,7 @@ fn derive_unit_struct_serialize(expanded_name: &ExpandedName) -> proc_macro2::To
 
 fn derive_enum_serialize(
     ident: &syn::Ident,
-    variants: syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>,
+    variants: &syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>,
     _element_opts: Option<&crate::XmlityRootElementDeriveOpts>,
     value_opts: Option<&crate::XmlityRootValueDeriveOpts>,
 ) -> proc_macro2::TokenStream {
@@ -123,97 +124,105 @@ fn serialize_trait_impl(
     }
 }
 
-pub fn derive_serialize_fn(
-    ast: DeriveInput,
-    element_opts: Option<&crate::XmlityRootElementDeriveOpts>,
-    value_opts: Option<&crate::XmlityRootValueDeriveOpts>,
-) -> darling::Result<proc_macro2::TokenStream> {
-    let ident_name = ast.ident.to_string();
-    let expanded_name = ExpandedName::new(
-        element_opts
+pub struct DeriveSerialize;
+
+impl DeriveMacro for DeriveSerialize {
+    fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
+        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
+        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
+
+        let ident_name = ast.ident.to_string();
+        let expanded_name = ExpandedName::new(
+            element_opts
+                .as_ref()
+                .and_then(|o| o.name.0.as_ref())
+                .unwrap_or(&ident_name),
+            element_opts.as_ref().and_then(|o| o.namespace.0.as_deref()),
+        );
+
+        let preferred_prefix = element_opts
             .as_ref()
-            .and_then(|o| o.name.0.as_ref())
-            .unwrap_or(&ident_name),
-        element_opts.as_ref().and_then(|o| o.namespace.0.as_deref()),
-    );
+            .and_then(|o| o.preferred_prefix.0.as_deref());
 
-    let preferred_prefix = element_opts
-        .as_ref()
-        .and_then(|o| o.preferred_prefix.0.as_deref());
-
-    let implementation = match ast.data {
-        syn::Data::Struct(DataStruct { fields, .. }) => {
-            let fields = match fields {
-                syn::Fields::Named(fields) => fields
-                    .named
-                    .into_iter()
-                    .map(|f| {
-                        darling::Result::Ok(SerializeField {
-                            field_ident: FieldIdent::Named(f.ident.clone().expect("Named struct")),
-                            options: XmlityFieldDeriveOpts::from_field(&f)?,
-                            field_type: f.ty,
+        let implementation = match &ast.data {
+            syn::Data::Struct(DataStruct { fields, .. }) => {
+                let fields = match fields {
+                    syn::Fields::Named(fields) => fields
+                        .named
+                        .iter()
+                        .map(|f| {
+                            darling::Result::Ok(SerializeField {
+                                field_ident: FieldIdent::Named(
+                                    f.ident.clone().expect("Named struct"),
+                                ),
+                                options: XmlityFieldDeriveOpts::from_field(f)?,
+                                field_type: f.ty.clone(),
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-                syn::Fields::Unnamed(fields) => fields
-                    .unnamed
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, f)| {
-                        darling::Result::Ok(SerializeField {
-                            field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                            options: XmlityFieldDeriveOpts::from_field(&f)?,
-                            field_type: f.ty,
+                        .collect::<Result<Vec<_>, _>>()?,
+                    syn::Fields::Unnamed(fields) => fields
+                        .unnamed
+                        .iter()
+                        .enumerate()
+                        .map(|(i, f)| {
+                            darling::Result::Ok(SerializeField {
+                                field_ident: FieldIdent::Indexed(syn::Index::from(i)),
+                                options: XmlityFieldDeriveOpts::from_field(f)?,
+                                field_type: f.ty.clone(),
+                            })
                         })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    syn::Fields::Unit => return Ok(derive_unit_struct_serialize(&expanded_name)),
+                };
+
+                let attribute_group_fields = fields.clone().into_iter().filter_map(|field| {
+                    field.map_options_opt(|opt| match opt {
+                        XmlityFieldDeriveOpts::Attribute(opts) => {
+                            Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
+                        }
+                        XmlityFieldDeriveOpts::Group(opts) => {
+                            Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
+                        }
+                        XmlityFieldDeriveOpts::Element(_) => None,
                     })
-                    .collect::<Result<Vec<_>, _>>()?,
-                syn::Fields::Unit => return Ok(derive_unit_struct_serialize(&expanded_name)),
-            };
+                });
 
-            let attribute_group_fields = fields.clone().into_iter().filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Attribute(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Element(_) => None,
-                })
-            });
+                let element_group_fields = fields.clone().into_iter().filter_map(|field| {
+                    field.map_options_opt(|opt| match opt {
+                        XmlityFieldDeriveOpts::Element(opts) => {
+                            Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
+                        }
+                        XmlityFieldDeriveOpts::Group(opts) => {
+                            Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
+                        }
+                        XmlityFieldDeriveOpts::Attribute(_) => None,
+                    })
+                });
 
-            let element_group_fields = fields.clone().into_iter().filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Element(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Attribute(_) => None,
-                })
-            });
+                derive_fields_struct_serialize(
+                    &expanded_name,
+                    preferred_prefix,
+                    element_opts
+                        .as_ref()
+                        .map(|o| o.enforce_prefix)
+                        .unwrap_or(false),
+                    element_group_fields,
+                    attribute_group_fields,
+                )
+            }
+            syn::Data::Enum(DataEnum { variants, .. }) => derive_enum_serialize(
+                &ast.ident,
+                variants,
+                element_opts.as_ref(),
+                value_opts.as_ref(),
+            ),
+            syn::Data::Union(_) => unreachable!(),
+        };
 
-            derive_fields_struct_serialize(
-                &expanded_name,
-                preferred_prefix,
-                element_opts
-                    .as_ref()
-                    .map(|o| o.enforce_prefix)
-                    .unwrap_or(false),
-                element_group_fields,
-                attribute_group_fields,
-            )
-        }
-        syn::Data::Enum(DataEnum { variants, .. }) => {
-            derive_enum_serialize(&ast.ident, variants, element_opts, value_opts)
-        }
-        syn::Data::Union(_) => unreachable!(),
-    };
-
-    Ok(serialize_trait_impl(
-        &ast.ident,
-        &ast.generics,
-        implementation,
-    ))
+        Ok(serialize_trait_impl(
+            &ast.ident,
+            &ast.generics,
+            implementation,
+        ))
+    }
 }
