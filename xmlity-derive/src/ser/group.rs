@@ -164,7 +164,7 @@ impl SerializationGroupBuilder for DeriveGroupStruct<'_> {
         ast: &syn::DeriveInput,
         element_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let serialize_attributes_implementation = super::attribute_field_serializer(
+        let serialize_attributes_implementation = super::attribute_group_field_serializer(
             quote! {&mut #element_access_ident},
             Self::attribute_group_fields(ast)?,
         );
@@ -180,7 +180,7 @@ impl SerializationGroupBuilder for DeriveGroupStruct<'_> {
         ast: &syn::DeriveInput,
         children_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let serialize_children_implementation = super::element_field_serializer(
+        let serialize_children_implementation = super::element_group_field_serializer(
             quote! {&mut #children_access_ident},
             Self::element_group_fields(ast)?,
         );

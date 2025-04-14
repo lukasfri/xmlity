@@ -138,9 +138,9 @@ impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
             .map::<Result<Arm, DeriveError>, _>(|variant| {
                 let variant_name = &variant.ident;
                 match &variant.fields {
-                    syn::Fields::Named(_fields) => Err(DeriveError::Custom(
-                        "Named fields are not supported yet".to_string(),
-                    )),
+                    syn::Fields::Named(_fields) => {
+                        Err(DeriveError::custom("Named fields are not supported yet"))
+                    }
                     syn::Fields::Unnamed(fields) => {
                         if fields.unnamed.len() == 1 {
                             Ok(parse_quote! {
@@ -149,15 +149,14 @@ impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
                                 },
                             })
                         } else {
-                            Err(DeriveError::Custom(
-                                "Enum variants with more than one field are not supported"
-                                    .to_string(),
+                            Err(DeriveError::custom(
+                                "Enum variants with more than one field are not supported",
                             ))
                         }
                     }
-                    syn::Fields::Unit => Err(DeriveError::Custom(
-                        "Unit variants are not supported yet".to_string(),
-                    )),
+                    syn::Fields::Unit => {
+                        Err(DeriveError::custom("Unit variants are not supported yet"))
+                    }
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;

@@ -6,11 +6,12 @@ pub use element::DeriveSerialize;
 pub use group::DeriveSerializationGroup;
 
 use crate::{
-    SerializeField, XmlityFieldAttributeGroupDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+    options::XmlityFieldElementDeriveOpts, SerializeField, XmlityFieldAttributeGroupDeriveOpts,
+    XmlityFieldElementGroupDeriveOpts,
 };
 use quote::{quote, ToTokens};
 
-fn attribute_field_serializer(
+fn attribute_group_field_serializer(
     access_ident: impl ToTokens,
     fields: impl IntoIterator<Item = SerializeField<XmlityFieldAttributeGroupDeriveOpts>>,
 ) -> proc_macro2::TokenStream {
@@ -34,7 +35,7 @@ fn attribute_field_serializer(
     }
 }
 
-fn element_field_serializer(
+fn element_group_field_serializer(
     access_ident: impl ToTokens,
     fields: impl IntoIterator<Item = SerializeField<XmlityFieldElementGroupDeriveOpts>>,
 ) -> proc_macro2::TokenStream {
@@ -50,6 +51,25 @@ fn element_field_serializer(
           XmlityFieldElementGroupDeriveOpts::Group(_) => quote! {
               ::xmlity::ser::SerializationGroup::serialize_children(&self.#field_ident, &mut #access_ident)?;
           },
+        }
+    });
+
+    quote! {
+        #(#fields)*
+    }
+}
+
+fn element_field_serializer(
+    access_ident: impl ToTokens,
+    fields: impl IntoIterator<Item = SerializeField<XmlityFieldElementDeriveOpts>>,
+) -> proc_macro2::TokenStream {
+    let fields = fields
+    .into_iter()
+    .map(|var_field| {
+        let field_ident = &var_field.field_ident;
+        
+        quote! {
+            ::xmlity::ser::SerializeChildren::serialize_child(&mut #access_ident, &self.#field_ident)?;
         }
     });
 

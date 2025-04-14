@@ -22,7 +22,6 @@ mod utils;
 
 enum DeriveError {
     Darling(darling::Error),
-    Syn(syn::Error),
     Custom(String),
 }
 
@@ -42,11 +41,14 @@ impl DeriveError {
     fn into_compile_error(self) -> proc_macro2::TokenStream {
         match self {
             DeriveError::Darling(e) => e.write_errors(),
-            DeriveError::Syn(e) => e.to_compile_error(),
             DeriveError::Custom(e) => {
                 syn::Error::new(proc_macro2::Span::call_site(), e).to_compile_error()
             }
         }
+    }
+
+    fn custom<T: Into<String>>(error: T) -> Self {
+        Self::Custom(error.into())
     }
 }
 

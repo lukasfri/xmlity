@@ -1,28 +1,37 @@
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{parse_quote, spanned::Spanned, Data, DataEnum, DeriveInput, Expr, Field, Ident, Lifetime, LifetimeParam, Stmt, Variant};
+use syn::{
+    parse_quote, spanned::Spanned, Data, DataEnum, DeriveInput, Expr, Field, Ident, Lifetime,
+    LifetimeParam, Stmt, Variant,
+};
 
 use crate::{
     de::{
         all_attributes_done, all_elements_done, attribute_done, builder_attribute_field_visitor,
         builder_element_field_visitor, constructor_expr, element_done,
-    }, options::{ElementOrder, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts}, simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro, DeserializeBuilderField, ExpandedName, FieldIdent, XmlityFieldAttributeDeriveOpts, XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldElementGroupDeriveOpts, XmlityFieldGroupDeriveOpts
+    },
+    options::{
+        ElementOrder, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts,
+        XmlityRootValueDeriveOpts,
+    },
+    simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro,
+    DeserializeBuilderField, ExpandedName, FieldIdent, XmlityFieldAttributeDeriveOpts,
+    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementDeriveOpts,
+    XmlityFieldElementGroupDeriveOpts, XmlityFieldGroupDeriveOpts,
 };
 
-use super::{common::{DeserializeBuilder, DeserializeBuilderExt, VisitorBuilder, VisitorBuilderExt}, StructType};
+use super::{
+    common::{DeserializeBuilder, DeserializeBuilderExt, VisitorBuilder, VisitorBuilderExt},
+    StructType,
+};
 
 pub struct StructElementVisitorBuilder<'a> {
     opts: &'a XmlityRootElementDeriveOpts,
 }
 
 impl<'a> StructElementVisitorBuilder<'a> {
-    pub fn new(
-        opts: &'a XmlityRootElementDeriveOpts,
-    ) -> Self {
-        Self {
-            opts,
-            
-        }
+    pub fn new(opts: &'a XmlityRootElementDeriveOpts) -> Self {
+        Self { opts }
     }
 
     fn struct_fields_visitor_end<T>(
@@ -39,34 +48,34 @@ impl<'a> StructElementVisitorBuilder<'a> {
     where
         T: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldDeriveOpts>> + Clone,
         T::IntoIter: Clone,
-    {    
+    {
         let element_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 XmlityFieldDeriveOpts::Element(opts) => Some(opts),
                 _ => None,
             })
         });
-    
+
         let attribute_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 XmlityFieldDeriveOpts::Attribute(opts) => Some(opts),
                 _ => None,
             })
         });
-    
+
         let group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 XmlityFieldDeriveOpts::Group(opts) => Some(opts),
                 _ => None,
             })
         });
-    
+
         let getter_declarations = visit_element_data_fn_impl_builder_field_decl(
             element_fields.clone(),
             attribute_fields.clone(),
             group_fields.clone(),
         );
-    
+
         let attribute_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 XmlityFieldDeriveOpts::Attribute(opts) => {
@@ -78,7 +87,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 XmlityFieldDeriveOpts::Element(_) => None,
             })
         });
-    
+
         let element_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 XmlityFieldDeriveOpts::Element(opts) => {
@@ -90,7 +99,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 XmlityFieldDeriveOpts::Attribute(_) => None,
             })
         });
-    
+
         let attribute_loop = if attribute_group_fields.clone().next().is_some() {
             visit_element_data_fn_impl_attribute(
                 &element_access_ident,
@@ -102,7 +111,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         } else {
             Vec::new()
         };
-    
+
         let children_loop = if element_group_fields.clone().next().is_some() {
             visit_element_data_fn_impl_children(
                 &element_access_ident,
@@ -113,7 +122,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         } else {
             Vec::new()
         };
-    
+
         let constructor = visit_element_data_fn_impl_constructor(
             struct_ident,
             visitor_lifetime,
@@ -122,14 +131,14 @@ impl<'a> StructElementVisitorBuilder<'a> {
             group_fields.clone(),
             constructor_type,
         );
-    
+
         parse_quote! {
             #(#getter_declarations)*
-    
+
             #(#attribute_loop)*
-    
+
             #(#children_loop)*
-    
+
             ::core::result::Result::Ok(#constructor)
         }
     }
@@ -202,7 +211,6 @@ impl<'a> StructElementVisitorBuilder<'a> {
             ::core::result::Result::Ok(#ident)
         }
     }
-
 }
 
 impl VisitorBuilder for StructElementVisitorBuilder<'_> {
@@ -228,8 +236,7 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
             syn::Data::Struct(data_struct) => data_struct,
             _ => unreachable!(),
         };
-        
-    
+
         let ident_name = ident.to_string();
         let expanded_name = ExpandedName::new(
             name.0.as_ref().unwrap_or(&ident_name),
@@ -263,15 +270,17 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
             syn::Fields::Unit => Self::visit_element_unit_fn_impl(ident),
         };
 
-        Ok(Some( parse_quote! {
+        Ok(Some(parse_quote! {
             #xml_name_identification
 
             #(#deserialization_impl)*
-        }))  
+        }))
     }
 
     fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
-        let DeriveInput { ident, generics,  .. } = ast;
+        let DeriveInput {
+            ident, generics, ..
+        } = ast;
         let non_bound_generics = crate::non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
@@ -289,7 +298,7 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
                 marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
                 lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
             }
-        })   
+        })
     }
 }
 
@@ -305,7 +314,12 @@ impl DeserializeBuilder for StructElementVisitorBuilder<'_> {
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
         let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
-        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(
+            self,
+            ast,
+            &visitor_ident,
+            &formatter_expecting,
+        )?;
 
         Ok(parse_quote! {
             #visitor_def
@@ -332,34 +346,39 @@ impl<'a> StructAttributeVisitorBuilder<'a> {
 
 impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
     fn visit_attribute_fn_body(
-            &self,
-            ast: &syn::DeriveInput,
-            visitor_lifetime: &Lifetime,
-            attribute_access_ident: &Ident,
-        ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-            let DeriveInput { ident, data, .. } = ast;
+        &self,
+        ast: &syn::DeriveInput,
+        visitor_lifetime: &Lifetime,
+        attribute_access_ident: &Ident,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let DeriveInput { ident, data, .. } = ast;
 
-            let Data::Struct(data_struct) = data else {
-                unreachable!()
-            };
-            let XmlityRootAttributeDeriveOpts { name, namespace, deserialize_any_name, .. } = self.opts;
-            let ident_name = ident.to_string();
-            let expanded_name = if *deserialize_any_name {
-                None
-            } else {
-                Some(ExpandedName::new(
-                    name.0.as_ref().unwrap_or(&ident_name),
-                    namespace.0.as_deref(),
-                ))
-            };
-            
-            let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
+        let Data::Struct(data_struct) = data else {
+            unreachable!()
+        };
+        let XmlityRootAttributeDeriveOpts {
+            name,
+            namespace,
+            deserialize_any_name,
+            ..
+        } = self.opts;
+        let ident_name = ident.to_string();
+        let expanded_name = if *deserialize_any_name {
+            None
+        } else {
+            Some(ExpandedName::new(
+                name.0.as_ref().unwrap_or(&ident_name),
+                namespace.0.as_deref(),
+            ))
+        };
+
+        let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
                 parse_quote! {
                     ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
                 }
             });
-    
-            let deserialization_impl = match &data_struct.fields {
+
+        let deserialization_impl = match &data_struct.fields {
                 syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => simple_compile_error("Only tuple structs with 1 element are supported"),
                 syn::Fields::Unnamed(_) => {
                     parse_quote! {
@@ -373,17 +392,18 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
                 syn::Fields::Unit =>
                     simple_compile_error("Unit structs are not supported. Only tuple structs with 1 element are supported"),
             };
-    
-            Ok(Some( parse_quote! {
-                #xml_name_identification
-    
-                #deserialization_impl
-            }))
-        
+
+        Ok(Some(parse_quote! {
+            #xml_name_identification
+
+            #deserialization_impl
+        }))
     }
-    
+
     fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
-        let DeriveInput { ident, generics,  .. } = ast;
+        let DeriveInput {
+            ident, generics, ..
+        } = ast;
         let non_bound_generics = crate::non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
@@ -402,7 +422,6 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
                 lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
             }
         })
-        
     }
 }
 
@@ -418,7 +437,12 @@ impl DeserializeBuilder for StructAttributeVisitorBuilder<'_> {
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
         let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
-        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(
+            self,
+            ast,
+            &visitor_ident,
+            &formatter_expecting,
+        )?;
 
         Ok(parse_quote! {
             #visitor_def
@@ -620,16 +644,24 @@ fn visit_element_data_fn_impl_attribute(
     }
 }
 
-struct SeqVisitLoop<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
-+ Clone> {
+struct SeqVisitLoop<
+    'a,
+    F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
+        + Clone,
+> {
     seq_access_ident: &'a Ident,
     allow_unknown_children: bool,
     order: ElementOrder,
     fields: F,
 }
 
-impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
-+ Clone> SeqVisitLoop<'a, F> {
+impl<
+        'a,
+        F: IntoIterator<
+                Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
+            > + Clone,
+    > SeqVisitLoop<'a, F>
+{
     fn new(
         seq_access_ident: &'a Ident,
         allow_unknown_children: bool,
@@ -648,16 +680,14 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
         quote! {}
     }
 
-    fn access_loop(
-        &self,
-    ) -> Vec<Stmt> {
+    fn access_loop(&self) -> Vec<Stmt> {
         let Self {
             seq_access_ident: access_ident,
             allow_unknown_children,
             order,
             fields,
         } = self;
-    
+
         let field_visits = builder_element_field_visitor(
             access_ident,
             quote! {},
@@ -674,8 +704,8 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
                 ElementOrder::None => false,
             },
         );
-    
-         match order {
+
+        match order {
             ElementOrder::Loose => field_visits.into_iter().zip(fields.clone()).map(|(field_visit, field)| {
                 let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
                     let skip_ident = Ident::new("__skip", access_ident.span());
@@ -736,7 +766,6 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
             },
         }
     }
-
 }
 
 fn visit_element_data_fn_impl_children(
@@ -748,7 +777,7 @@ fn visit_element_data_fn_impl_children(
 ) -> Vec<Stmt> {
     let access_ident = Ident::new("__children", element_access_ident.span());
 
-    let visit = SeqVisitLoop::new(&access_ident,  allow_unknown_children, order, fields);
+    let visit = SeqVisitLoop::new(&access_ident, allow_unknown_children, order, fields);
 
     let field_storage = visit.field_storage();
     let access_loop = visit.access_loop();
@@ -762,13 +791,11 @@ fn visit_element_data_fn_impl_children(
     }
 }
 
-struct EnumNoneVisitorBuilder {
-}
+struct EnumNoneVisitorBuilder {}
 
 impl EnumNoneVisitorBuilder {
     fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 }
 
@@ -816,7 +843,7 @@ impl VisitorBuilder for EnumNoneVisitorBuilder {
         }).collect::<Option<Vec<_>>>().unwrap_or_default();
         let ident_string = ident.to_string();
 
-        Ok(Some( parse_quote! {
+        Ok(Some(parse_quote! {
             #(#variants)*
 
             ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
@@ -824,7 +851,9 @@ impl VisitorBuilder for EnumNoneVisitorBuilder {
     }
 
     fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
-        let DeriveInput { ident, generics,  .. } = ast;
+        let DeriveInput {
+            ident, generics, ..
+        } = ast;
         let non_bound_generics = crate::non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
@@ -858,7 +887,12 @@ impl DeserializeBuilder for EnumNoneVisitorBuilder {
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
         let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
-        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(
+            self,
+            ast,
+            &visitor_ident,
+            &formatter_expecting,
+        )?;
 
         Ok(parse_quote! {
             #visitor_def
@@ -886,7 +920,7 @@ impl<'a> EnumValueVisitorBuilder<'a> {
         &self,
         ast: &syn::DeriveInput,
         value_ident: &Ident,
-    ) ->Result<Option<Vec<Stmt>>, DeriveError> {
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
         let syn::Data::Enum(DataEnum { variants, .. }) = data else {
             panic!("This is guaranteed by the caller");
@@ -927,59 +961,54 @@ impl<'a> EnumValueVisitorBuilder<'a> {
 
             ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
         }))
-
     }
 }
 
 impl VisitorBuilder for EnumValueVisitorBuilder<'_> {
     fn visit_text_fn_body(
-            &self,
-            ast: &syn::DeriveInput,
-            _visitor_lifetime: &Lifetime,
-            value_ident: &Ident,
-        ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-            let str_ident = Ident::new("__value_str", Span::mixed_site());
+        &self,
+        ast: &syn::DeriveInput,
+        _visitor_lifetime: &Lifetime,
+        value_ident: &Ident,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let str_ident = Ident::new("__value_str", Span::mixed_site());
 
-            let str_body = self.str_value_body(ast, &str_ident)?;
+        let str_body = self.str_value_body(ast, &str_ident)?;
 
-            let Some(str_body) = str_body else {
-                return Ok(None)
-            };
+        let Some(str_body) = str_body else {
+            return Ok(None);
+        };
 
-            Ok(Some(
-                 parse_quote! {
-                    let #str_ident = ::xmlity::de::XmlText::as_str(&#value_ident);
-                    #(#str_body)*
-                }
-            ))
-            
-        
+        Ok(Some(parse_quote! {
+            let #str_ident = ::xmlity::de::XmlText::as_str(&#value_ident);
+            #(#str_body)*
+        }))
     }
 
     fn visit_cdata_fn_body(
-            &self,
-            ast: &syn::DeriveInput,
-            _visitor_lifetime: &Lifetime,
-            value_ident: &Ident,
-        ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-            let str_ident = Ident::new("__value_str", Span::mixed_site());
+        &self,
+        ast: &syn::DeriveInput,
+        _visitor_lifetime: &Lifetime,
+        value_ident: &Ident,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let str_ident = Ident::new("__value_str", Span::mixed_site());
 
-            let str_body = self.str_value_body(ast, &str_ident)?;
+        let str_body = self.str_value_body(ast, &str_ident)?;
 
-            let Some(str_body) = str_body else {
-                return Ok(None)
-            };
+        let Some(str_body) = str_body else {
+            return Ok(None);
+        };
 
-            Ok(Some(
-                 parse_quote! {
-                    let #str_ident = ::xmlity::de::XmlCData::as_str(&#value_ident);
-                    #(#str_body)*
-                }
-            ))
+        Ok(Some(parse_quote! {
+            let #str_ident = ::xmlity::de::XmlCData::as_str(&#value_ident);
+            #(#str_body)*
+        }))
     }
 
     fn definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
-        let DeriveInput { ident, generics,  .. } = ast;
+        let DeriveInput {
+            ident, generics, ..
+        } = ast;
         let non_bound_generics = crate::non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
@@ -1013,7 +1042,12 @@ impl DeserializeBuilder for EnumValueVisitorBuilder<'_> {
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
         let visitor_def = <Self as VisitorBuilder>::definition(self, ast)?;
-        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(self, ast, &visitor_ident, &formatter_expecting)?;
+        let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(
+            self,
+            ast,
+            &visitor_ident,
+            &formatter_expecting,
+        )?;
 
         Ok(parse_quote! {
             #visitor_def
@@ -1033,7 +1067,7 @@ pub struct DeriveDeserialize;
 impl DeriveMacro for DeriveDeserialize {
     fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
         let opts = DeriveDeserializeOption::parse(ast)?;
-    
+
         match (&ast.data, &opts) {
             (syn::Data::Struct(_), DeriveDeserializeOption::Element(opts)) => {
                 StructElementVisitorBuilder::new(opts)
@@ -1041,22 +1075,21 @@ impl DeriveMacro for DeriveDeserialize {
                     .map(|a| a.to_token_stream())
             }
             (syn::Data::Struct(_), DeriveDeserializeOption::Attribute(opts)) => {
-                StructAttributeVisitorBuilder::new(opts).deserialize_trait_impl(ast)
-                .map(|a| a.to_token_stream())
+                StructAttributeVisitorBuilder::new(opts)
+                    .deserialize_trait_impl(ast)
+                    .map(|a| a.to_token_stream())
             }
-            (syn::Data::Struct(_), DeriveDeserializeOption::Value(_opts)) => {
-
-                Ok(simple_compile_error("Structs with value options are not supported yet"))
-            }
-            (syn::Data::Enum(_), DeriveDeserializeOption::None) => {
-                EnumNoneVisitorBuilder::new().deserialize_trait_impl(ast).map(|a| a.to_token_stream())
-            }
-            (
-                syn::Data::Enum(_),
-                DeriveDeserializeOption::Value(value_opts),
-            ) => EnumValueVisitorBuilder::new(value_opts)
+            (syn::Data::Struct(_), DeriveDeserializeOption::Value(_opts)) => Ok(
+                simple_compile_error("Structs with value options are not supported yet"),
+            ),
+            (syn::Data::Enum(_), DeriveDeserializeOption::None) => EnumNoneVisitorBuilder::new()
                 .deserialize_trait_impl(ast)
                 .map(|a| a.to_token_stream()),
+            (syn::Data::Enum(_), DeriveDeserializeOption::Value(value_opts)) => {
+                EnumValueVisitorBuilder::new(value_opts)
+                    .deserialize_trait_impl(ast)
+                    .map(|a| a.to_token_stream())
+            }
             (syn::Data::Union(_), _) => Ok(simple_compile_error("Unions are not supported yet")),
             _ => Ok(simple_compile_error("Wrong options")),
         }
