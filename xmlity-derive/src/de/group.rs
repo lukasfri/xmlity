@@ -18,7 +18,7 @@ use crate::{
 
 use super::{all_attributes_done, all_elements_done, constructor_expr, StructType};
 
-trait DeserializationGroupBuilderContent {
+trait DeserializationGroupBuilderBuilder {
     /// Returns the content inside the `DeserializationGroupBuilder::contribute_attributes` function.
     fn contribute_attributes_content(
         &self,
@@ -62,7 +62,7 @@ trait DeserializationGroupBuilderContent {
     ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
-trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderContent {
+trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderBuilder {
     fn contribute_attributes_fn(
         &self,
         ast: &syn::DeriveInput,
@@ -104,7 +104,7 @@ trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderContent 
     fn total_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError>;
 }
 
-impl<T: DeserializationGroupBuilderContent> DeserializationGroupBuilderContentExt for T {
+impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentExt for T {
     fn contribute_attributes_fn(
         &self,
         ast: &syn::DeriveInput,
@@ -461,7 +461,7 @@ impl<'a> StructGroup<'a> {
     }
 }
 
-impl DeserializationGroupBuilderContent for StructGroup<'_> {
+impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
     fn contribute_attributes_content(
         &self,
         ast: &syn::DeriveInput,

@@ -1,5 +1,6 @@
-use quote::{quote, ToTokens};
-use syn::{parse_quote, Arm, ExprMatch, ItemImpl, Stmt};
+use quote::ToTokens;
+use syn::spanned::Spanned;
+use syn::{parse_quote, Arm, ImplItemFn, ItemImpl, Stmt};
 use syn::{DeriveInput, Ident};
 
 use crate::options::XmlityRootAttributeDeriveOpts;
@@ -8,83 +9,52 @@ use crate::simple_compile_error;
 use crate::DeriveError;
 use crate::DeriveMacro;
 
-pub struct SerializeAttributeTraitImplBuilder<'a> {
-    ident: &'a Ident,
-    generics: &'a syn::Generics,
-    serializer_access: &'a Ident,
-    implementation: proc_macro2::TokenStream,
-}
-
-impl<'a> SerializeAttributeTraitImplBuilder<'a> {
-    pub fn new(
-        ident: &'a proc_macro2::Ident,
-        generics: &'a syn::Generics,
-        serializer_access: &'a Ident,
-        implementation: proc_macro2::TokenStream,
-    ) -> Self {
-        Self {
-            ident,
-            generics,
-            serializer_access,
-            implementation,
-        }
-    }
-
-    fn trait_impl(&self) -> ItemImpl {
-        let Self {
-            ident,
-            generics,
-            serializer_access,
-            implementation,
-        } = self;
-
-        let non_bound_generics = crate::non_bound_generics(generics);
-
-        parse_quote! {
-            impl #generics ::xmlity::SerializeAttribute for #ident #non_bound_generics {
-                fn serialize_attribute<S>(&self, mut #serializer_access: S) -> Result<<S as ::xmlity::AttributeSerializer>::Ok, <S as ::xmlity::AttributeSerializer>::Error>
-                where
-                    S: ::xmlity::AttributeSerializer,
-                {
-                    #implementation
-                }
-            }
-        }
-    }
-}
-
-trait SerializeAttributeContent {
+trait SerializeAttributeBuilder {
     /// Returns the content inside the `Deserialize::deserialize` function.
-    fn serialize_attribute_content(
+    fn serialize_attribute_fn_body(
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError>;
+    ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
-trait SerializeAttributeContentExt: SerializeAttributeContent {
-    fn serialize_attribute_impl(&self, ast: &syn::DeriveInput) -> Result<ItemImpl, DeriveError>;
+trait SerializeAttributeBuilderExt: SerializeAttributeBuilder {
+    fn serialize_attribute_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError>;
+    fn serialize_attribute_trait_impl(
+        &self,
+        ast: &syn::DeriveInput,
+    ) -> Result<ItemImpl, DeriveError>;
 }
 
-impl<T: SerializeAttributeContent> SerializeAttributeContentExt for T {
-    fn serialize_attribute_impl(
+impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
+    fn serialize_attribute_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
+        let serializer_access_ident = Ident::new("__serializer", ast.span());
+        let body = self.serialize_attribute_fn_body(ast, &serializer_access_ident)?;
+        Ok(parse_quote!(
+            fn serialize_attribute<S>(&self, mut #serializer_access_ident: S) -> Result<<S as ::xmlity::AttributeSerializer>::Ok, <S as ::xmlity::AttributeSerializer>::Error>
+            where
+                S: ::xmlity::AttributeSerializer,
+            {
+                #(#body)*
+            }
+        ))
+    }
+
+    fn serialize_attribute_trait_impl(
         &self,
         ast @ DeriveInput {
             ident, generics, ..
         }: &syn::DeriveInput,
     ) -> Result<ItemImpl, DeriveError> {
-        let serializer_access = Ident::new("__serializer", ident.span());
+        let serialize_attribute_fn = self.serialize_attribute_fn(ast)?;
 
-        let implementation = self.serialize_attribute_content(ast, &serializer_access)?;
+        let non_bound_generics = crate::non_bound_generics(generics);
 
-        let trait_impl_builder = SerializeAttributeTraitImplBuilder::new(
-            ident,
-            generics,
-            &serializer_access,
-            implementation,
-        );
-
-        Ok(trait_impl_builder.trait_impl())
+        Ok(parse_quote! {
+            impl #generics ::xmlity::SerializeAttribute for #ident #non_bound_generics {
+                #serialize_attribute_fn
+            }
+        })
     }
 }
 
@@ -98,12 +68,12 @@ impl<'a> StructUnnamedSingleFieldAttributeSerializeBuilder<'a> {
     }
 }
 
-impl SerializeAttributeContent for StructUnnamedSingleFieldAttributeSerializeBuilder<'_> {
-    fn serialize_attribute_content(
+impl SerializeAttributeBuilder for StructUnnamedSingleFieldAttributeSerializeBuilder<'_> {
+    fn serialize_attribute_fn_body(
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
 
         let XmlityRootAttributeDeriveOpts {
@@ -131,7 +101,7 @@ impl SerializeAttributeContent for StructUnnamedSingleFieldAttributeSerializeBui
             ::xmlity::ser::SerializeAttributeAccess::include_prefix(&mut #access_ident, #enforce_prefix)?;
         });
 
-        Ok(quote! {
+        Ok(parse_quote! {
             let #xml_name_temp_ident = #expanded_name;
             let mut #access_ident = ::xmlity::AttributeSerializer::serialize_attribute(
                 &mut #serializer_access,
@@ -144,22 +114,20 @@ impl SerializeAttributeContent for StructUnnamedSingleFieldAttributeSerializeBui
     }
 }
 
-pub struct EnumSingleFieldAttributeSerializeBuilder<'a> {
-    opts: &'a XmlityRootAttributeDeriveOpts,
-}
+pub struct EnumSingleFieldAttributeSerializeBuilder {}
 
-impl<'a> EnumSingleFieldAttributeSerializeBuilder<'a> {
-    pub fn new(opts: &'a XmlityRootAttributeDeriveOpts) -> Self {
-        Self { opts }
+impl EnumSingleFieldAttributeSerializeBuilder {
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
-impl SerializeAttributeContent for EnumSingleFieldAttributeSerializeBuilder<'_> {
-    fn serialize_attribute_content(
+impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
+    fn serialize_attribute_fn_body(
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
         let syn::Data::Enum(syn::DataEnum { variants, .. }) = data else {
             unreachable!()
@@ -194,13 +162,11 @@ impl SerializeAttributeContent for EnumSingleFieldAttributeSerializeBuilder<'_> 
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let enum_match: ExprMatch = parse_quote! {
+        Ok(parse_quote!(
             match self {
                 #(#variants)*
             }
-        };
-
-        Ok(enum_match.to_token_stream())
+        ))
     }
 }
 
@@ -214,15 +180,15 @@ impl DeriveMacro for DeriveSerializeAttribute {
             syn::Data::Struct(syn::DataStruct { fields, .. }) => match fields {
                 syn::Fields::Unnamed(_) => {
                     StructUnnamedSingleFieldAttributeSerializeBuilder::new(&opts)
-                        .serialize_attribute_impl(ast)
+                        .serialize_attribute_trait_impl(ast)
                         .map(|x| x.to_token_stream())
                 }
                 syn::Fields::Named(_) | syn::Fields::Unit => {
                     Ok(simple_compile_error("Named fields are not supported yet"))
                 }
             },
-            syn::Data::Enum(_) => EnumSingleFieldAttributeSerializeBuilder::new(&opts)
-                .serialize_attribute_impl(ast)
+            syn::Data::Enum(_) => EnumSingleFieldAttributeSerializeBuilder::new()
+                .serialize_attribute_trait_impl(ast)
                 .map(|x| x.to_token_stream()),
             syn::Data::Union(_) => unreachable!(),
         }
