@@ -479,34 +479,6 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
     }
 }
 
-// #[allow(dead_code)]
-// impl<'a> VisitorBuilder<'a> {
-//     pub fn definition(&self) -> ItemStruct {
-//         let Self {
-//             ident,
-//             generics,
-//             visitor_ident,
-//             visitor_lifetime,
-//             ..
-//         } = self;
-//         let non_bound_generics = crate::non_bound_generics(generics);
-
-//         let mut deserialize_generics = (*generics).to_owned();
-
-//         deserialize_generics.params.insert(
-//             0,
-//             syn::GenericParam::Lifetime(LifetimeParam::new((*visitor_lifetime).to_owned())),
-//         );
-
-//         parse_quote! {
-//             struct #visitor_ident #deserialize_generics {
-//                 marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
-//                 lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
-//             }
-//         }
-//     }
-// }
-
 pub trait DeserializeBuilder {
     /// Returns the content inside the `Deserialize::deserialize` function.
     fn deserialize_fn_body(

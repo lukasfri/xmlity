@@ -621,7 +621,6 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
             )));
 
         let mut generics = ast.generics.clone();
-        // if group_fields.clone().into_iter().next().is_some()
         generics.params.insert(
             0,
             syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
@@ -695,43 +694,6 @@ impl DeserializationGroupBuilderContent for StructGroup<'_> {
         Ok(parse_quote!(#expr))
     }
 }
-
-// pub struct DeserializeGroupTraitImplBuilder<'a> {
-//     ident: &'a proc_macro2::Ident,
-//     generics: &'a syn::Generics,
-//     deserialize_lifetime: &'a Lifetime,
-//     builder_ident: &'a proc_macro2::Ident,
-//     builder_constructor: &'a proc_macro2::TokenStream,
-// }
-
-// impl<'a> DeserializeGroupTraitImplBuilder<'a> {
-//     pub fn new(
-//         ident: &'a proc_macro2::Ident,
-//         generics: &'a syn::Generics,
-//         deserialize_lifetime: &'a Lifetime,
-//         builder_ident: &'a proc_macro2::Ident,
-//         builder_constructor: &'a proc_macro2::TokenStream,
-//     ) -> Self {
-//         Self {
-//             ident,
-//             generics,
-//             deserialize_lifetime,
-//             builder_ident,
-//             builder_constructor,
-//         }
-//     }
-
-//     pub fn trait_impl(&self) -> ItemImpl {
-//         let Self {
-//             ident,
-//             generics,
-//             deserialize_lifetime,
-//             builder_ident,
-//             builder_constructor,
-//         } = self;
-
-//     }
-// }
 
 fn finish_constructor_expr<T: quote::ToTokens>(
     ident: T,
