@@ -1,6 +1,8 @@
 use darling::{FromAttributes, FromMeta};
 use syn::DeriveInput;
 
+use crate::ExpandedName;
+
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
 pub enum GroupOrder {
@@ -178,6 +180,13 @@ impl XmlityRootAttributeDeriveOpts {
 
         let opts = Self::from_attributes(&[attr.clone()])?;
         Ok(Some(opts))
+    }
+
+    pub fn expanded_name<'a>(&'a self, ident_name: &'a str) -> ExpandedName<'a> {
+        ExpandedName::new(
+            self.name.0.as_deref().unwrap_or(ident_name),
+            self.namespace.0.as_deref(),
+        )
     }
 }
 

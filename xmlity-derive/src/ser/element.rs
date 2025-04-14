@@ -1,219 +1,313 @@
-use quote::quote;
-use syn::{DataEnum, DataStruct, DeriveInput, Generics, Ident};
-
-use crate::{
-    simple_compile_error, FieldIdent, SerializeField, XmlityFieldAttributeGroupDeriveOpts,
-    XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+use quote::{quote, ToTokens};
+use syn::spanned::Spanned;
+use syn::{
+    parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt,
 };
+
+use crate::options::{XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
+use crate::{DeriveError, DeriveMacro};
 
 use crate::ExpandedName;
 
-fn derive_fields_struct_serialize(
-    expanded_name: &ExpandedName,
-    preferred_prefix: Option<&str>,
-    enforce_prefix: bool,
-    element_fields: impl IntoIterator<Item = SerializeField<XmlityFieldElementGroupDeriveOpts>>,
-    attribute_fields: impl IntoIterator<Item = SerializeField<XmlityFieldAttributeGroupDeriveOpts>>,
-) -> proc_macro2::TokenStream {
-    let element_access_ident = Ident::new("__element", proc_macro2::Span::call_site());
-    let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
-    let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
-
-    let attribute_fields =
-        super::attribute_field_serializer(quote! {#element_access_ident}, attribute_fields);
-
-    let element_fields =
-        super::element_field_serializer(quote! {#children_access_ident}, element_fields);
-
-    let preferred_prefix_setting = preferred_prefix.map(|preferred_prefix| quote! {
-            ::xmlity::ser::SerializeElement::preferred_prefix(&mut #element_access_ident, ::core::option::Option::Some(::xmlity::Prefix::new(#preferred_prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.")))?;
-        });
-    let enforce_prefix_setting = Some(enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map(|enforce_prefix| quote! {
-            ::xmlity::ser::SerializeElement::include_prefix(&mut #element_access_ident, #enforce_prefix)?;
-        });
-
-    quote! {
-        let #xml_name_temp_ident = #expanded_name;
-        let mut #element_access_ident = ::xmlity::Serializer::serialize_element(serializer, &#xml_name_temp_ident)?;
-        #preferred_prefix_setting
-        #enforce_prefix_setting
-        #attribute_fields
-        let mut #children_access_ident = ::xmlity::ser::SerializeElement::serialize_children(#element_access_ident)?;
-        #element_fields
-        ::xmlity::ser::SerializeElementChildren::end(#children_access_ident)
-    }
+trait SerializeBuilder {
+    /// Returns the content inside the `Deserialize::deserialize` function.
+    fn serialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        serializer_access: &Ident,
+    ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
-fn derive_unit_struct_serialize(expanded_name: &ExpandedName) -> proc_macro2::TokenStream {
-    let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
-
-    quote! {
-        let #xml_name_temp_ident = #expanded_name;
-        ::xmlity::Serializer::serialize_element_empty(serializer, &#xml_name_temp_ident)?;
-    }
+trait SerializeBuilderExt: SerializeBuilder {
+    fn serialize_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError>;
+    fn serialize_trait_impl(&self, ast: &syn::DeriveInput) -> Result<ItemImpl, DeriveError>;
 }
 
-fn derive_enum_serialize(
-    ident: &syn::Ident,
-    variants: syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>,
-    _element_opts: Option<&crate::XmlityRootElementDeriveOpts>,
-    value_opts: Option<&crate::XmlityRootValueDeriveOpts>,
-) -> proc_macro2::TokenStream {
-    let variants = variants.iter().map(|variant| {
-        let variant_ident = &variant.ident;
-        let variant_ident_string = value_opts
-            .as_ref()
-            .map(|a| a.rename_all)
-            .unwrap_or_default()
-            .apply_to_variant(&variant_ident.to_string());
-
-        match &variant.fields {
-            syn::Fields::Named(_fields) => {
-                simple_compile_error("Named fields are not supported yet")
-            }
-            syn::Fields::Unnamed(fields) if fields.unnamed.is_empty() => {
-                quote! {
-                    #ident::#variant_ident() => {
-                        ::xmlity::Serialize::serialize(&__v, serializer)
-                    },
-                }
-            }
-            syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => {
-                simple_compile_error("Enum variants with more than one field are not supported")
-            }
-            syn::Fields::Unnamed(_) => {
-                quote! {
-                    #ident::#variant_ident(__v) => {
-                        ::xmlity::Serialize::serialize(&__v, serializer)
-                    },
-                }
-            }
-            syn::Fields::Unit => {
-                quote! {
-                    #ident::#variant_ident => {
-                        ::xmlity::Serialize::serialize(&#variant_ident_string, serializer)
-                    },
-                }
-            }
-        }
-    });
-    quote! {
-        match self {
-            #(#variants)*
-        }
-    }
-}
-
-fn serialize_trait_impl(
-    ident: &proc_macro2::Ident,
-    generics: &Generics,
-    implementation: proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
-    let non_bound_generics = crate::non_bound_generics(generics);
-
-    quote! {
-        impl #generics ::xmlity::Serialize for #ident #non_bound_generics {
-            fn serialize<S>(&self, mut serializer: S) -> Result<<S as ::xmlity::Serializer>::Ok, <S as ::xmlity::Serializer>::Error>
+impl<T: SerializeBuilder> SerializeBuilderExt for T {
+    fn serialize_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
+        let serializer_access_ident = Ident::new("__serializer", ast.span());
+        let body = self.serialize_fn_body(ast, &serializer_access_ident)?;
+        Ok(parse_quote!(
+            fn serialize<S>(&self, mut #serializer_access_ident: S) -> Result<<S as ::xmlity::Serializer>::Ok, <S as ::xmlity::Serializer>::Error>
             where
                 S: ::xmlity::Serializer,
             {
-                #implementation
+                #(#body)*
+            }
+        ))
+    }
+
+    fn serialize_trait_impl(
+        &self,
+        ast @ DeriveInput {
+            ident, generics, ..
+        }: &syn::DeriveInput,
+    ) -> Result<ItemImpl, DeriveError> {
+        let serialize_fn = self.serialize_fn(ast)?;
+
+        let non_bound_generics = crate::non_bound_generics(generics);
+
+        Ok(parse_quote! {
+            impl #generics ::xmlity::Serialize for #ident #non_bound_generics {
+                #serialize_fn
+            }
+        })
+    }
+}
+
+struct DeriveElementStruct<'a> {
+    opts: &'a XmlityRootElementDeriveOpts,
+}
+
+impl<'a> DeriveElementStruct<'a> {
+    fn new(opts: &'a XmlityRootElementDeriveOpts) -> Self {
+        Self { opts }
+    }
+}
+
+impl SerializeBuilder for DeriveElementStruct<'_> {
+    fn serialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        serializer_access: &Ident,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let XmlityRootElementDeriveOpts {
+            preferred_prefix,
+            enforce_prefix,
+            name,
+            namespace,
+            ..
+        } = self.opts;
+
+        let ident_name = ast.ident.to_string();
+        let expanded_name = ExpandedName::new(
+            name.0.as_deref().unwrap_or(&ident_name),
+            namespace.0.as_deref(),
+        );
+
+        let element_access_ident = Ident::new("__element", proc_macro2::Span::call_site());
+        let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
+        let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
+
+        let Data::Struct(DataStruct { fields, .. }) = &ast.data else {
+            unreachable!()
+        };
+
+        match fields {
+            syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
+                let attribute_fields = super::attribute_group_field_serializer(
+                    quote! {#element_access_ident},
+                    crate::ser::attribute_group_fields(ast)?,
+                );
+
+                let element_fields = super::element_group_field_serializer(
+                    quote! {#children_access_ident},
+                    crate::ser::element_group_fields(ast)?,
+                );
+
+                let preferred_prefix_setting = preferred_prefix.0.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
+                        ::xmlity::ser::SerializeElement::preferred_prefix(&mut #element_access_ident, ::core::option::Option::Some(::xmlity::Prefix::new(#preferred_prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.")))?;
+                    });
+                let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map::<Stmt, _>(|enforce_prefix| parse_quote! {
+                        ::xmlity::ser::SerializeElement::include_prefix(&mut #element_access_ident, #enforce_prefix)?;
+                    });
+
+                Ok(parse_quote! {
+                    let #xml_name_temp_ident = #expanded_name;
+                    let mut #element_access_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
+                    #preferred_prefix_setting
+                    #enforce_prefix_setting
+                    #attribute_fields
+                    let mut #children_access_ident = ::xmlity::ser::SerializeElement::serialize_children(#element_access_ident)?;
+                    #element_fields
+                    ::xmlity::ser::SerializeElementChildren::end(#children_access_ident)
+                })
+            }
+            syn::Fields::Unit => {
+                let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
+
+                Ok(parse_quote! {
+                    let #xml_name_temp_ident = #expanded_name;
+                    ::xmlity::Serializer::serialize_element_empty(serializer, &#xml_name_temp_ident)?;
+                })
             }
         }
     }
 }
 
-pub fn derive_serialize_fn(
-    ast: DeriveInput,
-    element_opts: Option<&crate::XmlityRootElementDeriveOpts>,
-    value_opts: Option<&crate::XmlityRootValueDeriveOpts>,
-) -> darling::Result<proc_macro2::TokenStream> {
-    let ident_name = ast.ident.to_string();
-    let expanded_name = ExpandedName::new(
-        element_opts
-            .as_ref()
-            .and_then(|o| o.name.0.as_ref())
-            .unwrap_or(&ident_name),
-        element_opts.as_ref().and_then(|o| o.namespace.0.as_deref()),
-    );
+struct DeriveNoneStruct {}
 
-    let preferred_prefix = element_opts
-        .as_ref()
-        .and_then(|o| o.preferred_prefix.0.as_deref());
+impl DeriveNoneStruct {
+    fn new() -> Self {
+        Self {}
+    }
+}
 
-    let implementation = match ast.data {
-        syn::Data::Struct(DataStruct { fields, .. }) => {
-            let fields = match fields {
-                syn::Fields::Named(fields) => fields
-                    .named
-                    .into_iter()
-                    .map(|f| {
-                        darling::Result::Ok(SerializeField {
-                            field_ident: FieldIdent::Named(f.ident.clone().expect("Named struct")),
-                            options: XmlityFieldDeriveOpts::from_field(&f)?,
-                            field_type: f.ty,
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-                syn::Fields::Unnamed(fields) => fields
-                    .unnamed
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, f)| {
-                        darling::Result::Ok(SerializeField {
-                            field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                            options: XmlityFieldDeriveOpts::from_field(&f)?,
-                            field_type: f.ty,
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-                syn::Fields::Unit => return Ok(derive_unit_struct_serialize(&expanded_name)),
-            };
+impl SerializeBuilder for DeriveNoneStruct {
+    fn serialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        serializer_access: &Ident,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let seq_access_ident = Ident::new("__seq_access", proc_macro2::Span::call_site());
 
-            let attribute_group_fields = fields.clone().into_iter().filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Attribute(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Element(_) => None,
+        let Data::Struct(DataStruct { fields, .. }) = &ast.data else {
+            unreachable!()
+        };
+
+        match fields {
+            syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
+                let value_fields = super::seq_field_serializer(
+                    quote! {#seq_access_ident},
+                    crate::ser::element_fields(ast)?,
+                );
+
+                Ok(parse_quote! {
+                    let mut #seq_access_ident = ::xmlity::Serializer::serialize_seq(#serializer_access)?;
+                    #value_fields
+                    ::xmlity::ser::SerializeSeq::end(#seq_access_ident)
                 })
-            });
-
-            let element_group_fields = fields.clone().into_iter().filter_map(|field| {
-                field.map_options_opt(|opt| match opt {
-                    XmlityFieldDeriveOpts::Element(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
-                    }
-                    XmlityFieldDeriveOpts::Group(opts) => {
-                        Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
-                    }
-                    XmlityFieldDeriveOpts::Attribute(_) => None,
-                })
-            });
-
-            derive_fields_struct_serialize(
-                &expanded_name,
-                preferred_prefix,
-                element_opts
-                    .as_ref()
-                    .map(|o| o.enforce_prefix)
-                    .unwrap_or(false),
-                element_group_fields,
-                attribute_group_fields,
-            )
+            }
+            syn::Fields::Unit => Ok(parse_quote! {
+                ::xmlity::Serializer::serialize_none(serializer)?;
+            }),
         }
-        syn::Data::Enum(DataEnum { variants, .. }) => {
-            derive_enum_serialize(&ast.ident, variants, element_opts, value_opts)
-        }
-        syn::Data::Union(_) => unreachable!(),
-    };
+    }
+}
 
-    Ok(serialize_trait_impl(
-        &ast.ident,
-        &ast.generics,
-        implementation,
-    ))
+pub struct DeriveNoneEnum;
+
+impl SerializeBuilder for DeriveNoneEnum {
+    fn serialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        serializer_access: &Ident,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let DeriveInput { ident, data, .. } = ast;
+
+        let Data::Enum(DataEnum { variants, .. }) = &data else {
+            unreachable!()
+        };
+
+        let variants = variants
+            .iter()
+            .map::<Result<Arm, DeriveError>, _>(|variant| {
+                let variant_ident = &variant.ident;
+
+                match &variant.fields {
+                    syn::Fields::Named(_fields) => {
+                        Err(DeriveError::custom("Named fields are not supported yet"))
+                    }
+                    syn::Fields::Unnamed(fields) if fields.unnamed.is_empty() => Ok(parse_quote! {
+                        #ident::#variant_ident() => {
+                            ::xmlity::Serialize::serialize(&__v, #serializer_access)
+                        },
+                    }),
+                    syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => {
+                        Err(DeriveError::custom(
+                            "Enum variants with more than one field are not supported",
+                        ))
+                    }
+                    syn::Fields::Unnamed(_) => Ok(parse_quote! {
+                        #ident::#variant_ident(__v) => {
+                            ::xmlity::Serialize::serialize(&__v, #serializer_access)
+                        },
+                    }),
+                    syn::Fields::Unit => Err(DeriveError::custom(
+                        "Unsupported unit variant in non-value enum.",
+                    )),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(parse_quote! {
+            match self {
+                #(#variants)*
+            }
+        })
+    }
+}
+
+pub struct DeriveValueEnum<'a> {
+    opts: &'a XmlityRootValueDeriveOpts,
+}
+
+impl<'a> DeriveValueEnum<'a> {
+    pub fn new(opts: &'a XmlityRootValueDeriveOpts) -> Self {
+        Self { opts }
+    }
+}
+
+impl SerializeBuilder for DeriveValueEnum<'_> {
+    fn serialize_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        serializer_access: &Ident,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let DeriveInput { ident, data, .. } = ast;
+
+        let Data::Enum(DataEnum { variants, .. }) = &data else {
+            unreachable!()
+        };
+
+        let variants = variants
+            .iter()
+            .map::<Result<Arm, DeriveError>, _>(|variant| {
+                let variant_ident = &variant.ident;
+                let variant_ident_string = self
+                    .opts
+                    .rename_all
+                    .apply_to_variant(&variant_ident.to_string());
+
+                match &variant.fields {
+                    syn::Fields::Named(_) | syn::Fields::Unnamed(_) => Err(DeriveError::custom(
+                        "Unsupported named/unnamed field variant in value enum.",
+                    )),
+                    syn::Fields::Unit => Ok(parse_quote! {
+                        #ident::#variant_ident => {
+                            ::xmlity::Serialize::serialize(&#variant_ident_string, #serializer_access)
+                        },
+                    }),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(parse_quote! {
+            match self {
+                #(#variants)*
+            }
+        })
+    }
+}
+
+pub struct DeriveSerialize;
+
+impl DeriveMacro for DeriveSerialize {
+    fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
+        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
+        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
+
+        match &ast.data {
+            syn::Data::Struct(_) => match element_opts {
+                Some(opts) => DeriveElementStruct::new(&opts)
+                    .serialize_trait_impl(ast)
+                    .map(|a| a.to_token_stream()),
+                None => DeriveNoneStruct::new()
+                    .serialize_trait_impl(ast)
+                    .map(|a| a.to_token_stream()),
+            },
+            syn::Data::Enum(_) => {
+                if let Some(value_opts) = value_opts.as_ref() {
+                    DeriveValueEnum::new(value_opts)
+                        .serialize_trait_impl(ast)
+                        .map(|a| a.to_token_stream())
+                } else {
+                    DeriveNoneEnum
+                        .serialize_trait_impl(ast)
+                        .map(|a| a.to_token_stream())
+                }
+            }
+            syn::Data::Union(_) => unreachable!(),
+        }
+    }
 }
