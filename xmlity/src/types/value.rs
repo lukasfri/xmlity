@@ -1520,6 +1520,40 @@ impl<'de> Deserializer<'de> for &mut XmlSeqAccess<'de, '_, XmlChild> {
     }
 }
 
+impl<'de> Deserializer<'de> for &'de XmlSeq<XmlValue> {
+    type Error = XmlValueDeserializerError;
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_seq(XmlSeqAccess::new(self))
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_any(visitor)
+    }
+}
+
+impl<'de> Deserializer<'de> for &'de XmlSeq<XmlChild> {
+    type Error = XmlValueDeserializerError;
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_seq(XmlSeqAccess::new(self))
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_any(visitor)
+    }
+}
+
 /// A processing instruction.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
