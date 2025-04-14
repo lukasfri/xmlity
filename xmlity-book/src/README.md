@@ -20,7 +20,8 @@ If something stated here is wrong, please submit a PR! It is not guaranteed to b
 | Feature                                                                      | XMLity              | [Yaserde][yaserde] | [`quick-xml`][quick-xml] <br> <sup>(`serde` feature)</sup> |
 | ---------------------------------------------------------------------------- | ------------------- | ------------------ | ---------------------------------------------------------- |
 | Namespace support                                                            | Yes                 | Yes                | No                                                         |
-| Enum string value                                                            | No<sup>?</sup>      | Yes                | Yes                                                        |
+| Enum string value                                                            | Yes                 | Yes                | Yes                                                        |
+| Enum number value                                                            | No<sup>?</sup>      | Yes                | Yes                                                        |
 | Trial and error deserialization                                              | Yes                 | No                 | No <sup>\*</sup>                                           |
 | Standalone named elements <br> <sup>(inherit element names from types)</sup> | Yes                 | No                 | No                                                         |
 | Order-based deserialization                                                  | Yes                 | No                 | Yes                                                        |

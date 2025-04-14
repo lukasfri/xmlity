@@ -341,7 +341,7 @@ impl<'de> de::AttributesAccess<'de> for SubAttributesAccess<'_, 'de> {
         Ok(Self::SubAccess {
             deserializer: self.deserializer,
             bytes_start: self.bytes_start,
-            attribute_index: self.attribute_index + 1,
+            attribute_index: self.attribute_index,
             write_attribute_to: self.write_attribute_to,
         })
     }

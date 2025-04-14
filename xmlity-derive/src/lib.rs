@@ -36,18 +36,70 @@
 #[doc = include_str!("../README.md")]
 struct _ReadMeDocTests;
 
+use de::{DeriveDeserializationGroup, DeriveDeserialize};
 use quote::quote;
+use ser::{DeriveSerializationGroup, DeriveSerialize, DeriveSerializeAttribute};
 use syn::{parse_macro_input, DeriveInput};
 
 mod de;
 mod options;
 use options::{
     XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldGroupDeriveOpts,
-    XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts, XmlityRootGroupDeriveOpts,
-    XmlityRootValueDeriveOpts,
+    XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
 };
 mod ser;
 mod utils;
+
+enum DeriveError {
+    Darling(darling::Error),
+    Custom(String),
+}
+
+impl From<darling::Error> for DeriveError {
+    fn from(e: darling::Error) -> Self {
+        DeriveError::Darling(e)
+    }
+}
+
+impl From<syn::Error> for DeriveError {
+    fn from(e: syn::Error) -> Self {
+        DeriveError::Darling(e.into())
+    }
+}
+
+impl DeriveError {
+    fn into_compile_error(self) -> proc_macro2::TokenStream {
+        match self {
+            DeriveError::Darling(e) => e.write_errors(),
+            DeriveError::Custom(e) => {
+                syn::Error::new(proc_macro2::Span::call_site(), e).to_compile_error()
+            }
+        }
+    }
+
+    fn custom<T: Into<String>>(error: T) -> Self {
+        Self::Custom(error.into())
+    }
+}
+
+trait DeriveMacro {
+    fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError>
+    where
+        Self: Sized;
+}
+
+trait DeriveMacroExt {
+    fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream;
+}
+
+impl<T: DeriveMacro> DeriveMacroExt for T {
+    fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+        let ast = parse_macro_input!(input as DeriveInput);
+        T::input_to_derive(&ast)
+            .unwrap_or_else(|e| e.into_compile_error())
+            .into()
+    }
+}
 
 /// Derives the [`xmlity::Serialize`] trait for a type.
 ///
@@ -128,13 +180,7 @@ mod utils;
 /// </table>
 #[proc_macro_derive(Serialize, attributes(xelement, xattribute, xgroup, xvalue))]
 pub fn derive_serialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let ast = parse_macro_input!(item as DeriveInput);
-    let element_opts = XmlityRootElementDeriveOpts::parse(&ast).expect("Wrong options");
-    let value_opts = XmlityRootValueDeriveOpts::parse(&ast).expect("Wrong options");
-
-    ser::derive_element_serialize_fn(ast, element_opts.as_ref(), value_opts.as_ref())
-        .expect("Wrong options")
-        .into()
+    DeriveSerialize::derive(item)
 }
 
 /// Derives the [`xmlity::SerializeAttribute`] trait for a type.
@@ -177,12 +223,31 @@ pub fn derive_serialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenSt
 /// </table>
 #[proc_macro_derive(SerializeAttribute, attributes(xattribute))]
 pub fn derive_serialize_attribute_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let ast = parse_macro_input!(item as DeriveInput);
-    let opts = XmlityRootAttributeDeriveOpts::parse(&ast)
-        .expect("Wrong options")
-        .unwrap_or_default();
+    DeriveSerializeAttribute::derive(item)
+}
 
-    ser::derive_attribute_serialize_fn(ast, opts).into()
+enum DeriveDeserializeOption {
+    None,
+    Element(XmlityRootElementDeriveOpts),
+    Attribute(XmlityRootAttributeDeriveOpts),
+    Value(XmlityRootValueDeriveOpts),
+}
+
+impl DeriveDeserializeOption {
+    pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
+        let element_opts = XmlityRootElementDeriveOpts::parse(ast).expect("Wrong options");
+        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast).expect("Wrong options");
+        let value_opts = XmlityRootValueDeriveOpts::parse(ast).expect("Wrong options");
+
+        let opts = match (element_opts, attribute_opts, value_opts) {
+            (Some(element_opts), None, None) => DeriveDeserializeOption::Element(element_opts),
+            (None, Some(attribute_opts), None) => DeriveDeserializeOption::Attribute(attribute_opts),
+            (None, None, Some(value_opts)) => DeriveDeserializeOption::Value(value_opts),
+            (None, None, None) => DeriveDeserializeOption::None,
+            _ => panic!("Wrong options. Only one of xelement, xattribute, or xvalue can be used for root elements."),
+        };
+        Ok(opts)
+    }
 }
 
 /// Derives the [`xmlity::Deserialize`] trait for a type.
@@ -292,14 +357,7 @@ pub fn derive_serialize_attribute_fn(item: proc_macro::TokenStream) -> proc_macr
 /// </table>
 #[proc_macro_derive(Deserialize, attributes(xelement, xattribute, xgroup, xvalue))]
 pub fn derive_deserialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let ast = parse_macro_input!(item as DeriveInput);
-    let element_opts = XmlityRootElementDeriveOpts::parse(&ast).expect("Wrong options");
-    let attribute_opts = XmlityRootAttributeDeriveOpts::parse(&ast).expect("Wrong options");
-    let value_opts = XmlityRootValueDeriveOpts::parse(&ast).expect("Wrong options");
-
-    de::derive_deserialize_fn(ast, element_opts, attribute_opts, value_opts)
-        .expect("Wrong options")
-        .into()
+    DeriveDeserialize::derive(item)
 }
 
 /// Derives the [`xmlity::SerializationGroup`] trait for a type.
@@ -341,14 +399,7 @@ pub fn derive_deserialize_fn(item: proc_macro::TokenStream) -> proc_macro::Token
 pub fn derive_serialization_group_attribute_fn(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let ast = parse_macro_input!(item as DeriveInput);
-    let opts = XmlityRootGroupDeriveOpts::parse(&ast)
-        .expect("Wrong options")
-        .unwrap_or_default();
-
-    ser::derive_group_serialize_fn(ast, opts)
-        .expect("Wrong options")
-        .into()
+    DeriveSerializationGroup::derive(item)
 }
 
 /// Derives the [`xmlity::DeserializationGroup`] trait for a type.
@@ -388,14 +439,7 @@ pub fn derive_serialization_group_attribute_fn(
 /// </table>
 #[proc_macro_derive(DeserializationGroup, attributes(xelement, xattribute, xgroup))]
 pub fn derive_deserialization_group_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let ast = parse_macro_input!(item as DeriveInput);
-    let opts = XmlityRootGroupDeriveOpts::parse(&ast)
-        .expect("Wrong options")
-        .unwrap_or_default();
-
-    de::derive_deserialization_group_fn(ast, opts)
-        .expect("Wrong options")
-        .into()
+    DeriveDeserializationGroup::derive(item)
 }
 
 fn simple_compile_error(text: &str) -> proc_macro2::TokenStream {
@@ -544,4 +588,17 @@ impl quote::ToTokens for ExpandedName<'_> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         tokens.extend(Self::to_expression(self))
     }
+}
+
+fn non_bound_generics(generics: &syn::Generics) -> syn::Generics {
+    let mut non_bound_generics = generics.to_owned();
+    non_bound_generics.where_clause = None;
+    non_bound_generics
+        .lifetimes_mut()
+        .for_each(|a| a.bounds.clear());
+    non_bound_generics
+        .type_params_mut()
+        .for_each(|a| a.bounds.clear());
+
+    non_bound_generics
 }
