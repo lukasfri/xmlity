@@ -4,7 +4,7 @@ pub use element::DeriveDeserialize;
 pub use group::DeriveDeserializationGroup;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{Ident, Type, Visibility};
+use syn::{parse_quote, Ident, Stmt, Type, Visibility};
 
 use crate::{
     options::{
@@ -141,12 +141,12 @@ fn builder_attribute_field_visitor<
     access_ident: &Ident,
     builder_field_ident_prefix: proc_macro2::TokenStream,
     fields: F,
-    if_next_attribute_none: proc_macro2::TokenStream,
-    finished_attribute: proc_macro2::TokenStream,
-    if_contributed_to_groups: proc_macro2::TokenStream,
-    after_attempt: proc_macro2::TokenStream,
+    if_next_attribute_none: Vec<Stmt>,
+    finished_attribute: Vec<Stmt>,
+    if_contributed_to_groups: Vec<Stmt>,
+    after_attempt: Vec<Stmt>,
     pop_error: bool,
-) -> impl Iterator<Item = TokenStream> + use<'_, F> {
+) -> Vec<Stmt> {
     fn attribute_field_deserialize_impl(
         access_ident: &Ident,
         builder_field_ident_prefix: impl ToTokens,
@@ -155,36 +155,36 @@ fn builder_attribute_field_visitor<
             field_type,
             ..
         }: DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
-        if_next_attribute_none: proc_macro2::TokenStream,
-        finished_attribute: proc_macro2::TokenStream,
-        after_attempt: proc_macro2::TokenStream,
+        if_next_attribute_none: &[Stmt],
+        finished_attribute: &[Stmt],
+        after_attempt: &[Stmt],
         pop_error: bool,
-    ) -> proc_macro2::TokenStream {
+    ) -> Vec<Stmt> {
         let temporary_value_ident = Ident::new("__v", Span::call_site());
 
         if pop_error {
-            quote! {
+            parse_quote! {
                 if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
                     let #temporary_value_ident = ::xmlity::de::AttributesAccess::next_attribute::<#field_type>(&mut #access_ident)?;
                     let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
-                        #if_next_attribute_none
+                        #(#if_next_attribute_none)*
                     };
                     #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
-                    #finished_attribute
+                    #(#finished_attribute)*
 
                 }
             }
         } else {
-            quote! {
+            parse_quote! {
                 if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
                     if let ::core::result::Result::Ok(#temporary_value_ident) = ::xmlity::de::AttributesAccess::next_attribute::<#field_type>(&mut #access_ident) {
                         let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
-                            #if_next_attribute_none
+                            #(#if_next_attribute_none)*
                         };
                         #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
-                        #finished_attribute
+                        #(#finished_attribute)*
                     }
-                    #after_attempt
+                    #(#after_attempt)*
                 }
             }
         }
@@ -197,31 +197,31 @@ fn builder_attribute_field_visitor<
             builder_field_ident,
             ..
         }: DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-        if_contributed_to_groups: proc_macro2::TokenStream,
-        after_attempt: proc_macro2::TokenStream,
+        if_contributed_to_groups: &[Stmt],
+        after_attempt: &[Stmt],
         pop_error: bool,
-    ) -> proc_macro2::TokenStream {
+    ) -> Vec<Stmt> {
         let contributed_to_attributes_ident =
             Ident::new("__contributed_to_attributes", Span::call_site());
 
         if pop_error {
-            quote! {
+            parse_quote! {
                 if !::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident) {
                     let #contributed_to_attributes_ident = ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?)?;
                     if #contributed_to_attributes_ident {
-                        #if_contributed_to_groups
+                        #(#if_contributed_to_groups)*
                     }
                 }
             }
         } else {
-            quote! {
+            parse_quote! {
                 if !::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident) {
                     if let ::core::result::Result::Ok(#contributed_to_attributes_ident) = ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?) {
                         if #contributed_to_attributes_ident {
-                            #if_contributed_to_groups
+                            #(#if_contributed_to_groups)*
                         }
                     }
-                    #after_attempt
+                    #(#after_attempt)*
                 }
             }
         }
@@ -255,9 +255,9 @@ fn builder_attribute_field_visitor<
                             XmlityFieldAttributeGroupDeriveOpts::Attribute(opts) => opts,
                             _ => unreachable!(),
                         }),
-                        if_next_attribute_none,
-                        finished_attribute,
-                        after_attempt,
+                        if_next_attribute_none.as_slice(),
+                        finished_attribute.as_slice(),
+                        after_attempt.as_slice(),
                         pop_error,
                     )
                 }
@@ -268,12 +268,14 @@ fn builder_attribute_field_visitor<
                         XmlityFieldAttributeGroupDeriveOpts::Group(opts) => opts,
                         _ => unreachable!(),
                     }),
-                    if_contributed_to_groups,
-                    after_attempt,
+                    if_contributed_to_groups.as_slice(),
+                    after_attempt.as_slice(),
                     pop_error,
                 ),
             },
         )
+        .flatten()
+        .collect::<Vec<_>>()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -283,12 +285,12 @@ fn builder_element_field_visitor<
     access_ident: &Ident,
     builder_field_ident_prefix: proc_macro2::TokenStream,
     fields: F,
-    if_next_element_none: proc_macro2::TokenStream,
-    finished_element: proc_macro2::TokenStream,
-    if_contributed_to_groups: proc_macro2::TokenStream,
-    after_attempt: proc_macro2::TokenStream,
+    if_next_element_none: Vec<Stmt>,
+    finished_element: Vec<Stmt>,
+    if_contributed_to_groups: Vec<Stmt>,
+    after_attempt: Vec<Stmt>,
     pop_error: bool,
-) -> impl Iterator<Item = TokenStream> + use<'_, F> {
+) -> Vec<Stmt> {
     fn element_field_deserialize_impl(
         access_ident: &Ident,
         builder_field_ident_prefix: impl ToTokens,
@@ -297,37 +299,37 @@ fn builder_element_field_visitor<
             field_type,
             ..
         }: DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>,
-        if_next_element_none: proc_macro2::TokenStream,
-        finished_element: proc_macro2::TokenStream,
-        after_attempt: proc_macro2::TokenStream,
+        if_next_element_none: &[Stmt],
+        finished_element: &[Stmt],
+        after_attempt: &[Stmt],
         pop_error: bool,
-    ) -> proc_macro2::TokenStream {
+    ) -> Vec<Stmt> {
         let temporary_value_ident = Ident::new("__v", Span::call_site());
 
         if pop_error {
-            quote! {
+            parse_quote! {
                 if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
                     let #temporary_value_ident = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident)?;
                     let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
-                        #if_next_element_none
+                        #(#if_next_element_none)*
                     };
                     #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
 
-                    #finished_element
+                    #(#finished_element)*
                 }
             }
         } else {
-            quote! {
+            parse_quote! {
                 if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
                     if let ::core::result::Result::Ok(#temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident) {
                         let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
-                            #if_next_element_none
+                            #(#if_next_element_none)*
                         };
                         #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
 
-                        #finished_element
+                        #(#finished_element)*
                     }
-                    #after_attempt
+                    #(#after_attempt)*
                 }
             }
         }
@@ -340,32 +342,32 @@ fn builder_element_field_visitor<
             builder_field_ident,
             ..
         }: DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-        if_contributed_to_groups: proc_macro2::TokenStream,
-        after_attempt: proc_macro2::TokenStream,
+        if_contributed_to_groups: &[Stmt],
+        after_attempt: &[Stmt],
         pop_error: bool,
-    ) -> proc_macro2::TokenStream {
+    ) -> Vec<Stmt> {
         let contributed_to_elements_ident =
             Ident::new("__contributed_to_elements", Span::call_site());
 
         if pop_error {
-            quote! {
+            parse_quote! {
                 if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
                     let #contributed_to_elements_ident = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)?;
                     if #contributed_to_elements_ident {
-                        #if_contributed_to_groups
+                        #(#if_contributed_to_groups)*
                     }
 
                 }
             }
         } else {
-            quote! {
+            parse_quote! {
                 if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
                     if let ::core::result::Result::Ok(#contributed_to_elements_ident) = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?) {
                         if #contributed_to_elements_ident {
-                            #if_contributed_to_groups
+                            #(#if_contributed_to_groups)*
                         }
                     }
-                    #after_attempt
+                    #(#after_attempt)*
                 }
             }
         }
@@ -398,9 +400,9 @@ fn builder_element_field_visitor<
                         XmlityFieldElementGroupDeriveOpts::Element(opts) => opts,
                         _ => unreachable!(),
                     }),
-                    if_next_element_none,
-                    finished_element,
-                    after_attempt,
+                    if_next_element_none.as_slice(),
+                    finished_element.as_slice(),
+                    after_attempt.as_slice(),
                     pop_error,
                 ),
                 XmlityFieldElementGroupDeriveOpts::Group(_) => group_field_deserialize_impl(
@@ -410,12 +412,14 @@ fn builder_element_field_visitor<
                         XmlityFieldElementGroupDeriveOpts::Group(opts) => opts,
                         _ => unreachable!(),
                     }),
-                    if_contributed_to_groups,
-                    after_attempt,
+                    if_contributed_to_groups.as_slice(),
+                    after_attempt.as_slice(),
                     pop_error,
                 ),
             },
         )
+        .flatten()
+        .collect::<Vec<_>>()
 }
 
 fn attribute_done(

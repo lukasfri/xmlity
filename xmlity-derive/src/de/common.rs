@@ -254,7 +254,7 @@ pub struct DeserializeTraitImplBuilder<'a> {
     generics: &'a syn::Generics,
     deserializer_ident: &'a Ident,
     deserialize_lifetime: &'a syn::Lifetime,
-    implementation: proc_macro2::TokenStream,
+    implementation: Vec<Stmt>,
 }
 
 impl<'a> DeserializeTraitImplBuilder<'a> {
@@ -263,7 +263,7 @@ impl<'a> DeserializeTraitImplBuilder<'a> {
         generics: &'a syn::Generics,
         deserializer_ident: &'a Ident,
         deserialize_lifetime: &'a syn::Lifetime,
-        implementation: proc_macro2::TokenStream,
+        implementation: Vec<Stmt>,
     ) -> Self {
         Self {
             ident,
@@ -298,7 +298,7 @@ impl<'a> DeserializeTraitImplBuilder<'a> {
                 where
                     D: ::xmlity::Deserializer<#deserialize_lifetime>,
                 {
-                    #implementation
+                    #(#implementation)*
                 }
             }
         }

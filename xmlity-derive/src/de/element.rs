@@ -19,7 +19,7 @@ trait DeserializeContent {
         visitor_ident: &Ident,
         visitor_lifetime: &Lifetime,
         deserializer_ident: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError>;
+    ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
 trait DeserializeContentExt: DeserializeContent {
@@ -303,7 +303,7 @@ impl DeserializeContent for StructElementVisitorBuilder<'_> {
         visitor_ident: &Ident,
         visitor_lifetime: &Lifetime,
         deserializer_ident: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let Self {
             opts,
         } = self;
@@ -365,7 +365,7 @@ impl DeserializeContent for StructElementVisitorBuilder<'_> {
         let visitor_def = visitor_builder.definition();
         let visitor_trait_impl = visitor_builder.trait_impl();
 
-        Ok(quote! {
+        Ok(parse_quote! {
             #visitor_def
 
             #visitor_trait_impl
@@ -436,7 +436,7 @@ impl DeserializeContent for StructAttributeVisitorBuilder<'_> {
         visitor_ident: &Ident,
         visitor_lifetime: &Lifetime,
         deserializer_ident: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let data_struct = match ast.data {
             syn::Data::Struct(ref data_struct) => data_struct,
             _ => {
@@ -481,7 +481,7 @@ impl DeserializeContent for StructAttributeVisitorBuilder<'_> {
         let visitor_def = visitor_builder.definition();
         let visitor_trait_impl = visitor_builder.trait_impl();
 
-        Ok(quote! {
+        Ok(parse_quote! {
             #visitor_def
 
             #visitor_trait_impl
@@ -607,13 +607,13 @@ fn visit_element_data_fn_impl_attribute(
         access_ident,
         quote! {},
         fields.clone(),
-        quote! {break;},
+        parse_quote! {break;},
         match order {
-            ElementOrder::Loose => quote! {break;},
-            ElementOrder::None => quote! {continue;},
+            ElementOrder::Loose => parse_quote! {break;},
+            ElementOrder::None => parse_quote! {continue;},
         },
-        quote! {continue;},
-        quote! {},
+        parse_quote! {continue;},
+        parse_quote! {},
         match order {
             ElementOrder::Loose => true,
             ElementOrder::None => false,
@@ -621,7 +621,7 @@ fn visit_element_data_fn_impl_attribute(
     );
 
     match order {
-        ElementOrder::Loose => field_visits.zip(fields).map(|(field_visit, field)| {
+        ElementOrder::Loose => field_visits.into_iter().zip(fields).map(|(field_visit, field)| {
             let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
                 let skip_ident = Ident::new("__skip", span);
                 parse_quote! {
@@ -723,13 +723,13 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
             access_ident,
             quote! {},
             fields.clone(),
-            quote! {break;},
+            parse_quote! {break;},
             match order {
-                ElementOrder::Loose => quote! {break;},
-                ElementOrder::None => quote! {continue;},
+                ElementOrder::Loose => parse_quote! {break;},
+                ElementOrder::None => parse_quote! {continue;},
             },
-            quote! {continue;},
-            quote! {},
+            parse_quote! {continue;},
+            parse_quote! {},
             match order {
                 ElementOrder::Loose => true,
                 ElementOrder::None => false,
@@ -737,7 +737,7 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
         );
     
          match order {
-            ElementOrder::Loose => field_visits.zip(fields.clone()).map(|(field_visit, field)| {
+            ElementOrder::Loose => field_visits.into_iter().zip(fields.clone()).map(|(field_visit, field)| {
                 let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
                     let skip_ident = Ident::new("__skip", access_ident.span());
                     parse_quote! {
@@ -845,7 +845,7 @@ impl DeserializeContent for EnumNoneVisitorBuilder {
         visitor_ident: &Ident,
         visitor_lifetime: &Lifetime,
         deserializer_ident: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let data_enum = match &data {
             syn::Data::Enum(data_enum) => data_enum,
             _ => panic!("Wrong options. Only enums can be used for xelement."),
@@ -913,17 +913,17 @@ impl DeserializeContent for EnumNoneVisitorBuilder {
         let visitor_def = visitor_builder.definition();
         let visitor_trait_impl = visitor_builder.trait_impl();
     
-        let deserialize_expr = quote! {
+        let deserialize_stmt: Vec<Stmt> = parse_quote! {
             ::xmlity::de::Deserializer::deserialize_seq(#deserializer_ident, #visitor_ident {
                 lifetime: ::core::marker::PhantomData,
                 marker: ::core::marker::PhantomData,
             })
         };
     
-        Ok(quote! {
+        Ok(parse_quote! {
             #visitor_def
             #visitor_trait_impl
-            #deserialize_expr
+            #(#deserialize_stmt)*
         })
     }
 }
@@ -945,7 +945,7 @@ impl DeserializeContent for EnumValueVisitorBuilder<'_> {
         visitor_ident: &Ident,
         visitor_lifetime: &Lifetime,
         deserializer_ident: &Ident,
-    ) -> Result<proc_macro2::TokenStream, DeriveError>
+    ) -> Result<Vec<Stmt>, DeriveError>
 
 {
     let syn::Data::Enum(DataEnum { variants, .. }) = data else {
@@ -1030,17 +1030,17 @@ impl DeserializeContent for EnumValueVisitorBuilder<'_> {
     let visitor_def = visitor_builder.definition();
     let visitor_trait_impl = visitor_builder.trait_impl();
 
-    let deserialize_expr = quote! {
+    let deserialize_stmt: Vec<Stmt> = parse_quote! {
         ::xmlity::de::Deserializer::deserialize_any(#deserializer_ident, #visitor_ident {
             lifetime: ::core::marker::PhantomData,
             marker: ::core::marker::PhantomData,
         })
     };
 
-    Ok(quote! {
+    Ok(parse_quote! {
         #visitor_def
         #visitor_trait_impl
-        #deserialize_expr
+        #(#deserialize_stmt)*
     })
 }
 }
