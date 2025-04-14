@@ -1,5 +1,4 @@
-use quote::quote;
-use syn::{Ident, LifetimeParam};
+use syn::{parse_quote, Ident, ImplItemFn, ItemImpl, ItemStruct, LifetimeParam, Stmt};
 
 pub struct VisitorBuilder<'a> {
     ident: &'a Ident,
@@ -7,16 +6,16 @@ pub struct VisitorBuilder<'a> {
     visitor_ident: &'a Ident,
     visitor_lifetime: &'a syn::Lifetime,
     formatter_expecting: &'a str,
-    visit_text_fn: Option<proc_macro2::TokenStream>,
-    visit_cdata_fn: Option<proc_macro2::TokenStream>,
-    visit_element_fn: Option<proc_macro2::TokenStream>,
-    visit_attribute_fn: Option<proc_macro2::TokenStream>,
-    visit_seq_fn: Option<proc_macro2::TokenStream>,
-    visit_pi_fn: Option<proc_macro2::TokenStream>,
-    visit_decl_fn: Option<proc_macro2::TokenStream>,
-    visit_comment_fn: Option<proc_macro2::TokenStream>,
-    visit_doctype_fn: Option<proc_macro2::TokenStream>,
-    visit_none_fn: Option<proc_macro2::TokenStream>,
+    visit_text_fn: Option<ImplItemFn>,
+    visit_cdata_fn: Option<ImplItemFn>,
+    visit_element_fn: Option<ImplItemFn>,
+    visit_attribute_fn: Option<ImplItemFn>,
+    visit_seq_fn: Option<ImplItemFn>,
+    visit_pi_fn: Option<ImplItemFn>,
+    visit_decl_fn: Option<ImplItemFn>,
+    visit_comment_fn: Option<ImplItemFn>,
+    visit_doctype_fn: Option<ImplItemFn>,
+    visit_none_fn: Option<ImplItemFn>,
 }
 
 #[allow(dead_code)]
@@ -47,78 +46,51 @@ impl<'a> VisitorBuilder<'a> {
         }
     }
 
-    pub fn visit_text_fn(
-        mut self,
-        visit_text_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_text_fn(mut self, visit_text_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_text_fn = visit_text_fn.into();
         self
     }
-    pub fn visit_cdata_fn(
-        mut self,
-        visit_cdata_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_cdata_fn(mut self, visit_cdata_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_cdata_fn = visit_cdata_fn.into();
         self
     }
 
-    pub fn visit_element_fn(
-        mut self,
-        visit_element_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_element_fn(mut self, visit_element_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_element_fn = visit_element_fn.into();
         self
     }
 
-    pub fn visit_attribute_fn(
-        mut self,
-        visit_attribute_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_attribute_fn(mut self, visit_attribute_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_attribute_fn = visit_attribute_fn.into();
         self
     }
 
-    pub fn visit_seq_fn(
-        mut self,
-        visit_seq_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_seq_fn(mut self, visit_seq_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_seq_fn = visit_seq_fn.into();
         self
     }
 
-    pub fn visit_pi_fn(mut self, visit_pi_fn: impl Into<Option<proc_macro2::TokenStream>>) -> Self {
+    pub fn visit_pi_fn(mut self, visit_pi_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_pi_fn = visit_pi_fn.into();
         self
     }
 
-    pub fn visit_decl_fn(
-        mut self,
-        visit_decl_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_decl_fn(mut self, visit_decl_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_decl_fn = visit_decl_fn.into();
         self
     }
 
-    pub fn visit_comment_fn(
-        mut self,
-        visit_comment_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_comment_fn(mut self, visit_comment_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_comment_fn = visit_comment_fn.into();
         self
     }
 
-    pub fn visit_doctype_fn(
-        mut self,
-        visit_doctype_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_doctype_fn(mut self, visit_doctype_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_doctype_fn = visit_doctype_fn.into();
         self
     }
 
-    pub fn visit_none_fn(
-        mut self,
-        visit_none_fn: impl Into<Option<proc_macro2::TokenStream>>,
-    ) -> Self {
+    pub fn visit_none_fn(mut self, visit_none_fn: impl Into<Option<ImplItemFn>>) -> Self {
         self.visit_none_fn = visit_none_fn.into();
         self
     }
@@ -126,44 +98,47 @@ impl<'a> VisitorBuilder<'a> {
     pub fn visit_seq_fn_signature(
         seq_acces_ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
-        body: proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
-        quote! {
+        body: impl IntoIterator<Item = Stmt>,
+    ) -> ImplItemFn {
+        let body = body.into_iter();
+        parse_quote! {
             fn visit_seq<S>(self, mut #seq_acces_ident: S) -> ::core::result::Result<Self::Value, <S as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error>
             where
                 S: ::xmlity::de::SeqAccess<#visitor_lifetime>,
             {
-                #body
+                #(#body)*
             }
         }
     }
 
     pub fn visit_text_fn_signature(
         value_ident: &Ident,
-        body: proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
-        quote! {
+        body: impl IntoIterator<Item = Stmt>,
+    ) -> ImplItemFn {
+        let body = body.into_iter();
+        parse_quote! {
             fn visit_text<E, V>(self, #value_ident: V) -> ::core::result::Result<Self::Value, E>
             where
                 E: ::xmlity::de::Error,
                 V: ::xmlity::de::XmlText,
             {
-                #body
+                #(#body)*
             }
         }
     }
 
     pub fn visit_cdata_fn_signature(
         value_ident: &Ident,
-        body: proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
-        quote! {
+        body: impl IntoIterator<Item = Stmt>,
+    ) -> ImplItemFn {
+        let body = body.into_iter();
+        parse_quote! {
             fn visit_cdata<E, V>(self, #value_ident: V) -> ::core::result::Result<Self::Value, E>
             where
                 E: ::xmlity::de::Error,
                 V: ::xmlity::de::XmlCData,
             {
-                #body
+                #(#body)*
             }
         }
     }
@@ -171,34 +146,36 @@ impl<'a> VisitorBuilder<'a> {
     pub fn visit_attribute_fn_signature(
         attribute_access_ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
-        body: proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
-        quote! {
+        body: impl IntoIterator<Item = Stmt>,
+    ) -> ImplItemFn {
+        let body = body.into_iter();
+        parse_quote! {
             fn visit_attribute<A>(self, #attribute_access_ident: A) -> ::core::result::Result<Self::Value, <A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>
             where
                 A: ::xmlity::de::AttributeAccess<#visitor_lifetime>,
             {
-                #body
+                #(#body)*
             }
         }
     }
 
     pub fn visit_element_fn_signature(
-        body: proc_macro2::TokenStream,
         element_access_ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
-    ) -> proc_macro2::TokenStream {
-        quote! {
+        body: impl IntoIterator<Item = Stmt>,
+    ) -> ImplItemFn {
+        let body = body.into_iter();
+        parse_quote! {
             fn visit_element<A>(self, mut #element_access_ident: A) -> ::core::result::Result<Self::Value, <A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>
             where
                 A: xmlity::de::ElementAccess<#visitor_lifetime>,
             {
-                #body
+                #(#body)*
             }
         }
     }
 
-    pub fn definition(&self) -> proc_macro2::TokenStream {
+    pub fn definition(&self) -> ItemStruct {
         let Self {
             ident,
             generics,
@@ -215,7 +192,7 @@ impl<'a> VisitorBuilder<'a> {
             syn::GenericParam::Lifetime(LifetimeParam::new((*visitor_lifetime).to_owned())),
         );
 
-        quote! {
+        parse_quote! {
             struct #visitor_ident #deserialize_generics {
                 marker: ::core::marker::PhantomData<#ident #non_bound_generics>,
                 lifetime: ::core::marker::PhantomData<&#visitor_lifetime ()>,
@@ -223,7 +200,7 @@ impl<'a> VisitorBuilder<'a> {
         }
     }
 
-    pub fn trait_impl(&self) -> proc_macro2::TokenStream {
+    pub fn trait_impl(&self) -> ItemImpl {
         let Self {
             ident,
             generics,
@@ -251,7 +228,7 @@ impl<'a> VisitorBuilder<'a> {
         );
         let non_bound_deserialize_generics = crate::non_bound_generics(&deserialize_generics);
 
-        quote! {
+        parse_quote! {
             impl #deserialize_generics ::xmlity::de::Visitor<#visitor_lifetime> for #visitor_ident #non_bound_deserialize_generics {
                 type Value = #ident #non_bound_generics;
                 fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
@@ -297,7 +274,7 @@ impl<'a> DeserializeTraitImplBuilder<'a> {
         }
     }
 
-    pub fn trait_impl(&self) -> proc_macro2::TokenStream {
+    pub fn trait_impl(&self) -> ItemImpl {
         let Self {
             ident,
             generics,
@@ -315,7 +292,7 @@ impl<'a> DeserializeTraitImplBuilder<'a> {
             syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
         );
 
-        quote! {
+        parse_quote! {
             impl #deserialize_generics ::xmlity::Deserialize<#deserialize_lifetime> for #ident #non_bound_generics  {
                 fn deserialize<D>(#deserializer_ident: D) -> Result<Self, <D as ::xmlity::Deserializer<#deserialize_lifetime>>::Error>
                 where

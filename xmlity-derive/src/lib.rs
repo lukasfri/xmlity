@@ -23,6 +23,7 @@ mod utils;
 enum DeriveError {
     Darling(darling::Error),
     Syn(syn::Error),
+    Custom(String),
 }
 
 impl From<darling::Error> for DeriveError {
@@ -42,6 +43,9 @@ impl DeriveError {
         match self {
             DeriveError::Darling(e) => e.write_errors(),
             DeriveError::Syn(e) => e.to_compile_error(),
+            DeriveError::Custom(e) => {
+                syn::Error::new(proc_macro2::Span::call_site(), e).to_compile_error()
+            }
         }
     }
 }

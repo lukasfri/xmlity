@@ -1,4 +1,5 @@
-use quote::quote;
+use quote::{quote, ToTokens};
+use syn::{parse_quote, Arm, ExprMatch, ItemImpl, Stmt};
 use syn::{DeriveInput, Ident};
 
 use crate::options::XmlityRootAttributeDeriveOpts;
@@ -29,7 +30,7 @@ impl<'a> SerializeAttributeTraitImplBuilder<'a> {
         }
     }
 
-    fn trait_impl(&self) -> proc_macro2::TokenStream {
+    fn trait_impl(&self) -> ItemImpl {
         let Self {
             ident,
             generics,
@@ -39,7 +40,7 @@ impl<'a> SerializeAttributeTraitImplBuilder<'a> {
 
         let non_bound_generics = crate::non_bound_generics(generics);
 
-        quote! {
+        parse_quote! {
             impl #generics ::xmlity::SerializeAttribute for #ident #non_bound_generics {
                 fn serialize_attribute<S>(&self, mut #serializer_access: S) -> Result<<S as ::xmlity::AttributeSerializer>::Ok, <S as ::xmlity::AttributeSerializer>::Error>
                 where
@@ -62,10 +63,7 @@ trait SerializeAttributeContent {
 }
 
 trait SerializeAttributeContentExt: SerializeAttributeContent {
-    fn serialize_attribute_impl(
-        &self,
-        ast: &syn::DeriveInput,
-    ) -> Result<proc_macro2::TokenStream, DeriveError>;
+    fn serialize_attribute_impl(&self, ast: &syn::DeriveInput) -> Result<ItemImpl, DeriveError>;
 }
 
 impl<T: SerializeAttributeContent> SerializeAttributeContentExt for T {
@@ -74,7 +72,7 @@ impl<T: SerializeAttributeContent> SerializeAttributeContentExt for T {
         ast @ DeriveInput {
             ident, generics, ..
         }: &syn::DeriveInput,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<ItemImpl, DeriveError> {
         let serializer_access = Ident::new("__serializer", ident.span());
 
         let implementation = self.serialize_attribute_content(ast, &serializer_access)?;
@@ -126,10 +124,10 @@ impl SerializeAttributeContent for StructUnnamedSingleFieldAttributeSerializeBui
         let access_ident = Ident::new("__sa", proc_macro2::Span::call_site());
         let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
 
-        let preferred_prefix_setting = preferred_prefix.0.as_ref().map(|preferred_prefix| quote! {
+        let preferred_prefix_setting = preferred_prefix.0.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
             ::xmlity::ser::SerializeAttributeAccess::preferred_prefix(&mut #access_ident, ::core::option::Option::Some(::xmlity::Prefix::new(#preferred_prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.")))?;
         });
-        let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map(|enforce_prefix| quote! {
+        let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map::<Stmt, _>(|enforce_prefix| parse_quote! {
             ::xmlity::ser::SerializeAttributeAccess::include_prefix(&mut #access_ident, #enforce_prefix)?;
         });
 
@@ -167,34 +165,42 @@ impl SerializeAttributeContent for EnumSingleFieldAttributeSerializeBuilder<'_> 
             unreachable!()
         };
 
-        let variants = variants.iter().map(|variant| {
-            let variant_name = &variant.ident;
-            match &variant.fields {
-                syn::Fields::Named(_fields) => {
-                    simple_compile_error("Named fields are not supported yet")
-                }
-                syn::Fields::Unnamed(fields) => {
-                    if fields.unnamed.len() == 1 {
-                        quote! {
-                            #ident::#variant_name(val) => {
-                                ::xmlity::Serialize::serialize(&val, &mut #serializer_access)
-                            },
+        let variants = variants
+            .iter()
+            .map::<Result<Arm, DeriveError>, _>(|variant| {
+                let variant_name = &variant.ident;
+                match &variant.fields {
+                    syn::Fields::Named(_fields) => Err(DeriveError::Custom(
+                        "Named fields are not supported yet".to_string(),
+                    )),
+                    syn::Fields::Unnamed(fields) => {
+                        if fields.unnamed.len() == 1 {
+                            Ok(parse_quote! {
+                                #ident::#variant_name(val) => {
+                                    ::xmlity::Serialize::serialize(&val, &mut #serializer_access)
+                                },
+                            })
+                        } else {
+                            Err(DeriveError::Custom(
+                                "Enum variants with more than one field are not supported"
+                                    .to_string(),
+                            ))
                         }
-                    } else {
-                        simple_compile_error(
-                            "Enum variants with more than one field are not supported",
-                        )
                     }
+                    syn::Fields::Unit => Err(DeriveError::Custom(
+                        "Unit variants are not supported yet".to_string(),
+                    )),
                 }
-                syn::Fields::Unit => simple_compile_error("Unit variants are not supported yet"),
-            }
-        });
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(quote! {
+        let enum_match: ExprMatch = parse_quote! {
             match self {
                 #(#variants)*
             }
-        })
+        };
+
+        Ok(enum_match.to_token_stream())
     }
 }
 
@@ -209,14 +215,15 @@ impl DeriveMacro for DeriveSerializeAttribute {
                 syn::Fields::Unnamed(_) => {
                     StructUnnamedSingleFieldAttributeSerializeBuilder::new(&opts)
                         .serialize_attribute_impl(ast)
+                        .map(|x| x.to_token_stream())
                 }
                 syn::Fields::Named(_) | syn::Fields::Unit => {
                     Ok(simple_compile_error("Named fields are not supported yet"))
                 }
             },
-            syn::Data::Enum(_) => {
-                EnumSingleFieldAttributeSerializeBuilder::new(&opts).serialize_attribute_impl(ast)
-            }
+            syn::Data::Enum(_) => EnumSingleFieldAttributeSerializeBuilder::new(&opts)
+                .serialize_attribute_impl(ast)
+                .map(|x| x.to_token_stream()),
             syn::Data::Union(_) => unreachable!(),
         }
     }

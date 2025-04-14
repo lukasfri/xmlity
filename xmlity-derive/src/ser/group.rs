@@ -1,5 +1,5 @@
-use quote::quote;
-use syn::{DataEnum, DataStruct, DeriveInput, Ident};
+use quote::{quote, ToTokens};
+use syn::{parse_quote, DataEnum, DataStruct, DeriveInput, Ident, ItemImpl};
 
 use crate::{
     options::XmlityRootGroupDeriveOpts, simple_compile_error, DeriveError, DeriveMacro, FieldIdent,
@@ -14,10 +14,10 @@ fn deserialize_trait_impl(
     serialize_attributes_implementation: proc_macro2::TokenStream,
     children_access_ident: &proc_macro2::Ident,
     serialize_children_implementation: proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
+) -> ItemImpl {
     let non_bound_generics = crate::non_bound_generics(generics);
 
-    quote! {
+    parse_quote! {
     impl #generics ::xmlity::ser::SerializationGroup for #ident #non_bound_generics {
         fn serialize_attributes<S: xmlity::ser::SerializeAttributes>(
             &self,
@@ -131,7 +131,8 @@ impl DeriveMacro for DeriveSerializationGroup {
                     serialize_attributes_implementation,
                     &children_access_ident,
                     serialize_children_implementation,
-                ))
+                )
+                .to_token_stream())
             }
             syn::Data::Enum(DataEnum { .. }) => {
                 Ok(simple_compile_error("Enum is not supported yet."))

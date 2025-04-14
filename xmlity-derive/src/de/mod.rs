@@ -4,7 +4,7 @@ pub use element::DeriveDeserialize;
 pub use group::DeriveDeserializationGroup;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{Ident, Visibility};
+use syn::{Ident, Type, Visibility};
 
 use crate::{
     options::{
@@ -107,10 +107,10 @@ fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
     }
 }
 
-fn struct_definition_expr<I: ToTokens, T: ToTokens>(
+fn struct_definition_expr<I: ToTokens>(
     ident: I,
     generics: Option<&syn::Generics>,
-    fields: impl IntoIterator<Item = (FieldIdent, T)>,
+    fields: impl IntoIterator<Item = (FieldIdent, Type)>,
     constructor_type: &StructType,
     visibility: &Visibility,
 ) -> proc_macro2::TokenStream {

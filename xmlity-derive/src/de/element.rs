@@ -1,6 +1,6 @@
 use proc_macro2::Span;
-use quote::quote;
-use syn::{spanned::Spanned, DataEnum, DataStruct, DeriveInput, Field, Ident, Lifetime, Variant};
+use quote::{quote, ToTokens};
+use syn::{parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Expr, Field, Ident, ImplItemFn, ItemImpl, Lifetime, Stmt, Variant};
 
 use crate::{
     de::{
@@ -26,7 +26,7 @@ trait DeserializeContentExt: DeserializeContent {
     fn deserialize_impl(
         &self,
         ast: &syn::DeriveInput,
-    ) -> Result<proc_macro2::TokenStream, DeriveError>;
+    ) -> Result<ItemImpl, DeriveError>;
 }
 
 impl<T: DeserializeContent> DeserializeContentExt for T {
@@ -37,7 +37,7 @@ impl<T: DeserializeContent> DeserializeContentExt for T {
             generics,
             ..
         }: &syn::DeriveInput,
-    ) -> Result<proc_macro2::TokenStream, DeriveError> {
+    ) -> Result<ItemImpl, DeriveError> {
         let visitor_ident =
             Ident::new("__Visitor", ident.span());
         let visitor_lifetime = Lifetime::new("'__visitor", ident.span());
@@ -82,7 +82,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         allow_unknown_children: bool,
         attributes_order: ElementOrder,
         allow_unknown_attributes: bool,
-    ) -> proc_macro2::TokenStream
+    ) -> Vec<Stmt>
     where
         T: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldDeriveOpts>> + Clone,
         T::IntoIter: Clone,
@@ -141,26 +141,26 @@ impl<'a> StructElementVisitorBuilder<'a> {
         });
     
         let attribute_loop = if attribute_group_fields.clone().next().is_some() {
-            Some(visit_element_data_fn_impl_attribute(
+            visit_element_data_fn_impl_attribute(
                 &element_access_ident,
                 struct_ident.span(),
                 attribute_group_fields,
                 allow_unknown_attributes,
                 attributes_order,
-            ))
+            )
         } else {
-            None
+            Vec::new()
         };
     
         let children_loop = if element_group_fields.clone().next().is_some() {
-            Some(visit_element_data_fn_impl_children(
+            visit_element_data_fn_impl_children(
                 &element_access_ident,
                 element_group_fields,
                 allow_unknown_children,
                 children_order,
-            ))
+            )
         } else {
-            None
+            Vec::new()
         };
     
         let constructor = visit_element_data_fn_impl_constructor(
@@ -172,12 +172,12 @@ impl<'a> StructElementVisitorBuilder<'a> {
             constructor_type,
         );
     
-        quote! {
-            #getter_declarations
+        parse_quote! {
+            #(#getter_declarations)*
     
-            #attribute_loop
+            #(#attribute_loop)*
     
-            #children_loop
+            #(#children_loop)*
     
             ::core::result::Result::Ok(#constructor)
         }
@@ -191,7 +191,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         allow_unknown_children: bool,
         attributes_order: ElementOrder,
         allow_unknown_attributes: bool,
-    ) -> Result<proc_macro2::TokenStream, darling::Error> {
+    ) -> Result<Vec<Stmt>, darling::Error> {
         let constructor_type = match fields {
             syn::Fields::Named(_) => StructType::Named,
             syn::Fields::Unnamed(_) => StructType::Unnamed,
@@ -244,8 +244,8 @@ impl<'a> StructElementVisitorBuilder<'a> {
         ))
     }
 
-    fn visit_element_unit_fn_impl(ident: &Ident) -> proc_macro2::TokenStream {
-        quote! {
+    fn visit_element_unit_fn_impl(ident: &Ident) -> Vec<Stmt> {
+        parse_quote! {
             ::core::result::Result::Ok(#ident)
         }
     }
@@ -259,10 +259,10 @@ impl<'a> StructElementVisitorBuilder<'a> {
         allow_unknown_children: bool,
         attributes_order: ElementOrder,
         allow_unknown_attributes: bool,
-    ) -> Result<proc_macro2::TokenStream, darling::Error> {
+    ) -> Result<ImplItemFn, darling::Error> {
         let element_access_ident = Ident::new("__element", ident.span());
-        let xml_name_identification = expanded_name.as_ref().map(|qname| {
-            quote! {
+        let xml_name_identification = expanded_name.as_ref().map::<Stmt, _>(|qname| {
+            parse_quote! {
                 ::xmlity::de::ElementAccessExt::ensure_name::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
             }
         });
@@ -282,14 +282,16 @@ impl<'a> StructElementVisitorBuilder<'a> {
             syn::Fields::Unit => Self::visit_element_unit_fn_impl(ident),
         };
 
-        Ok(VisitorBuilder::visit_element_fn_signature(
-            quote! {
-                #xml_name_identification
+        let body : Vec<Stmt> = parse_quote! {
+            #xml_name_identification
 
-                #deserialization_impl
-            },
+            #(#deserialization_impl)*
+        };
+
+        Ok(VisitorBuilder::visit_element_fn_signature(
             &element_access_ident,
             visitor_lifetime,
+            body,
         ))
     }
 }
@@ -390,37 +392,39 @@ impl<'a> StructAttributeVisitorBuilder<'a> {
         visitor_lifetime: &syn::Lifetime,
         expanded_name: Option<ExpandedName>,
         data_struct: &DataStruct,
-    ) -> darling::Result<proc_macro2::TokenStream> {
+    ) -> darling::Result<ImplItemFn> {
         let attribute_access_ident = Ident::new("__attribute", ident.span());
-        let xml_name_identification = expanded_name.map(|qname| {
-        quote! {
-            ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
-        }
-    });
+        let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
+            parse_quote! {
+                ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
+            }
+        });
 
         let deserialization_impl = match &data_struct.fields {
-        syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => simple_compile_error("Only tuple structs with 1 element are supported"),
-        syn::Fields::Unnamed(_) => {
-            quote! {
-                ::core::str::FromStr::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
-                    .map(#ident)
-                    .map_err(::xmlity::de::Error::custom)
+            syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => simple_compile_error("Only tuple structs with 1 element are supported"),
+            syn::Fields::Unnamed(_) => {
+                parse_quote! {
+                    ::core::str::FromStr::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
+                        .map(#ident)
+                        .map_err(::xmlity::de::Error::custom)
+                }
             }
-        }
-        syn::Fields::Named(_) =>
-            simple_compile_error("Named fields in structs are not supported. Only tuple structs with 1 element are supported"),
-        syn::Fields::Unit =>
-            simple_compile_error("Unit structs are not supported. Only tuple structs with 1 element are supported"),
-    };
+            syn::Fields::Named(_) =>
+                simple_compile_error("Named fields in structs are not supported. Only tuple structs with 1 element are supported"),
+            syn::Fields::Unit =>
+                simple_compile_error("Unit structs are not supported. Only tuple structs with 1 element are supported"),
+        };
+
+        let body: Vec<Stmt> = parse_quote! {
+            #xml_name_identification
+
+            #deserialization_impl
+        };
 
         Ok(VisitorBuilder::visit_attribute_fn_signature(
             &attribute_access_ident,
             visitor_lifetime,
-            quote! {
-                #xml_name_identification
-
-                #deserialization_impl
-            },
+            body,
         ))
     }
 }
@@ -500,43 +504,43 @@ fn visit_element_data_fn_impl_builder_field_decl(
     group_fields: impl IntoIterator<
         Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
     >,
-) -> proc_macro2::TokenStream {
+) -> Vec<Stmt> {
     let getter_declarations = attribute_fields
         .into_iter()
-        .map(
+        .map::<Stmt, _>(
             |DeserializeBuilderField {
                  builder_field_ident,
                  field_type,
                  ..
              }| {
-                quote! {
+                parse_quote! {
                     let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
                 }
             },
         )
-        .chain(element_fields.into_iter().map(
+        .chain(element_fields.into_iter().map::<Stmt, _>(
             |DeserializeBuilderField {
                  builder_field_ident,
                  field_type,
                  ..
              }| {
-                quote! {
+                parse_quote! {
                     let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
                 }
             },
-        )).chain(group_fields.into_iter().map(
+        )).chain(group_fields.into_iter().map::<Stmt, _>(
             |DeserializeBuilderField {
                  builder_field_ident,
                  field_type,
                  ..
              }| {
-                quote! {
+                parse_quote! {
                     let mut #builder_field_ident = <#field_type as ::xmlity::de::DeserializationGroup>::builder();
                 }
             },
         ));
 
-    quote! {
+    parse_quote! {
         #(#getter_declarations)*
     }
 }
@@ -558,25 +562,25 @@ fn visit_element_data_fn_impl_constructor(
     let local_value_expressions_constructors = attribute_fields.into_iter()
         .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
         .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Element)))
-        .map(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
+        .map::<(_, Expr), _>(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
             let expression = if matches!(options, XmlityFieldDeriveOpts::Element(XmlityFieldElementDeriveOpts {default: true}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true})) {
-                quote! {
+                parse_quote! {
                     ::core::option::Option::unwrap_or_default(#builder_field_ident)
                 }
             } else {
-                quote! {
+                parse_quote! {
                     ::core::option::Option::ok_or(#builder_field_ident, ::xmlity::de::Error::missing_field(stringify!(#field_ident)))?
                 }
             };
             (field_ident, expression)
         });
-    let group_value_expressions_constructors = group_fields.into_iter().map(
+    let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
         |DeserializeBuilderField {
              builder_field_ident,
              field_ident,
              ..
          }| {
-            let expression = quote! {
+            let expression = parse_quote! {
                 ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
             };
 
@@ -598,7 +602,7 @@ fn visit_element_data_fn_impl_attribute(
         > + Clone,
     allow_unknown_attributes: bool,
     order: ElementOrder,
-) -> proc_macro2::TokenStream {
+) -> Vec<Stmt> {
     let field_visits = builder_attribute_field_visitor(
         access_ident,
         quote! {},
@@ -618,9 +622,9 @@ fn visit_element_data_fn_impl_attribute(
 
     match order {
         ElementOrder::Loose => field_visits.zip(fields).map(|(field_visit, field)| {
-            let skip_unknown = if allow_unknown_attributes {
+            let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
                 let skip_ident = Ident::new("__skip", span);
-                quote! {
+                parse_quote! {
                     let #skip_ident = ::xmlity::de::AttributesAccess::next_attribute::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
                     if ::core::option::Option::is_none(&#skip_ident) {
                         break;
@@ -630,7 +634,7 @@ fn visit_element_data_fn_impl_attribute(
             } else {
                 let condition = attribute_done(field, quote! {});
 
-                quote! {
+                parse_quote! {
                     if #condition {
                         break;
                     } else {
@@ -639,17 +643,17 @@ fn visit_element_data_fn_impl_attribute(
                 }
             };
 
-            quote! {
+            parse_quote! {
                 loop {
                     #field_visit
-                    #skip_unknown
+                    #(#skip_unknown)*
                 }
             }
         }).collect(),
         ElementOrder::None => {
-            let skip_unknown = if allow_unknown_attributes {
+            let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
                 let skip_ident = Ident::new("__skip", span);
-                quote! {
+                parse_quote! {
                     let #skip_ident = ::xmlity::de::AttributesAccess::next_attribute::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
                     if ::core::option::Option::is_none(&#skip_ident) {
                         break
@@ -658,7 +662,7 @@ fn visit_element_data_fn_impl_attribute(
             } else {
                 let all_some_condition = all_attributes_done(fields, quote! {});
 
-                quote! {
+                parse_quote! {
                     if #all_some_condition {
                         break;
                     } else {
@@ -667,10 +671,10 @@ fn visit_element_data_fn_impl_attribute(
                 }
             };
 
-            quote! {
+            parse_quote! {
                 loop {
                     #(#field_visits)*
-                    #skip_unknown
+                    #(#skip_unknown)*
                 }
             }
         },
@@ -707,7 +711,7 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
 
     fn access_loop(
         &self,
-    ) -> proc_macro2::TokenStream {
+    ) -> Vec<Stmt> {
         let Self {
             seq_access_ident: access_ident,
             allow_unknown_children,
@@ -734,9 +738,9 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
     
          match order {
             ElementOrder::Loose => field_visits.zip(fields.clone()).map(|(field_visit, field)| {
-                let skip_unknown = if *allow_unknown_children {
+                let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
                     let skip_ident = Ident::new("__skip", access_ident.span());
-                    quote! {
+                    parse_quote! {
                         let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
                         if ::core::option::Option::is_none(&#skip_ident) {
                             break;
@@ -746,7 +750,7 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
                 } else {
                     let condition = element_done(field, quote! {});
     
-                    quote! {
+                    parse_quote! {
                         if #condition {
                             break;
                         } else {
@@ -756,17 +760,17 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
                 };
     
     
-                quote! {
+                parse_quote! {
                     loop {
                         #field_visit
-                        #skip_unknown
+                        #(#skip_unknown)*
                     }
                 }
             }).collect(),
             ElementOrder::None => {
-                let skip_unknown = if *allow_unknown_children {
+                let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
                     let skip_ident = Ident::new("__skip", access_ident.span());
-                    quote! {
+                    parse_quote! {
                         let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
                         if ::core::option::Option::is_none(&#skip_ident) {
                             break
@@ -775,7 +779,7 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
                 } else {
                     let all_some_condition = all_elements_done(fields.clone(), quote! {});
     
-                    quote! {
+                    parse_quote! {
                         if #all_some_condition {
                             break;
                         } else {
@@ -784,10 +788,10 @@ impl<'a, F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldE
                     }
                 };
     
-                quote! {
+                parse_quote! {
                     loop {
                         #(#field_visits)*
-                        #skip_unknown
+                        #(#skip_unknown)*
                     }
                 }
             },
@@ -802,7 +806,7 @@ fn visit_element_data_fn_impl_children(
         + Clone,
     allow_unknown_children: bool,
     order: ElementOrder,
-) -> proc_macro2::TokenStream {
+) -> Vec<Stmt> {
     let access_ident = Ident::new("__children", element_access_ident.span());
 
     let visit = SeqVisitLoop::new(&access_ident,  allow_unknown_children, order, fields);
@@ -810,12 +814,12 @@ fn visit_element_data_fn_impl_children(
     let field_storage = visit.field_storage();
     let access_loop = visit.access_loop();
 
-    quote! {
+    parse_quote! {
         let mut #access_ident = ::xmlity::de::ElementAccess::children(#element_access_ident)?;
 
         #field_storage
 
-        #access_loop
+        #(#access_loop)*
     }
 }
 
@@ -881,15 +885,17 @@ impl DeserializeContent for EnumNoneVisitorBuilder {
                 }
             }).collect::<Option<Vec<_>>>()?;
             let ident_string = ident.to_string();
+
+            let body: Vec<Stmt> = parse_quote! {
+                #(#variants)*
+
+                ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
+            };
     
             Some(VisitorBuilder::visit_seq_fn_signature(
                 &sequence_access_ident,
                 visitor_lifetime,
-                quote! {
-                    #(#variants)*
-    
-                    ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
-                },
+                body,
             ))
         })();
     
@@ -981,26 +987,30 @@ impl DeserializeContent for EnumValueVisitorBuilder<'_> {
 
         let ident_string = ident.to_string();
 
-        let fn_body = quote! {
+        let fn_body: Vec<Stmt> = parse_quote! {
             #(#variants)*
 
             ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
         };
 
+        let text_fn_body: Vec<Stmt> = parse_quote! {
+            let #value_ident = ::xmlity::de::XmlText::as_str(&#value_ident_owned);
+            #(#fn_body)*
+        };
+
+        let cdata_fn_body: Vec<Stmt> = parse_quote! {
+            let #value_ident = ::xmlity::de::XmlCData::as_str(&#value_ident_owned);
+            #(#fn_body)*
+        };
+
         (
             Some(VisitorBuilder::visit_text_fn_signature(
                 &value_ident_owned,
-                quote! {
-                    let #value_ident = ::xmlity::de::XmlText::as_str(&#value_ident_owned);
-                    #fn_body
-                },
+                text_fn_body,
             )),
             Some(VisitorBuilder::visit_cdata_fn_signature(
                 &value_ident_owned,
-                quote! {
-                    let #value_ident = ::xmlity::de::XmlCData::as_str(&#value_ident_owned);
-                    #fn_body
-                },
+                cdata_fn_body,
             )),
         )
     })();
@@ -1045,30 +1055,25 @@ impl DeriveMacro for DeriveDeserialize {
             (syn::Data::Struct(_), DeriveDeserializeOption::Element(opts)) => {
                 StructElementVisitorBuilder::new(opts)
                     .deserialize_impl(ast)
+                    .map(|a| a.to_token_stream())
             }
             (syn::Data::Struct(_), DeriveDeserializeOption::Attribute(opts)) => {
                 StructAttributeVisitorBuilder::new(opts).deserialize_impl(ast)
+                .map(|a| a.to_token_stream())
             }
             (syn::Data::Struct(_), DeriveDeserializeOption::Value(_opts)) => {
-                // struct_attribute_de_impl(
-                //     &ast.ident,
-                //     &ast.generics,
-                //     &visitor_ident,
-                //     &visitor_lifetime,
-                //     &deserializer_ident,
-                //     data_struct,
-                //     attribute_opts,
-                // )?
+
                 Ok(simple_compile_error("Structs with value options are not supported yet"))
             }
             (syn::Data::Enum(_), DeriveDeserializeOption::None) => {
-                EnumNoneVisitorBuilder::new().deserialize_impl(ast)
+                EnumNoneVisitorBuilder::new().deserialize_impl(ast).map(|a| a.to_token_stream())
             }
             (
                 syn::Data::Enum(_),
                 DeriveDeserializeOption::Value(value_opts),
             ) => EnumValueVisitorBuilder::new(value_opts)
-                .deserialize_impl(ast),
+                .deserialize_impl(ast)
+                .map(|a| a.to_token_stream()),
             (syn::Data::Union(_), _) => Ok(simple_compile_error("Unions are not supported yet")),
             _ => Ok(simple_compile_error("Wrong options")),
         }
