@@ -11,11 +11,11 @@ use crate::{
         builder_element_field_visitor, constructor_expr, element_done,
     },
     options::{
-        ElementOrder, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts,
-        XmlityRootValueDeriveOpts,
+        ElementOrder, WithExpandedNameExt, XmlityRootAttributeDeriveOpts,
+        XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
     },
-    simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro,
-    DeserializeBuilderField, ExpandedName, FieldIdent, XmlityFieldAttributeDeriveOpts,
+    simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro, DeriveResult,
+    DeserializeBuilderField, FieldIdent, XmlityFieldAttributeDeriveOpts,
     XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementDeriveOpts,
     XmlityFieldElementGroupDeriveOpts, XmlityFieldGroupDeriveOpts,
 };
@@ -154,7 +154,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         allow_unknown_children: bool,
         attribute_order: ElementOrder,
         allow_unknown_attributes: bool,
-    ) -> Result<Vec<Stmt>, darling::Error> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let constructor_type = match fields {
             syn::Fields::Named(_) => StructType::Named,
             syn::Fields::Unnamed(_) => StructType::Unnamed,
@@ -168,7 +168,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 .map(|f| {
                     let field_ident = f.ident.clone().expect("Named struct");
 
-                    darling::Result::Ok(DeserializeBuilderField {
+                    DeriveResult::Ok(DeserializeBuilderField {
                         builder_field_ident: FieldIdent::Named(field_ident.clone()),
                         field_ident: FieldIdent::Named(field_ident),
                         options: XmlityFieldDeriveOpts::from_field(f)?,
@@ -181,7 +181,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, f)| {
-                    darling::Result::Ok(DeserializeBuilderField {
+                    DeriveResult::Ok(DeserializeBuilderField {
                         builder_field_ident: FieldIdent::Named(Ident::new(
                             &format!("__{}", i),
                             f.span(),
@@ -224,8 +224,6 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
         let XmlityRootElementDeriveOpts {
-            name,
-            namespace,
             deserialize_any_name,
             allow_unknown_attributes,
             allow_unknown_children,
@@ -240,10 +238,7 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
         };
 
         let ident_name = ident.to_string();
-        let expanded_name = ExpandedName::new(
-            name.0.as_ref().unwrap_or(&ident_name),
-            namespace.0.as_deref(),
-        );
+        let expanded_name = self.opts.expanded_name(&ident_name);
         let expanded_name = if *deserialize_any_name {
             None
         } else {
@@ -459,8 +454,6 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
             unreachable!()
         };
         let XmlityRootAttributeDeriveOpts {
-            name,
-            namespace,
             deserialize_any_name,
             ..
         } = self.opts;
@@ -468,10 +461,7 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
         let expanded_name = if *deserialize_any_name {
             None
         } else {
-            Some(ExpandedName::new(
-                name.0.as_ref().unwrap_or(&ident_name),
-                namespace.0.as_deref(),
-            ))
+            Some(self.opts.expanded_name(&ident_name))
         };
 
         let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
@@ -1197,7 +1187,7 @@ impl DeriveMacro for DeriveDeserialize {
                     .map(|a| a.to_token_stream())
             }
             (syn::Data::Union(_), _) => Ok(simple_compile_error("Unions are not supported yet")),
-            _ => Ok(simple_compile_error(
+            _ => Err(DeriveError::custom(
                 "Wrong options. Unsupported deserialize.",
             )),
         }

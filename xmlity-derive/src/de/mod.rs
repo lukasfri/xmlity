@@ -11,8 +11,8 @@ use crate::{
         XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldGroupDeriveOpts,
     },
     utils::{self},
-    DeriveError, DeserializeBuilderField, FieldIdent, XmlityFieldAttributeGroupDeriveOpts,
-    XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+    DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent,
+    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
 };
 
 mod common;
@@ -519,7 +519,7 @@ pub fn fields(
             .map(|f| {
                 let field_ident = f.ident.clone().expect("Named struct");
 
-                darling::Result::Ok(DeserializeBuilderField {
+                DeriveResult::Ok(DeserializeBuilderField {
                     builder_field_ident: FieldIdent::Named(field_ident.clone()),
                     field_ident: FieldIdent::Named(field_ident),
                     options: XmlityFieldDeriveOpts::from_field(f)?,
@@ -532,7 +532,7 @@ pub fn fields(
             .iter()
             .enumerate()
             .map(|(i, f)| {
-                darling::Result::Ok(DeserializeBuilderField {
+                DeriveResult::Ok(DeserializeBuilderField {
                     builder_field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     options: XmlityFieldDeriveOpts::from_field(f)?,
