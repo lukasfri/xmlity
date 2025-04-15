@@ -3,7 +3,7 @@ use syn::spanned::Spanned;
 use syn::{parse_quote, Arm, ImplItemFn, ItemImpl, Stmt};
 use syn::{DeriveInput, Ident};
 
-use crate::options::{WithExpandedName, XmlityRootAttributeDeriveOpts};
+use crate::options::{WithExpandedNameExt, XmlityRootAttributeDeriveOpts};
 use crate::simple_compile_error;
 
 use crate::DeriveError;

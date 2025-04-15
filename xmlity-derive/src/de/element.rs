@@ -11,8 +11,8 @@ use crate::{
         builder_element_field_visitor, constructor_expr, element_done,
     },
     options::{
-        ElementOrder, WithExpandedName, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts,
-        XmlityRootValueDeriveOpts,
+        ElementOrder, WithExpandedName, WithExpandedNameExt, XmlityRootAttributeDeriveOpts,
+        XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
     },
     simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro,
     DeserializeBuilderField, FieldIdent, XmlityFieldAttributeDeriveOpts,

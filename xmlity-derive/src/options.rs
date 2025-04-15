@@ -3,7 +3,7 @@ use std::borrow::Cow;
 
 use darling::{FromAttributes, FromMeta};
 use quote::ToTokens;
-use syn::{DeriveInput, Ident};
+use syn::{DeriveInput, Expr};
 
 use crate::ExpandedName;
 
@@ -90,7 +90,34 @@ pub enum TextSerializationFormat {
 }
 
 pub trait WithExpandedName {
+    // pub name: Option<LocalName<'static>>,
+    // #[darling(default)]
+    // pub namespace: Option<XmlNamespace<'static>>,
+    // #[darling(default)]
+    // pub namespace_expr: Option<Expr>,
+    fn name<'a>(&'a self) -> Option<LocalName<'a>>;
+    fn namespace<'a>(&'a self) -> Option<XmlNamespace<'a>>;
+    fn namespace_expr<'a>(&'a self) -> Option<Expr>;
+}
+
+pub trait WithExpandedNameExt: WithExpandedName {
     fn expanded_name<'a>(&'a self, ident: &'a str) -> ExpandedName<'a>;
+}
+
+impl<T: WithExpandedName> WithExpandedNameExt for T {
+    fn expanded_name<'a>(&'a self, ident: &'a str) -> ExpandedName<'a> {
+        if self.namespace().is_some() {
+            ExpandedName::new(
+                self.name().unwrap_or(LocalName(Cow::Borrowed(ident))),
+                self.namespace(),
+            )
+        } else {
+            ExpandedName::new_ref(
+                self.name().unwrap_or(LocalName(Cow::Borrowed(ident))),
+                self.namespace_expr(),
+            )
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -170,7 +197,7 @@ pub struct XmlityRootElementDeriveOpts {
     #[darling(default)]
     pub namespace: Option<XmlNamespace<'static>>,
     #[darling(default)]
-    pub namespace_path: Option<Ident>,
+    pub namespace_expr: Option<Expr>,
     #[darling(default)]
     pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
@@ -198,9 +225,9 @@ impl XmlityRootElementDeriveOpts {
         };
 
         let opts = Self::from_attributes(&[attr.clone()])?;
-        if opts.namespace_path.is_some() && opts.namespace.is_some() {
+        if opts.namespace_expr.is_some() && opts.namespace.is_some() {
             return Err(darling::Error::custom(
-                "Cannot specify both `namespace` and `namespace_path`",
+                "Cannot specify both `namespace` and `namespace_expr`",
             ));
         }
         Ok(Some(opts))
@@ -208,14 +235,16 @@ impl XmlityRootElementDeriveOpts {
 }
 
 impl WithExpandedName for XmlityRootElementDeriveOpts {
-    fn expanded_name<'a>(&'a self, default_name: &'a str) -> ExpandedName<'a> {
-        ExpandedName::new(
-            self.name
-                .as_ref()
-                .map(LocalName::as_ref)
-                .unwrap_or(LocalName(Cow::Borrowed(default_name))),
-            self.namespace.as_ref().map(XmlNamespace::as_ref),
-        )
+    fn name<'a>(&'a self) -> Option<LocalName<'a>> {
+        self.name.clone()
+    }
+
+    fn namespace<'a>(&'a self) -> Option<XmlNamespace<'a>> {
+        self.namespace.clone()
+    }
+
+    fn namespace_expr<'a>(&'a self) -> Option<Expr> {
+        self.namespace_expr.clone()
     }
 }
 
@@ -226,6 +255,8 @@ pub struct XmlityRootAttributeDeriveOpts {
     pub name: Option<LocalName<'static>>,
     #[darling(default)]
     pub namespace: Option<XmlNamespace<'static>>,
+    #[darling(default)]
+    pub namespace_expr: Option<Expr>,
     #[darling(default)]
     pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
@@ -250,14 +281,16 @@ impl XmlityRootAttributeDeriveOpts {
 }
 
 impl WithExpandedName for XmlityRootAttributeDeriveOpts {
-    fn expanded_name<'a>(&'a self, default_name: &'a str) -> ExpandedName<'a> {
-        ExpandedName::new(
-            self.name
-                .as_ref()
-                .map(LocalName::as_ref)
-                .unwrap_or(LocalName(Cow::Borrowed(default_name))),
-            self.namespace.as_ref().map(XmlNamespace::as_ref),
-        )
+    fn name<'a>(&'a self) -> Option<LocalName<'a>> {
+        self.name.clone()
+    }
+
+    fn namespace<'a>(&'a self) -> Option<XmlNamespace<'a>> {
+        self.namespace.clone()
+    }
+
+    fn namespace_expr<'a>(&'a self) -> Option<Expr> {
+        self.namespace_expr.clone()
     }
 }
 

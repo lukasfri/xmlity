@@ -7,9 +7,9 @@
 struct _ReadMeDocTests;
 
 use de::{DeriveDeserializationGroup, DeriveDeserialize};
-use quote::quote;
+use quote::{quote, ToTokens};
 use ser::{DeriveSerializationGroup, DeriveSerialize, DeriveSerializeAttribute};
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, Expr};
 
 mod de;
 mod options;
@@ -246,14 +246,37 @@ impl<T> SerializeField<T> {
     }
 }
 
+enum XmlNamespaceRef<'a> {
+    Static(XmlNamespace<'a>),
+    Dynamic(syn::Expr),
+}
+
+impl ToTokens for XmlNamespaceRef<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            XmlNamespaceRef::Static(namespace) => namespace.to_tokens(tokens),
+            XmlNamespaceRef::Dynamic(expr) => expr.to_tokens(tokens),
+        }
+    }
+}
+
 struct ExpandedName<'a> {
     name: LocalName<'a>,
-    namespace: Option<XmlNamespace<'a>>,
+    namespace: Option<XmlNamespaceRef<'a>>,
 }
 
 impl<'a> ExpandedName<'a> {
     fn new(name: LocalName<'a>, namespace: Option<XmlNamespace<'a>>) -> Self {
-        Self { name, namespace }
+        Self {
+            name,
+            namespace: namespace.map(XmlNamespaceRef::Static),
+        }
+    }
+    fn new_ref(name: LocalName<'a>, namespace: Option<Expr>) -> Self {
+        Self {
+            name,
+            namespace: namespace.map(XmlNamespaceRef::Dynamic),
+        }
     }
 
     fn to_expression(Self { name, namespace }: &Self) -> proc_macro2::TokenStream {
