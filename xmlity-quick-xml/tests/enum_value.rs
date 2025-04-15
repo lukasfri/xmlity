@@ -315,7 +315,6 @@ fn wrong_deserialize<T: DeserializeOwned + std::fmt::Debug + PartialEq>(
     assert!(actual.is_err());
     if let xmlity_quick_xml::Error::NoPossibleVariant { ident } = actual.unwrap_err() {
         assert_eq!(ident, type_name::<T>().split("::").last().unwrap());
-        println!("{:?}", ident);
     } else {
         panic!("Unexpected error type");
     }

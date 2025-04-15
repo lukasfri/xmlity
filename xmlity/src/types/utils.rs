@@ -5,38 +5,229 @@ use std::{marker::PhantomData, str::FromStr};
 
 use crate::{
     de::{self, Visitor, XmlCData, XmlText},
+    types::value::XmlDecl,
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
 use super::value::{XmlComment, XmlDoctype, XmlPI};
 
 /// This utility type represents an XML root document.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-#[non_exhaustive]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct XmlRoot<T> {
-    /// The root element of the XML document.
-    pub value: T,
-    /// The comments in the XML document.
-    pub comments: Vec<XmlComment>,
-    /// The processing instructions in the XML document.
-    pub pis: Vec<XmlPI>,
-    /// The doctype declarations in the XML document.
-    pub doctype: Vec<XmlDoctype>,
+    /// The declaration of the XML document.
+    pub decl: Option<XmlDecl>,
+    /// The top-level elements of the XML document.
+    pub elements: Vec<XmlRootTop<T>>,
+}
+
+impl<T: Serialize> crate::Serialize for XmlRoot<T> {
+    fn serialize<S>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as crate::Serializer>::Ok, <S as crate::Serializer>::Error>
+    where
+        S: crate::Serializer,
+    {
+        let __xml_name = crate::ExpandedName::new(
+            <crate::LocalName as ::core::str::FromStr>::from_str("XmlRoot").expect(
+                "XML name in derive macro is invalid. This is a bug in xmlity. Please report it.",
+            ),
+            ::core::option::Option::None,
+        );
+        let mut __element = crate::Serializer::serialize_element(serializer, &__xml_name)?;
+        let mut __children = crate::ser::SerializeElement::serialize_children(__element)?;
+        crate::ser::SerializeChildren::serialize_child(&mut __children, &self.decl)?;
+        crate::ser::SerializeChildren::serialize_child(&mut __children, &self.elements)?;
+        crate::ser::SerializeElementChildren::end(__children)
+    }
+}
+
+impl<'__deserialize, T: Deserialize<'__deserialize> + Debug> Deserialize<'__deserialize>
+    for XmlRoot<T>
+{
+    fn deserialize<D>(__deserializer: D) -> Result<Self, <D as Deserializer<'__deserialize>>::Error>
+    where
+        D: Deserializer<'__deserialize>,
+    {
+        struct __XmlRootVisitor<'__visitor, T> {
+            marker: ::core::marker::PhantomData<XmlRoot<T>>,
+            lifetime: ::core::marker::PhantomData<&'__visitor ()>,
+        }
+        impl<'__visitor, T: Deserialize<'__visitor> + Debug> crate::de::Visitor<'__visitor>
+            for __XmlRootVisitor<'__visitor, T>
+        {
+            type Value = XmlRoot<T>;
+            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                ::core::fmt::Formatter::write_str(formatter, "struct XmlRoot")
+            }
+
+            fn visit_seq<S>(self, mut sequence: S) -> Result<Self::Value, S::Error>
+            where
+                S: de::SeqAccess<'__visitor>,
+            {
+                Ok(Self::Value {
+                    decl: crate::de::SeqAccess::next_element::<XmlDecl>(&mut sequence)
+                        .ok()
+                        .flatten(),
+                    elements: crate::de::SeqAccess::next_element_seq::<Vec<XmlRootTop<T>>>(
+                        &mut sequence,
+                    )?
+                    .unwrap_or_default(),
+                })
+            }
+        }
+        Deserializer::deserialize_seq(
+            __deserializer,
+            __XmlRootVisitor {
+                lifetime: ::core::marker::PhantomData,
+                marker: ::core::marker::PhantomData,
+            },
+        )
+    }
+}
+
+/// A top-level element of the XML document.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum XmlRootTop<T> {
+    /// An element of the XML document.
+    Value(T),
+    /// A comment in the XML document.
+    Comment(XmlComment),
+    /// A processing instructions in the XML document.
+    PI(XmlPI),
+    /// A doctype declarations in the XML document.
+    Doctype(XmlDoctype),
+}
+
+impl<T> From<XmlComment> for XmlRootTop<T> {
+    fn from(value: XmlComment) -> Self {
+        XmlRootTop::Comment(value)
+    }
+}
+
+impl<T> From<XmlPI> for XmlRootTop<T> {
+    fn from(value: XmlPI) -> Self {
+        XmlRootTop::PI(value)
+    }
+}
+
+impl<T> From<XmlDoctype> for XmlRootTop<T> {
+    fn from(value: XmlDoctype) -> Self {
+        XmlRootTop::Doctype(value)
+    }
+}
+
+impl<T: Serialize> crate::Serialize for XmlRootTop<T> {
+    fn serialize<S>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as crate::Serializer>::Ok, <S as crate::Serializer>::Error>
+    where
+        S: crate::Serializer,
+    {
+        match self {
+            XmlRootTop::Value(__v) => crate::Serialize::serialize(&__v, serializer),
+            XmlRootTop::Comment(__v) => crate::Serialize::serialize(&__v, serializer),
+            XmlRootTop::PI(__v) => crate::Serialize::serialize(&__v, serializer),
+            XmlRootTop::Doctype(__v) => crate::Serialize::serialize(&__v, serializer),
+        }
+    }
+}
+
+impl<'__deserialize, T: Deserialize<'__deserialize>> Deserialize<'__deserialize> for XmlRootTop<T> {
+    fn deserialize<D>(__deserializer: D) -> Result<Self, <D as Deserializer<'__deserialize>>::Error>
+    where
+        D: Deserializer<'__deserialize>,
+    {
+        struct __XmlRootTopVisitor<'__visitor, T> {
+            marker: ::core::marker::PhantomData<XmlRootTop<T>>,
+            lifetime: ::core::marker::PhantomData<&'__visitor ()>,
+        }
+        impl<'__visitor, T: Deserialize<'__visitor>> crate::de::Visitor<'__visitor>
+            for __XmlRootTopVisitor<'__visitor, T>
+        {
+            type Value = XmlRootTop<T>;
+            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                ::core::fmt::Formatter::write_str(formatter, "enum XmlRootTop")
+            }
+            fn visit_seq<S>(
+                self,
+                mut __sequence: S,
+            ) -> Result<Self::Value, <S as crate::de::SeqAccess<'__visitor>>::Error>
+            where
+                S: crate::de::SeqAccess<'__visitor>,
+            {
+                if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) =
+                    crate::de::SeqAccess::next_element::<T>(&mut __sequence)
+                {
+                    return ::core::result::Result::Ok(XmlRootTop::Value(_v));
+                }
+                if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) =
+                    crate::de::SeqAccess::next_element::<XmlComment>(&mut __sequence)
+                {
+                    return ::core::result::Result::Ok(XmlRootTop::Comment(_v));
+                }
+                if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) =
+                    crate::de::SeqAccess::next_element::<XmlPI>(&mut __sequence)
+                {
+                    return ::core::result::Result::Ok(XmlRootTop::PI(_v));
+                }
+                if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) =
+                    crate::de::SeqAccess::next_element::<XmlDoctype>(&mut __sequence)
+                {
+                    return ::core::result::Result::Ok(XmlRootTop::Doctype(_v));
+                }
+                ::core::result::Result::Err(crate::de::Error::no_possible_variant("XmlRootTop"))
+            }
+        }
+        Deserializer::deserialize_seq(
+            __deserializer,
+            __XmlRootTopVisitor {
+                lifetime: ::core::marker::PhantomData,
+                marker: ::core::marker::PhantomData,
+            },
+        )
+    }
 }
 
 impl<T> XmlRoot<T> {
     /// Creates a new `XmlRoot` with the given value.
-    pub fn new(value: T) -> Self {
+    pub fn new() -> Self {
         Self {
-            value,
-            comments: Vec::new(),
-            pis: Vec::new(),
-            doctype: Vec::new(),
+            decl: None,
+            elements: Vec::new(),
         }
     }
+
+    /// Adds a declaration to the XML document.
+    pub fn with_decl<U: Into<XmlDecl>>(mut self, decl: U) -> Self {
+        let decl: XmlDecl = decl.into();
+        self.decl = Some(decl);
+        self
+    }
+
+    /// Adds an element to the XML document.
+    pub fn with_element<U: Into<T>>(mut self, element: U) -> Self {
+        let element: T = element.into();
+        self.elements.push(XmlRootTop::Value(element));
+        self
+    }
+
+    /// Adds multiple elements to the XML document.
+    pub fn with_elements<U: Into<T>, I: IntoIterator<Item = U>>(mut self, elements: I) -> Self {
+        self.elements.extend(
+            elements
+                .into_iter()
+                .map(Into::<T>::into)
+                .map(XmlRootTop::Value),
+        );
+        self
+    }
+
     /// Adds a comment to the XML document.
     pub fn with_comment<U: Into<XmlComment>>(mut self, comment: U) -> Self {
-        self.comments.push(comment.into());
+        let comment: XmlComment = comment.into();
+        self.elements.push(comment.into());
         self
     }
 
@@ -45,25 +236,33 @@ impl<T> XmlRoot<T> {
         mut self,
         comments: I,
     ) -> Self {
-        self.comments.extend(comments.into_iter().map(Into::into));
+        self.elements.extend(
+            comments
+                .into_iter()
+                .map(Into::<XmlComment>::into)
+                .map(Into::into),
+        );
         self
     }
 
     /// Adds a processing instruction to the XML document.
     pub fn with_pi<U: Into<XmlPI>>(mut self, pi: U) -> Self {
-        self.pis.push(pi.into());
+        let pi: XmlPI = pi.into();
+        self.elements.push(pi.into());
         self
     }
 
     /// Adds multiple processing instructions to the XML document.
     pub fn with_pis<U: Into<XmlPI>, I: IntoIterator<Item = U>>(mut self, pis: I) -> Self {
-        self.pis.extend(pis.into_iter().map(Into::into));
+        self.elements
+            .extend(pis.into_iter().map(Into::<XmlPI>::into).map(Into::into));
         self
     }
 
     /// Adds a doctype declaration to the XML document.
     pub fn with_doctype<U: Into<XmlDoctype>>(mut self, doctype: U) -> Self {
-        self.doctype.push(doctype.into());
+        let doctype: XmlDoctype = doctype.into();
+        self.elements.push(doctype.into());
         self
     }
 
@@ -72,76 +271,19 @@ impl<T> XmlRoot<T> {
         mut self,
         doctypes: I,
     ) -> Self {
-        self.doctype.extend(doctypes.into_iter().map(Into::into));
+        self.elements.extend(
+            doctypes
+                .into_iter()
+                .map(Into::<XmlDoctype>::into)
+                .map(Into::into),
+        );
         self
     }
 }
 
-impl<'de, T: Deserialize<'de> + 'de> Deserialize<'de> for XmlRoot<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct __Visitor<'v, T> {
-            marker: ::core::marker::PhantomData<XmlRoot<T>>,
-            lifetime: ::core::marker::PhantomData<&'v ()>,
-        }
-
-        impl<'v, T: Deserialize<'v> + 'v> crate::de::Visitor<'v> for __Visitor<'v, T> {
-            type Value = XmlRoot<T>;
-
-            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                formatter.write_str("Root element")
-            }
-
-            fn visit_seq<S>(self, mut sequence: S) -> Result<Self::Value, S::Error>
-            where
-                S: crate::de::SeqAccess<'v>,
-            {
-                let mut value: Option<T> = None;
-                let mut comments = Vec::new();
-                let mut pis = Vec::new();
-                let mut doctype = Vec::new();
-
-                loop {
-                    if let Ok(Some(new_value)) = sequence.next_element_seq::<T>() {
-                        if value.is_some() {
-                            return Err(crate::de::Error::custom("Multiple root elements"));
-                        }
-
-                        value = Some(new_value);
-                        continue;
-                    }
-
-                    if let Ok(Some(comment)) = sequence.next_element_seq::<XmlComment>() {
-                        comments.push(comment);
-                        continue;
-                    }
-                    if let Ok(Some(pi)) = sequence.next_element_seq::<XmlPI>() {
-                        pis.push(pi);
-                        continue;
-                    }
-                    if let Ok(Some(pi)) = sequence.next_element_seq::<XmlDoctype>() {
-                        doctype.push(pi);
-                        continue;
-                    }
-
-                    break;
-                }
-
-                Ok(XmlRoot {
-                    value: value.ok_or_else(|| crate::de::Error::custom("No root element"))?,
-                    comments,
-                    pis,
-                    doctype,
-                })
-            }
-        }
-
-        deserializer.deserialize_seq(__Visitor {
-            lifetime: ::core::marker::PhantomData,
-            marker: ::core::marker::PhantomData,
-        })
+impl<T> Default for XmlRoot<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
