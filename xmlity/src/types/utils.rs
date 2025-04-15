@@ -42,24 +42,41 @@ impl<T: Serialize> crate::Serialize for XmlRoot<T> {
     }
 }
 
-impl<'__deserialize, T> crate::Deserialize<'__deserialize> for XmlRoot<T> {
-    fn deserialize<D>(
-        __deserializer: D,
-    ) -> Result<Self, <D as crate::Deserializer<'__deserialize>>::Error>
+impl<'__deserialize, T: Deserialize<'__deserialize> + Debug> Deserialize<'__deserialize>
+    for XmlRoot<T>
+{
+    fn deserialize<D>(__deserializer: D) -> Result<Self, <D as Deserializer<'__deserialize>>::Error>
     where
-        D: crate::Deserializer<'__deserialize>,
+        D: Deserializer<'__deserialize>,
     {
         struct __XmlRootVisitor<'__visitor, T> {
             marker: ::core::marker::PhantomData<XmlRoot<T>>,
             lifetime: ::core::marker::PhantomData<&'__visitor ()>,
         }
-        impl<'__visitor, T> crate::de::Visitor<'__visitor> for __XmlRootVisitor<'__visitor, T> {
+        impl<'__visitor, T: Deserialize<'__visitor> + Debug> crate::de::Visitor<'__visitor>
+            for __XmlRootVisitor<'__visitor, T>
+        {
             type Value = XmlRoot<T>;
             fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 ::core::fmt::Formatter::write_str(formatter, "struct XmlRoot")
             }
+
+            fn visit_seq<S>(self, mut sequence: S) -> Result<Self::Value, S::Error>
+            where
+                S: de::SeqAccess<'__visitor>,
+            {
+                Ok(Self::Value {
+                    decl: crate::de::SeqAccess::next_element::<XmlDecl>(&mut sequence)
+                        .ok()
+                        .flatten(),
+                    elements: crate::de::SeqAccess::next_element_seq::<Vec<XmlRootTop<T>>>(
+                        &mut sequence,
+                    )?
+                    .unwrap_or_default(),
+                })
+            }
         }
-        crate::de::Deserializer::deserialize_any(
+        Deserializer::deserialize_seq(
             __deserializer,
             __XmlRootVisitor {
                 lifetime: ::core::marker::PhantomData,
@@ -117,14 +134,10 @@ impl<T: Serialize> crate::Serialize for XmlRootTop<T> {
     }
 }
 
-impl<'__deserialize, T: Deserialize<'__deserialize>> crate::Deserialize<'__deserialize>
-    for XmlRootTop<T>
-{
-    fn deserialize<D>(
-        __deserializer: D,
-    ) -> Result<Self, <D as crate::Deserializer<'__deserialize>>::Error>
+impl<'__deserialize, T: Deserialize<'__deserialize>> Deserialize<'__deserialize> for XmlRootTop<T> {
+    fn deserialize<D>(__deserializer: D) -> Result<Self, <D as Deserializer<'__deserialize>>::Error>
     where
-        D: crate::Deserializer<'__deserialize>,
+        D: Deserializer<'__deserialize>,
     {
         struct __XmlRootTopVisitor<'__visitor, T> {
             marker: ::core::marker::PhantomData<XmlRootTop<T>>,
@@ -167,7 +180,7 @@ impl<'__deserialize, T: Deserialize<'__deserialize>> crate::Deserialize<'__deser
                 ::core::result::Result::Err(crate::de::Error::no_possible_variant("XmlRootTop"))
             }
         }
-        crate::de::Deserializer::deserialize_seq(
+        Deserializer::deserialize_seq(
             __deserializer,
             __XmlRootTopVisitor {
                 lifetime: ::core::marker::PhantomData,

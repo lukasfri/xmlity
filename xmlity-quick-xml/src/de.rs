@@ -54,22 +54,14 @@ impl<'i> From<&'i [u8]> for Deserializer<'i> {
 
 impl<'i> Deserializer<'i> {
     pub fn new(reader: NsReader<&'i [u8]>) -> Self {
-        let mut new = Self {
+        Self {
             reader,
             current_depth: 0,
             peeked_event: None,
-        };
-
-        if let Some(Event::Decl(_)) = new.peek_event() {
-            let Some(Event::Decl(_decl)) = new.next_event() else {
-                unreachable!("peek_event returned Decl but next_event did not")
-            };
         }
-
-        new
     }
 
-    fn read_event(&mut self) -> Result<quick_xml::events::Event<'i>, Error> {
+    fn read_event(&mut self) -> Result<Event<'i>, Error> {
         while let Ok(event) = self.reader.read_event() {
             match event {
                 Event::Text(text) if text.clone().into_inner().trim_ascii().is_empty() => {
@@ -80,7 +72,7 @@ impl<'i> Deserializer<'i> {
             }
         }
 
-        Ok(quick_xml::events::Event::Eof)
+        Ok(Event::Eof)
     }
 
     fn read_until_element_end(&mut self, name: &QuickName, depth: i16) -> Result<(), Error> {
@@ -101,7 +93,7 @@ impl<'i> Deserializer<'i> {
         Err(Error::Unexpected(de::Unexpected::Eof))
     }
 
-    pub fn peek_event(&mut self) -> Option<&quick_xml::events::Event<'i>> {
+    pub fn peek_event(&mut self) -> Option<&Event<'i>> {
         if self.peeked_event.is_some() {
             return self.peeked_event.as_ref();
         }
@@ -110,7 +102,7 @@ impl<'i> Deserializer<'i> {
         self.peeked_event.as_ref()
     }
 
-    pub fn next_event(&mut self) -> Option<quick_xml::events::Event<'i>> {
+    pub fn next_event(&mut self) -> Option<Event<'i>> {
         let event = if self.peeked_event.is_some() {
             self.peeked_event.take()
         } else {
@@ -455,7 +447,7 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
 
         let current_depth = deserializer.current_depth;
 
-        if let Some(quick_xml::events::Event::End(bytes_end)) = deserializer.peek_event() {
+        if let Some(Event::End(bytes_end)) = deserializer.peek_event() {
             if OwnedQuickName::new(expected_end).as_ref() != bytes_end.name()
                 && current_depth == *start_depth
             {
@@ -489,7 +481,7 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
 
         let current_depth = deserializer.current_depth;
 
-        if let Some(quick_xml::events::Event::End(bytes_end)) = deserializer.peek_event() {
+        if let Some(Event::End(bytes_end)) = deserializer.peek_event() {
             if OwnedQuickName::new(expected_end).as_ref() != bytes_end.name()
                 && current_depth == *start_depth
             {
@@ -631,8 +623,8 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
         let event = self.next_event().ok_or_else(|| Error::custom("EOF"))?;
 
         match event {
-            quick_xml::events::Event::Start(bytes_start) => {
-                let bytes_start_name = bytes_start.name().0.to_owned();
+            Event::Start(bytes_start) => {
+                let element_name = OwnedQuickName(bytes_start.name().0.to_owned());
 
                 let value = Visitor::visit_element(
                     visitor,
@@ -647,13 +639,11 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
 
                 let end_event = self.next_event().ok_or_else(|| Error::custom("EOF"))?;
 
-                let mut success = false;
-
-                if let quick_xml::events::Event::End(bytes_end) = &end_event {
-                    if bytes_end.name() == QuickName(&bytes_start_name) {
-                        success = true;
-                    }
-                }
+                let success = if let Event::End(bytes_end) = &end_event {
+                    bytes_end.name() == element_name.as_ref()
+                } else {
+                    false
+                };
 
                 if success {
                     Ok(value)
@@ -661,24 +651,18 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
                     Err(Error::custom("No matching end element"))
                 }
             }
-            quick_xml::events::Event::End(_bytes_end) => {
-                Err(Error::custom("Unexpected end element"))
-            }
-            quick_xml::events::Event::Empty(bytes_start) => visitor.visit_element(ElementAccess {
+            Event::End(_bytes_end) => Err(Error::custom("Unexpected end element")),
+            Event::Empty(bytes_start) => visitor.visit_element(ElementAccess {
                 bytes_start: bytes_start.into_owned().clone(),
                 start_depth: self.current_depth,
                 deserializer: Some(self),
                 empty: true,
                 attribute_index: 0,
             }),
-            quick_xml::events::Event::Text(bytes_text) => visitor.visit_text(bytes_text.deref()),
-            quick_xml::events::Event::CData(bytes_cdata) => {
-                visitor.visit_cdata(bytes_cdata.deref())
-            }
-            quick_xml::events::Event::Comment(bytes_text) => {
-                visitor.visit_comment(bytes_text.deref())
-            }
-            quick_xml::events::Event::Decl(bytes_decl) => visitor.visit_decl(
+            Event::Text(bytes_text) => visitor.visit_text(bytes_text.deref()),
+            Event::CData(bytes_cdata) => visitor.visit_cdata(bytes_cdata.deref()),
+            Event::Comment(bytes_text) => visitor.visit_comment(bytes_text.deref()),
+            Event::Decl(bytes_decl) => visitor.visit_decl(
                 bytes_decl.version()?,
                 match bytes_decl.encoding() {
                     Some(Ok(encoding)) => Some(encoding),
@@ -691,11 +675,9 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
                     None => None,
                 },
             ),
-            quick_xml::events::Event::PI(bytes_pi) => visitor.visit_pi(bytes_pi.deref()),
-            quick_xml::events::Event::DocType(bytes_text) => {
-                visitor.visit_doctype(bytes_text.deref())
-            }
-            quick_xml::events::Event::Eof => Err(Error::custom("Unexpected EOF")),
+            Event::PI(bytes_pi) => visitor.visit_pi(bytes_pi.deref()),
+            Event::DocType(bytes_text) => visitor.visit_doctype(bytes_text.deref()),
+            Event::Eof => Err(Error::custom("Unexpected EOF")),
         }
     }
 

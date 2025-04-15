@@ -21,6 +21,8 @@ use crate::{
     SerializeAttribute, Serializer,
 };
 
+use super::iterator::IteratorVisitor;
+
 /// A value that can be serialized or deserialized as XML, and a type which other types can deserialize from/serialize into.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum XmlValue {
@@ -154,7 +156,9 @@ impl<'de> Deserialize<'de> for XmlValue {
             where
                 S: de::SeqAccess<'v>,
             {
-                XmlSeqVisitor::new().visit_seq(sequence).map(XmlValue::Seq)
+                IteratorVisitor::new()
+                    .visit_seq(sequence)
+                    .map(XmlValue::Seq)
             }
 
             fn visit_pi<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
@@ -1305,37 +1309,6 @@ impl<T: Serialize> Serialize for XmlSeq<T> {
     }
 }
 
-struct XmlSeqVisitor<'v, T> {
-    marker: ::core::marker::PhantomData<XmlSeq<T>>,
-    lifetime: ::core::marker::PhantomData<&'v ()>,
-}
-
-impl<T> XmlSeqVisitor<'_, T> {
-    fn new() -> Self {
-        Self {
-            marker: ::core::marker::PhantomData,
-            lifetime: ::core::marker::PhantomData,
-        }
-    }
-}
-
-impl<'v, T: Deserialize<'v>> crate::de::Visitor<'v> for XmlSeqVisitor<'v, T> {
-    type Value = XmlSeq<T>;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a sequence of values")
-    }
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: crate::de::SeqAccess<'v>,
-    {
-        let mut values = Vec::new();
-        while let Some(value) = seq.next_element()? {
-            values.push(value);
-        }
-        Ok(XmlSeq { values })
-    }
-}
-
 impl crate::ser::SerializeSeq for &mut XmlSeq<XmlValue> {
     type Ok = ();
 
@@ -1482,7 +1455,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for XmlSeq<T> {
     where
         D: crate::de::Deserializer<'de>,
     {
-        deserializer.deserialize_seq(XmlSeqVisitor::new())
+        deserializer.deserialize_seq(IteratorVisitor::new())
     }
 }
 
