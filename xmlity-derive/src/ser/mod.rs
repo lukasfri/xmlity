@@ -1,9 +1,9 @@
-mod attribute;
-mod element;
-mod group;
-pub use attribute::DeriveSerializeAttribute;
-pub use element::DeriveSerialize;
-pub use group::DeriveSerializationGroup;
+mod serialization_group;
+mod serialize;
+mod serialize_attribute;
+pub use serialization_group::DeriveSerializationGroup;
+pub use serialize::DeriveSerialize;
+pub use serialize_attribute::DeriveSerializeAttribute;
 
 use crate::{
     options::XmlityFieldValueDeriveOpts, DeriveError, FieldIdent, SerializeField,

@@ -16,7 +16,7 @@ use crate::{
     XmlityFieldDeriveOpts,
 };
 
-use super::{all_attributes_done, all_elements_done, constructor_expr, StructType};
+use super::{all_attributes_done_expr, all_elements_done_expr, constructor_expr, StructType};
 
 trait DeserializationGroupBuilderBuilder {
     /// Returns the content inside the `DeserializationGroupBuilder::contribute_attributes` function.
@@ -366,7 +366,8 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_attributes_done(crate::de::attribute_group_fields(ast)?, quote! {self.});
+        let expr =
+            all_attributes_done_expr(crate::de::attribute_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
@@ -409,7 +410,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_elements_done(crate::de::element_group_fields(ast)?, quote! {self.});
+        let expr = all_elements_done_expr(crate::de::element_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
