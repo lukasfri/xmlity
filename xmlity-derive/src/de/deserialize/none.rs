@@ -1,15 +1,13 @@
 use proc_macro2::Span;
 use syn::{
-    parse_quote, Data, DataStruct, DeriveInput, Expr, ExprIf, Field, Ident, ItemStruct, Lifetime,
-    LifetimeParam, Stmt, Variant,
+    parse_quote, spanned::Spanned,  DeriveInput, Expr, ExprIf, Field, Ident, ItemStruct, Lifetime, LifetimeParam, Stmt, Variant
 };
 
 use crate::{
     de::{
-        common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+        common::{DeserializeBuilder, SeqVisitLoop, VisitorBuilder, VisitorBuilderExt},
         constructor_expr, StructType,
-    },
-    DeriveError, DeserializeBuilderField,
+    }, options::{ElementOrder, XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts}, DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent, XmlityFieldDeriveOpts, XmlityFieldValueGroupDeriveOpts
 };
 
 pub struct SerializeNoneStructBuilder;
@@ -18,39 +16,224 @@ impl SerializeNoneStructBuilder {
     pub fn new() -> Self {
         Self {}
     }
+
+    pub fn field_decl(
+        element_fields: impl IntoIterator<
+            Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
+        >,
+        group_fields: impl IntoIterator<
+            Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
+        >,
+    ) -> Vec<Stmt> {
+        let getter_declarations = element_fields.into_iter().map::<Stmt, _>(
+                |DeserializeBuilderField {
+                     builder_field_ident,
+                     field_type,
+                     ..
+                 }| {
+                    parse_quote! {
+                        let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
+                    }
+                },
+            ).chain(group_fields.into_iter().map::<Stmt, _>(
+                |DeserializeBuilderField {
+                     builder_field_ident,
+                     field_type,
+                     ..
+                 }| {
+                    parse_quote! {
+                        let mut #builder_field_ident = <#field_type as ::xmlity::de::DeserializationGroup>::builder();
+                    }
+                },
+            ));
+
+        parse_quote! {
+            #(#getter_declarations)*
+        }
+    }
+    
+    pub fn constructor_expr(
+        ident: &Ident,
+        visitor_lifetime: &syn::Lifetime,
+        element_fields: impl IntoIterator<
+            Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
+        >,
+        group_fields: impl IntoIterator<
+            Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
+        >,
+        constructor_type: StructType,
+    ) -> proc_macro2::TokenStream {
+        let local_value_expressions_constructors = 
+            element_fields.into_iter().map(|a| a.map_options(XmlityFieldValueGroupDeriveOpts::Value))
+            .map::<(_, Expr), _>(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
+                let expression = if matches!(options, XmlityFieldValueGroupDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) ) {
+                    parse_quote! {
+                        ::core::option::Option::unwrap_or_default(#builder_field_ident)
+                    }
+                } else {
+                    parse_quote! {
+                        ::core::option::Option::ok_or(#builder_field_ident, ::xmlity::de::Error::missing_field(stringify!(#field_ident)))?
+                    }
+                };
+                (field_ident, expression)
+            });
+        let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
+            |DeserializeBuilderField {
+                 builder_field_ident,
+                 field_ident,
+                 ..
+             }| {
+                let expression = parse_quote! {
+                    ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
+                };
+    
+                (field_ident, expression)
+            },
+        );
+    
+        let value_expressions_constructors =
+            local_value_expressions_constructors.chain(group_value_expressions_constructors);
+    
+        constructor_expr(ident, value_expressions_constructors, &constructor_type)
+    }
+
+    pub fn seq_access(
+        access_ident: &Ident,
+        fields: impl IntoIterator<
+                Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
+            > + Clone,
+        allow_unknown_children: bool,
+        order: ElementOrder,
+    ) -> Vec<Stmt> {
+
+        let visit = SeqVisitLoop::new(access_ident, allow_unknown_children, order, fields);
+
+        let field_storage = visit.field_storage();
+        let access_loop = visit.access_loop();
+
+        parse_quote! {
+            #field_storage
+
+            #(#access_loop)*
+        }
+    }
 }
 
 impl VisitorBuilder for SerializeNoneStructBuilder {
     fn visit_seq_fn_body(
         &self,
         ast: &syn::DeriveInput,
-        _visitor_lifetime: &Lifetime,
+        visitor_lifetime: &Lifetime,
         seq_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let Data::Struct(DataStruct { fields, .. }) = &ast.data else {
-            unreachable!()
+        let DeriveInput { data, .. } = ast;
+
+        let data_struct = match data {
+            syn::Data::Struct(data_struct) => data_struct,
+            _ => unreachable!(),
         };
 
-        let constructor_type = match &fields {
+        let fields = match &data_struct.fields {
+            fields @ syn::Fields::Named(_) | fields @ syn::Fields::Unnamed(_) => fields,
+            syn::Fields::Unit => unreachable!(),
+        };
+
+        let constructor_type = match fields {
             syn::Fields::Named(_) => StructType::Named,
             syn::Fields::Unnamed(_) => StructType::Unnamed,
             _ => unreachable!(),
         };
 
-        let fields = crate::de::fields(ast)?.into_iter()
-        .map::<(_, Expr), _>(|DeserializeBuilderField { field_ident,  field_type, .. }| {
+        let fields = match fields {
+            syn::Fields::Named(fields) => fields
+                .named
+                .iter()
+                .map(|f| {
+                    let field_ident = f.ident.clone().expect("Named struct");
 
-            (field_ident, parse_quote! {
-                ::core::option::Option::ok_or_else(
-                    ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #seq_access_ident)?,
-                    ::xmlity::de::Error::missing_data,
-                )?
+                    DeriveResult::Ok(DeserializeBuilderField {
+                        builder_field_ident: FieldIdent::Named(field_ident.clone()),
+                        field_ident: FieldIdent::Named(field_ident),
+                        options: XmlityFieldDeriveOpts::from_field(f)?,
+                        field_type: f.ty.clone(),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            syn::Fields::Unnamed(fields) => fields
+                .unnamed
+                .iter()
+                .enumerate()
+                .map(|(i, f)| {
+                    DeriveResult::Ok(DeserializeBuilderField {
+                        builder_field_ident: FieldIdent::Named(Ident::new(
+                            &format!("__{}", i),
+                            f.span(),
+                        )),
+                        field_ident: FieldIdent::Indexed(syn::Index::from(i)),
+                        options: XmlityFieldDeriveOpts::from_field(f)?,
+                        field_type: f.ty.clone(),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => unreachable!(),
+        };
+        
+        let element_fields = fields.clone().into_iter().filter_map(|field| {
+            field.map_options_opt(|opt| match opt {
+                XmlityFieldDeriveOpts::Value(opts) => Some(opts),
+                _ => None,
             })
         });
 
-        let constructor = constructor_expr(&ast.ident, fields, &constructor_type);
+        let group_fields = fields.clone().into_iter().filter_map(|field| {
+            field.map_options_opt(|opt| match opt {
+                XmlityFieldDeriveOpts::Group(opts) => Some(opts),
+                _ => None,
+            })
+        });
+
+        let getter_declarations = Self::field_decl(
+            element_fields.clone(),
+            group_fields.clone(),
+        );
+
+
+        let element_group_fields = fields.clone().into_iter().filter_map(|field| {
+            field.map_options_opt(|opt| match opt {
+                XmlityFieldDeriveOpts::Value(opts) => {
+                    Some(XmlityFieldValueGroupDeriveOpts::Value(opts))
+                }
+                XmlityFieldDeriveOpts::Group(opts) => {
+                    Some(XmlityFieldValueGroupDeriveOpts::Group(opts))
+                }
+                XmlityFieldDeriveOpts::Attribute(_) => None,
+            })
+        });
+
+        let children_loop = if element_group_fields.clone().next().is_some() {
+            Self::seq_access(
+                seq_access_ident,
+                element_group_fields,
+                false,
+                ElementOrder::Loose,
+            )
+        } else {
+            Vec::new()
+        };
+
+        let constructor = Self::constructor_expr(
+            &ast.ident,
+            visitor_lifetime,
+            element_fields.clone(),
+            group_fields.clone(),
+            constructor_type,
+        );
 
         Ok(Some(parse_quote! {
+            #(#getter_declarations)*
+
+            #(#children_loop)*
+
             ::core::result::Result::Ok(#constructor)
         }))
     }
@@ -104,7 +287,7 @@ impl DeserializeBuilder for SerializeNoneStructBuilder {
 
             #visitor_trait_impl
 
-            ::xmlity::de::Deserializer::deserialize_any(#deserializer_ident, #visitor_ident {
+            ::xmlity::de::Deserializer::deserialize_seq(#deserializer_ident, #visitor_ident {
                 lifetime: ::core::marker::PhantomData,
                 marker: ::core::marker::PhantomData,
             })

@@ -5,28 +5,28 @@ use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test}
 
 use xmlity::{Deserialize, Serialize};
 
-const SIMPLE_1D_STRUCT_TEST_XML: &str = r###"Asdreboot<![CDATA[More]]>Text"###;
+const EXTENDABLE_STRUCT_TEST_XML: &str = r###"Asdreboot<![CDATA[More]]>Text"###;
 
-const SIMPLE_1D_STRUCT_TEST_XML_SER: &str = r###"AsdrebootMoreText"###;
+const EXTENDABLE_STRUCT_TEST_XML_SER: &str = r###"AsdrebootMoreText"###;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct To(#[xvalue(extendable = true)] String);
 
-fn simple_1d_struct() -> To {
+fn extendable_struct() -> To {
     To("AsdrebootMoreText".to_string())
 }
 
 #[test]
-fn simple_1d_struct_serialize() {
-    let actual = quick_xml_serialize_test(simple_1d_struct()).unwrap();
+fn extendable_struct_serialize() {
+    let actual = quick_xml_serialize_test(extendable_struct()).unwrap();
 
-    assert_eq!(actual, clean_string(SIMPLE_1D_STRUCT_TEST_XML_SER));
+    assert_eq!(actual, clean_string(EXTENDABLE_STRUCT_TEST_XML_SER));
 }
 
 #[test]
-fn simple_1d_struct_deserialize() {
+fn extendable_struct_deserialize() {
     {
-        let mut reader = quick_xml::NsReader::from_reader(SIMPLE_1D_STRUCT_TEST_XML.as_bytes());
+        let mut reader = quick_xml::NsReader::from_reader(EXTENDABLE_STRUCT_TEST_XML.as_bytes());
         while let Ok(event) = reader.read_event() {
             if matches!(event, quick_xml::events::Event::Eof) {
                 break;
@@ -35,9 +35,9 @@ fn simple_1d_struct_deserialize() {
         }
     }
     let actual: To =
-        quick_xml_deserialize_test(clean_string(SIMPLE_1D_STRUCT_TEST_XML).as_str()).unwrap();
+        quick_xml_deserialize_test(clean_string(EXTENDABLE_STRUCT_TEST_XML).as_str()).unwrap();
 
-    let expected = simple_1d_struct();
+    let expected = extendable_struct();
 
     assert_eq!(actual, expected);
 }

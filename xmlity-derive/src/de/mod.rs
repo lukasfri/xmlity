@@ -295,7 +295,7 @@ fn element_field_deserialize_impl_pop_error(
         let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
         Some(parse_quote! {
             while let Some(#loop_temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident)? {
-                ::core::iter::Extend::extend_one(&mut #temporary_value_ident, #loop_temporary_value_ident);
+                ::core::iter::Extend::extend(&mut #temporary_value_ident, [#loop_temporary_value_ident]);
             }
         })
     } else {
@@ -305,7 +305,7 @@ fn element_field_deserialize_impl_pop_error(
     parse_quote! {
         if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
             let #temporary_value_ident = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident)?;
-            let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
+            let ::core::option::Option::Some(mut #temporary_value_ident) = #temporary_value_ident else {
                 #(#if_next_element_none)*
             };
             #extendable_loop
@@ -335,7 +335,7 @@ fn element_field_deserialize_impl_ignore_error(
 
         Some(parse_quote! {
             while let Ok(Some(#loop_temporary_value_ident)) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident) {
-                ::core::iter::Extend::extend_one(&mut #temporary_value_ident, #loop_temporary_value_ident);
+                ::core::iter::Extend::extend(&mut #temporary_value_ident, [#loop_temporary_value_ident]);
             }
         })
     } else {
@@ -345,7 +345,7 @@ fn element_field_deserialize_impl_ignore_error(
     parse_quote! {
         if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
             if let ::core::result::Result::Ok(#temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident) {
-                let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
+                let ::core::option::Option::Some(mut #temporary_value_ident) = #temporary_value_ident else {
                     #(#if_next_element_none)*
                 };
                 #extendable_loop

@@ -19,6 +19,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
     pub fn new(opts: &'a XmlityRootElementDeriveOpts) -> Self {
         Self { opts }
     }
+    
     pub fn field_decl(
         element_fields: impl IntoIterator<
             Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
