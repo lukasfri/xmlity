@@ -1,7 +1,11 @@
-use darling::{FromAttributes, FromMeta};
-use syn::DeriveInput;
+#![allow(dead_code)]
+use std::borrow::Cow;
 
-use crate::ExpandedName;
+use darling::{FromAttributes, FromMeta};
+use quote::ToTokens;
+use syn::{DeriveInput, Expr};
+
+use crate::{DeriveError, ExpandedName};
 
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
@@ -85,33 +89,103 @@ pub enum TextSerializationFormat {
     Text,
 }
 
-#[derive(Debug, Default)]
-pub struct LocalNameOption(pub Option<String>);
+pub trait WithExpandedName {
+    // pub name: Option<LocalName<'static>>,
+    // #[darling(default)]
+    // pub namespace: Option<XmlNamespace<'static>>,
+    // #[darling(default)]
+    // pub namespace_expr: Option<Expr>,
+    fn name(&self) -> Option<LocalName<'_>>;
+    fn namespace(&self) -> Option<XmlNamespace<'_>>;
+    fn namespace_expr(&self) -> Option<Expr>;
+}
 
-impl FromMeta for LocalNameOption {
+pub trait WithExpandedNameExt: WithExpandedName {
+    fn expanded_name<'a>(&'a self, ident: &'a str) -> ExpandedName<'a>;
+}
+
+impl<T: WithExpandedName> WithExpandedNameExt for T {
+    fn expanded_name<'a>(&'a self, ident: &'a str) -> ExpandedName<'a> {
+        if self.namespace().is_some() {
+            ExpandedName::new(
+                self.name().unwrap_or(LocalName(Cow::Borrowed(ident))),
+                self.namespace(),
+            )
+        } else {
+            ExpandedName::new_ref(
+                self.name().unwrap_or(LocalName(Cow::Borrowed(ident))),
+                self.namespace_expr(),
+            )
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct LocalName<'a>(pub Cow<'a, str>);
+
+impl<'a> LocalName<'a> {
+    pub fn as_ref<'b: 'a>(&'b self) -> LocalName<'b> {
+        Self(Cow::Borrowed(&self.0))
+    }
+}
+
+impl FromMeta for LocalName<'_> {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate local name
-        Ok(LocalNameOption(Some(value.to_owned())))
+        Ok(LocalName(Cow::Owned(value.to_owned())))
     }
 }
 
-#[derive(Debug, Default)]
-pub struct XmlNamespaceOption(pub Option<String>);
+impl ToTokens for LocalName<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let name = &self.0;
+        tokens.extend(quote::quote! { <::xmlity::LocalName as ::core::str::FromStr>::from_str(#name).expect("XML name in derive macro is invalid. This is a bug in xmlity. Please report it.") })
+    }
+}
 
-impl FromMeta for XmlNamespaceOption {
+#[derive(Debug, Default, Clone)]
+pub struct XmlNamespace<'a>(pub Cow<'a, str>);
+
+impl<'a> XmlNamespace<'a> {
+    pub fn as_ref<'b: 'a>(&'b self) -> XmlNamespace<'b> {
+        Self(Cow::Borrowed(&self.0))
+    }
+}
+
+impl FromMeta for XmlNamespace<'_> {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate namespace
-        Ok(XmlNamespaceOption(Some(value.to_owned())))
+        Ok(XmlNamespace(Cow::Owned(value.to_owned())))
     }
 }
 
-#[derive(Debug, Default)]
-pub struct PrefferedPrefixOption(pub Option<String>);
+impl ToTokens for XmlNamespace<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let namespace = &self.0;
+        tokens.extend(quote::quote! { <::xmlity::XmlNamespace as ::core::str::FromStr>::from_str(#namespace).expect("XML namespace in derive macro is invalid. This is a bug in xmlity. Please report it.") })
+    }
+}
 
-impl FromMeta for PrefferedPrefixOption {
+#[derive(Debug, Default, Clone)]
+pub struct Prefix<'a>(pub Cow<'a, str>);
+
+impl<'a> Prefix<'a> {
+    pub fn as_ref<'b: 'a>(&'b self) -> Prefix<'b> {
+        Self(Cow::Borrowed(&self.0))
+    }
+}
+
+impl FromMeta for Prefix<'_> {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate prefix
-        Ok(PrefferedPrefixOption(Some(value.to_owned())))
+        Ok(Prefix(Cow::Owned(value.to_owned())))
+    }
+}
+
+impl ToTokens for Prefix<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let prefix = &self.0;
+        tokens.extend(quote::quote! { ::xmlity::Prefix::new(#prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.") })
     }
 }
 
@@ -119,11 +193,13 @@ impl FromMeta for PrefferedPrefixOption {
 #[darling(attributes(xelement))]
 pub struct XmlityRootElementDeriveOpts {
     #[darling(default)]
-    pub name: LocalNameOption,
+    pub name: Option<LocalName<'static>>,
     #[darling(default)]
-    pub namespace: XmlNamespaceOption,
+    pub namespace: Option<XmlNamespace<'static>>,
     #[darling(default)]
-    pub preferred_prefix: PrefferedPrefixOption,
+    pub namespace_expr: Option<Expr>,
+    #[darling(default)]
+    pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
     pub enforce_prefix: bool,
     #[darling(default)]
@@ -139,7 +215,7 @@ pub struct XmlityRootElementDeriveOpts {
 }
 
 impl XmlityRootElementDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast
             .attrs
             .iter()
@@ -149,7 +225,26 @@ impl XmlityRootElementDeriveOpts {
         };
 
         let opts = Self::from_attributes(&[attr.clone()])?;
+        if opts.namespace_expr.is_some() && opts.namespace.is_some() {
+            return Err(DeriveError::custom(
+                "Cannot specify both `namespace` and `namespace_expr`",
+            ));
+        }
         Ok(Some(opts))
+    }
+}
+
+impl WithExpandedName for XmlityRootElementDeriveOpts {
+    fn name(&self) -> Option<LocalName<'_>> {
+        self.name.clone()
+    }
+
+    fn namespace(&self) -> Option<XmlNamespace<'_>> {
+        self.namespace.clone()
+    }
+
+    fn namespace_expr(&self) -> Option<Expr> {
+        self.namespace_expr.clone()
     }
 }
 
@@ -157,11 +252,13 @@ impl XmlityRootElementDeriveOpts {
 #[darling(attributes(xattribute))]
 pub struct XmlityRootAttributeDeriveOpts {
     #[darling(default)]
-    pub name: LocalNameOption,
+    pub name: Option<LocalName<'static>>,
     #[darling(default)]
-    pub namespace: XmlNamespaceOption,
+    pub namespace: Option<XmlNamespace<'static>>,
     #[darling(default)]
-    pub preferred_prefix: PrefferedPrefixOption,
+    pub namespace_expr: Option<Expr>,
+    #[darling(default)]
+    pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
     pub enforce_prefix: bool,
     #[darling(default)]
@@ -169,7 +266,7 @@ pub struct XmlityRootAttributeDeriveOpts {
 }
 
 impl XmlityRootAttributeDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast
             .attrs
             .iter()
@@ -181,12 +278,19 @@ impl XmlityRootAttributeDeriveOpts {
         let opts = Self::from_attributes(&[attr.clone()])?;
         Ok(Some(opts))
     }
+}
 
-    pub fn expanded_name<'a>(&'a self, ident_name: &'a str) -> ExpandedName<'a> {
-        ExpandedName::new(
-            self.name.0.as_deref().unwrap_or(ident_name),
-            self.namespace.0.as_deref(),
-        )
+impl WithExpandedName for XmlityRootAttributeDeriveOpts {
+    fn name(&self) -> Option<LocalName<'_>> {
+        self.name.clone()
+    }
+
+    fn namespace(&self) -> Option<XmlNamespace<'_>> {
+        self.namespace.clone()
+    }
+
+    fn namespace_expr(&self) -> Option<Expr> {
+        self.namespace_expr.clone()
     }
 }
 
@@ -200,7 +304,7 @@ pub struct XmlityRootGroupDeriveOpts {
 }
 
 impl XmlityRootGroupDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xgroup")) else {
             return Ok(None);
         };
@@ -221,7 +325,7 @@ pub struct XmlityRootValueDeriveOpts {
 }
 
 impl XmlityRootValueDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xvalue")) else {
             return Ok(None);
         };
@@ -239,7 +343,7 @@ pub struct XmlityFieldElementDeriveOpts {
 }
 
 impl XmlityFieldElementDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, darling::Error> {
+    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
             .attrs
             .iter()
@@ -248,7 +352,9 @@ impl XmlityFieldElementDeriveOpts {
         else {
             return Ok(None);
         };
-        Self::from_attributes(&[attribute]).map(Some)
+        Self::from_attributes(&[attribute])
+            .map(Some)
+            .map_err(DeriveError::Darling)
     }
 }
 
@@ -260,7 +366,7 @@ pub struct XmlityFieldAttributeDeriveOpts {
 }
 
 impl XmlityFieldAttributeDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, darling::Error> {
+    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
             .attrs
             .iter()
@@ -269,7 +375,9 @@ impl XmlityFieldAttributeDeriveOpts {
         else {
             return Ok(None);
         };
-        Self::from_attributes(&[attribute]).map(Some)
+        Self::from_attributes(&[attribute])
+            .map(Some)
+            .map_err(DeriveError::Darling)
     }
 }
 
@@ -278,7 +386,7 @@ impl XmlityFieldAttributeDeriveOpts {
 pub struct XmlityFieldGroupDeriveOpts {}
 
 impl XmlityFieldGroupDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, darling::Error> {
+    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
             .attrs
             .iter()
@@ -287,6 +395,8 @@ impl XmlityFieldGroupDeriveOpts {
         else {
             return Ok(None);
         };
-        Self::from_attributes(&[attribute]).map(Some)
+        Self::from_attributes(&[attribute])
+            .map(Some)
+            .map_err(DeriveError::Darling)
     }
 }
