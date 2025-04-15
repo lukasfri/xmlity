@@ -4,10 +4,8 @@ use syn::{
     parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt,
 };
 
-use crate::options::{XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
+use crate::options::{WithExpandedNameExt, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
 use crate::{DeriveError, DeriveMacro};
-
-use crate::ExpandedName;
 
 trait SerializeBuilder {
     /// Returns the content inside the `Deserialize::deserialize` function.
@@ -74,16 +72,11 @@ impl SerializeBuilder for DeriveElementStruct<'_> {
         let XmlityRootElementDeriveOpts {
             preferred_prefix,
             enforce_prefix,
-            name,
-            namespace,
             ..
         } = self.opts;
 
         let ident_name = ast.ident.to_string();
-        let expanded_name = ExpandedName::new(
-            name.0.as_deref().unwrap_or(&ident_name),
-            namespace.0.as_deref(),
-        );
+        let expanded_name = self.opts.expanded_name(&ident_name);
 
         let element_access_ident = Ident::new("__element", proc_macro2::Span::call_site());
         let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
@@ -105,8 +98,8 @@ impl SerializeBuilder for DeriveElementStruct<'_> {
                     crate::ser::element_group_fields(ast)?,
                 );
 
-                let preferred_prefix_setting = preferred_prefix.0.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
-                        ::xmlity::ser::SerializeElement::preferred_prefix(&mut #element_access_ident, ::core::option::Option::Some(::xmlity::Prefix::new(#preferred_prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.")))?;
+                let preferred_prefix_setting = preferred_prefix.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
+                        ::xmlity::ser::SerializeElement::preferred_prefix(&mut #element_access_ident, ::core::option::Option::Some(#preferred_prefix))?;
                     });
                 let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map::<Stmt, _>(|enforce_prefix| parse_quote! {
                         ::xmlity::ser::SerializeElement::include_prefix(&mut #element_access_ident, #enforce_prefix)?;

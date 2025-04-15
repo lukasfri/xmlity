@@ -3,7 +3,7 @@ use syn::spanned::Spanned;
 use syn::{parse_quote, Arm, ImplItemFn, ItemImpl, Stmt};
 use syn::{DeriveInput, Ident};
 
-use crate::options::XmlityRootAttributeDeriveOpts;
+use crate::options::{WithExpandedNameExt, XmlityRootAttributeDeriveOpts};
 use crate::simple_compile_error;
 
 use crate::DeriveError;
@@ -94,8 +94,8 @@ impl SerializeAttributeBuilder for StructUnnamedSingleFieldAttributeSerializeBui
         let access_ident = Ident::new("__sa", proc_macro2::Span::call_site());
         let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
 
-        let preferred_prefix_setting = preferred_prefix.0.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
-            ::xmlity::ser::SerializeAttributeAccess::preferred_prefix(&mut #access_ident, ::core::option::Option::Some(::xmlity::Prefix::new(#preferred_prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.")))?;
+        let preferred_prefix_setting = preferred_prefix.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
+            ::xmlity::ser::SerializeAttributeAccess::preferred_prefix(&mut #access_ident, ::core::option::Option::Some(#preferred_prefix))?;
         });
         let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map::<Stmt, _>(|enforce_prefix| parse_quote! {
             ::xmlity::ser::SerializeAttributeAccess::include_prefix(&mut #access_ident, #enforce_prefix)?;

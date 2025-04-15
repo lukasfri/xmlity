@@ -7,15 +7,16 @@
 struct _ReadMeDocTests;
 
 use de::{DeriveDeserializationGroup, DeriveDeserialize};
-use quote::quote;
+use quote::{quote, ToTokens};
 use ser::{DeriveSerializationGroup, DeriveSerialize, DeriveSerializeAttribute};
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, Expr};
 
 mod de;
 mod options;
 use options::{
-    XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldGroupDeriveOpts,
-    XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
+    LocalName, XmlNamespace, XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts,
+    XmlityFieldGroupDeriveOpts, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts,
+    XmlityRootValueDeriveOpts,
 };
 mod ser;
 mod utils;
@@ -24,6 +25,8 @@ enum DeriveError {
     Darling(darling::Error),
     Custom(String),
 }
+
+type DeriveResult<T> = Result<T, DeriveError>;
 
 impl From<darling::Error> for DeriveError {
     fn from(e: darling::Error) -> Self {
@@ -92,9 +95,9 @@ enum DeriveDeserializeOption {
 
 impl DeriveDeserializeOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let element_opts = XmlityRootElementDeriveOpts::parse(ast).expect("Wrong options");
-        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast).expect("Wrong options");
-        let value_opts = XmlityRootValueDeriveOpts::parse(ast).expect("Wrong options");
+        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
+        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast)?;
+        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
 
         let opts = match (element_opts, attribute_opts, value_opts) {
             (Some(element_opts), None, None) => DeriveDeserializeOption::Element(element_opts),
@@ -153,7 +156,7 @@ enum XmlityFieldElementGroupDeriveOpts {
 }
 
 impl XmlityFieldDeriveOpts {
-    fn from_field(field: &syn::Field) -> Result<Self, darling::Error> {
+    fn from_field(field: &syn::Field) -> Result<Self, DeriveError> {
         let element = XmlityFieldElementDeriveOpts::from_field(field)?;
         let attribute = XmlityFieldAttributeDeriveOpts::from_field(field)?;
         let group = XmlityFieldGroupDeriveOpts::from_field(field)?;
@@ -163,8 +166,8 @@ impl XmlityFieldDeriveOpts {
             (None, None, Some(group)) => Self::Group(group),
             (None, None, None) => Self::Element(XmlityFieldElementDeriveOpts::default()),
             _ => {
-                return Err(darling::Error::custom(
-                    "Cannot have multiple xmlity field attributes on the same field",
+                return Err(DeriveError::custom(
+                    "Cannot have multiple xmlity field attributes on the same field.",
                 ))
             }
         })
@@ -245,26 +248,49 @@ impl<T> SerializeField<T> {
     }
 }
 
+enum XmlNamespaceRef<'a> {
+    Static(XmlNamespace<'a>),
+    Dynamic(syn::Expr),
+}
+
+impl ToTokens for XmlNamespaceRef<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            XmlNamespaceRef::Static(namespace) => namespace.to_tokens(tokens),
+            XmlNamespaceRef::Dynamic(expr) => expr.to_tokens(tokens),
+        }
+    }
+}
+
 struct ExpandedName<'a> {
-    name: &'a str,
-    namespace: Option<&'a str>,
+    name: LocalName<'a>,
+    namespace: Option<XmlNamespaceRef<'a>>,
 }
 
 impl<'a> ExpandedName<'a> {
-    fn new(name: &'a str, namespace: Option<&'a str>) -> Self {
-        Self { name, namespace }
+    fn new(name: LocalName<'a>, namespace: Option<XmlNamespace<'a>>) -> Self {
+        Self {
+            name,
+            namespace: namespace.map(XmlNamespaceRef::Static),
+        }
+    }
+    fn new_ref(name: LocalName<'a>, namespace: Option<Expr>) -> Self {
+        Self {
+            name,
+            namespace: namespace.map(XmlNamespaceRef::Dynamic),
+        }
     }
 
     fn to_expression(Self { name, namespace }: &Self) -> proc_macro2::TokenStream {
         let xml_namespace = match namespace {
             Some(xml_namespace) => {
-                quote! { ::core::option::Option::Some(<::xmlity::XmlNamespace as ::core::str::FromStr>::from_str(#xml_namespace).expect("XML namespace in derive macro is invalid. This is a bug in xmlity. Please report it.")) }
+                quote! { ::core::option::Option::Some(#xml_namespace) }
             }
             None => quote! { ::core::option::Option::None },
         };
 
         quote! {
-            ::xmlity::ExpandedName::new(<::xmlity::LocalName as ::core::str::FromStr>::from_str(#name).expect("XML name in derive macro is invalid. This is a bug in xmlity. Please report it."), #xml_namespace)
+            ::xmlity::ExpandedName::new(#name, #xml_namespace)
         }
     }
 }
