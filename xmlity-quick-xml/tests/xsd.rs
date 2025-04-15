@@ -129,7 +129,7 @@ pub enum SchemaEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[xelement(name = "schema", namespace = "http://www.w3.org/2001/XMLSchema")]
 pub struct Schema {
-    #[xelement(default)]
+    #[xvalue(default)]
     pub sequence: Vec<SchemaEntry>,
 }
 

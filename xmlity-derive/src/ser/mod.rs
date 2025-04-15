@@ -1,13 +1,13 @@
-mod attribute;
-mod element;
-mod group;
-pub use attribute::DeriveSerializeAttribute;
-pub use element::DeriveSerialize;
-pub use group::DeriveSerializationGroup;
+mod serialization_group;
+mod serialize;
+mod serialize_attribute;
+pub use serialization_group::DeriveSerializationGroup;
+pub use serialize::DeriveSerialize;
+pub use serialize_attribute::DeriveSerializeAttribute;
 
 use crate::{
-    options::XmlityFieldElementDeriveOpts, DeriveError, FieldIdent, SerializeField,
-    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+    options::XmlityFieldValueDeriveOpts, DeriveError, FieldIdent, SerializeField,
+    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldValueGroupDeriveOpts,
 };
 use quote::{quote, ToTokens};
 
@@ -37,7 +37,7 @@ fn attribute_group_field_serializer(
 
 fn element_group_field_serializer(
     access_ident: impl ToTokens,
-    fields: impl IntoIterator<Item = SerializeField<XmlityFieldElementGroupDeriveOpts>>,
+    fields: impl IntoIterator<Item = SerializeField<XmlityFieldValueGroupDeriveOpts>>,
 ) -> proc_macro2::TokenStream {
     let fields = fields
     .into_iter()
@@ -45,10 +45,10 @@ fn element_group_field_serializer(
         let field_ident = &var_field.field_ident;
 
         match var_field.options {
-          XmlityFieldElementGroupDeriveOpts::Element(_) => quote! {
+          XmlityFieldValueGroupDeriveOpts::Value(_) => quote! {
               ::xmlity::ser::SerializeChildren::serialize_child(&mut #access_ident, &self.#field_ident)?;
           },
-          XmlityFieldElementGroupDeriveOpts::Group(_) => quote! {
+          XmlityFieldValueGroupDeriveOpts::Group(_) => quote! {
               ::xmlity::ser::SerializationGroup::serialize_children(&self.#field_ident, &mut #access_ident)?;
           },
         }
@@ -61,7 +61,7 @@ fn element_group_field_serializer(
 
 fn seq_field_serializer(
     access_ident: impl ToTokens,
-    fields: impl IntoIterator<Item = SerializeField<XmlityFieldElementDeriveOpts>>,
+    fields: impl IntoIterator<Item = SerializeField<XmlityFieldValueDeriveOpts>>,
 ) -> proc_macro2::TokenStream {
     let fields = fields.into_iter().map(|var_field| {
         let field_ident = &var_field.field_ident;
@@ -124,7 +124,7 @@ fn attribute_group_fields(
                 XmlityFieldDeriveOpts::Group(opts) => {
                     Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
                 }
-                XmlityFieldDeriveOpts::Element(_) => None,
+                XmlityFieldDeriveOpts::Value(_) => None,
             })
         })
         .collect())
@@ -132,16 +132,16 @@ fn attribute_group_fields(
 
 fn element_group_fields(
     ast: &syn::DeriveInput,
-) -> Result<Vec<SerializeField<XmlityFieldElementGroupDeriveOpts>>, DeriveError> {
+) -> Result<Vec<SerializeField<XmlityFieldValueGroupDeriveOpts>>, DeriveError> {
     Ok(fields(ast)?
         .into_iter()
         .filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Element(opts) => {
-                    Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
+                XmlityFieldDeriveOpts::Value(opts) => {
+                    Some(XmlityFieldValueGroupDeriveOpts::Value(opts))
                 }
                 XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
+                    Some(XmlityFieldValueGroupDeriveOpts::Group(opts))
                 }
                 XmlityFieldDeriveOpts::Attribute(_) => None,
             })
@@ -151,12 +151,12 @@ fn element_group_fields(
 
 fn element_fields(
     ast: &syn::DeriveInput,
-) -> Result<Vec<SerializeField<XmlityFieldElementDeriveOpts>>, DeriveError> {
+) -> Result<Vec<SerializeField<XmlityFieldValueDeriveOpts>>, DeriveError> {
     Ok(fields(ast)?
         .into_iter()
         .filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Element(opts) => Some(opts),
+                XmlityFieldDeriveOpts::Value(opts) => Some(opts),
                 XmlityFieldDeriveOpts::Group(_) | XmlityFieldDeriveOpts::Attribute(_) => None,
             })
         })

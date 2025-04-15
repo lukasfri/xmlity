@@ -117,7 +117,7 @@ pub trait VisitorBuilder {
         Ok(None)
     }
 
-    fn definition(&self, ast: &syn::DeriveInput) -> Result<ItemStruct, DeriveError>;
+    fn visitor_definition(&self, ast: &syn::DeriveInput) -> Result<ItemStruct, DeriveError>;
 }
 
 pub trait VisitorBuilderExt: VisitorBuilder {
@@ -542,5 +542,136 @@ impl<T: DeserializeBuilder> DeserializeBuilderExt for T {
                 #deserialize_fn
             }
         })
+    }
+}
+
+use quote::quote;
+use syn::spanned::Spanned;
+
+use crate::{
+    de::{all_elements_done_expr, builder_element_field_visitor, element_done_expr},
+    options::ElementOrder,
+    DeserializeBuilderField, FieldIdent, XmlityFieldValueGroupDeriveOpts,
+};
+
+pub struct SeqVisitLoop<
+    'a,
+    F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
+        + Clone,
+> {
+    seq_access_ident: &'a Ident,
+    allow_unknown_children: bool,
+    order: ElementOrder,
+    fields: F,
+}
+
+impl<
+        'a,
+        F: IntoIterator<
+                Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
+            > + Clone,
+    > SeqVisitLoop<'a, F>
+{
+    pub fn new(
+        seq_access_ident: &'a Ident,
+        allow_unknown_children: bool,
+        order: ElementOrder,
+        fields: F,
+    ) -> Self {
+        Self {
+            seq_access_ident,
+            allow_unknown_children,
+            order,
+            fields,
+        }
+    }
+
+    pub fn field_storage(&self) -> proc_macro2::TokenStream {
+        quote! {}
+    }
+
+    pub fn access_loop(&self) -> Vec<Stmt> {
+        let Self {
+            seq_access_ident: access_ident,
+            allow_unknown_children,
+            order,
+            fields,
+        } = self;
+
+        let pop_error = matches!(order, ElementOrder::Loose);
+
+        let field_visits = builder_element_field_visitor(
+            access_ident,
+            quote! {},
+            fields.clone(),
+            parse_quote! {break;},
+            match order {
+                ElementOrder::Loose => parse_quote! {break;},
+                ElementOrder::None => parse_quote! {continue;},
+            },
+            parse_quote! {continue;},
+            parse_quote! {},
+            pop_error,
+        );
+
+        match order {
+            ElementOrder::Loose => field_visits.into_iter().zip(fields.clone()).map(|(field_visit, field)| {
+                let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
+                    let skip_ident = Ident::new("__skip", access_ident.span());
+                    parse_quote! {
+                        let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
+                        if ::core::option::Option::is_none(&#skip_ident) {
+                            break;
+                        }
+                        continue;
+                    }
+                } else {
+                    let condition = element_done_expr(field, quote! {});
+
+                    parse_quote! {
+                        if #condition {
+                            break;
+                        } else {
+                            return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
+                        }
+                    }
+                };
+
+                parse_quote! {
+                    loop {
+                        #field_visit
+                        #(#skip_unknown)*
+                    }
+                }
+            }).collect(),
+            ElementOrder::None => {
+                let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
+                    let skip_ident = Ident::new("__skip", access_ident.span());
+                    parse_quote! {
+                        let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
+                        if ::core::option::Option::is_none(&#skip_ident) {
+                            break
+                        }
+                    }
+                } else {
+                    let all_some_condition = all_elements_done_expr(fields.clone(), quote! {});
+
+                    parse_quote! {
+                        if #all_some_condition {
+                            break;
+                        } else {
+                            return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
+                        }
+                    }
+                };
+
+                parse_quote! {
+                    loop {
+                        #(#field_visits)*
+                        #(#skip_unknown)*
+                    }
+                }
+            },
+        }
     }
 }

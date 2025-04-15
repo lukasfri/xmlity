@@ -336,18 +336,20 @@ impl XmlityRootValueDeriveOpts {
 }
 
 #[derive(FromAttributes, Default, Clone)]
-#[darling(attributes(xelement))]
-pub struct XmlityFieldElementDeriveOpts {
+#[darling(attributes(xvalue))]
+pub struct XmlityFieldValueDeriveOpts {
     #[darling(default)]
     pub default: bool,
+    #[darling(default)]
+    pub extendable: bool,
 }
 
-impl XmlityFieldElementDeriveOpts {
+impl XmlityFieldValueDeriveOpts {
     pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
             .attrs
             .iter()
-            .find(|attr| attr.path().is_ident("xelement"))
+            .find(|attr| attr.path().is_ident("xvalue"))
             .cloned()
         else {
             return Ok(None);

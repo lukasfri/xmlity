@@ -61,18 +61,18 @@ impl<'i> Deserializer<'i> {
         }
     }
 
-    fn read_event(&mut self) -> Result<Event<'i>, Error> {
+    fn read_event(&mut self) -> Result<Option<Event<'i>>, Error> {
         while let Ok(event) = self.reader.read_event() {
             match event {
+                Event::Eof => return Ok(None),
                 Event::Text(text) if text.clone().into_inner().trim_ascii().is_empty() => {
                     continue;
                 }
-
-                event => return Ok(event),
+                event => return Ok(Some(event)),
             }
         }
 
-        Ok(Event::Eof)
+        Ok(None)
     }
 
     fn read_until_element_end(&mut self, name: &QuickName, depth: i16) -> Result<(), Error> {
@@ -98,7 +98,7 @@ impl<'i> Deserializer<'i> {
             return self.peeked_event.as_ref();
         }
 
-        self.peeked_event = self.read_event().ok();
+        self.peeked_event = self.read_event().ok().flatten();
         self.peeked_event.as_ref()
     }
 
@@ -106,7 +106,7 @@ impl<'i> Deserializer<'i> {
         let event = if self.peeked_event.is_some() {
             self.peeked_event.take()
         } else {
-            self.read_event().ok()
+            self.read_event().ok().flatten()
         };
 
         if matches!(event, Some(Event::End(_))) {
@@ -445,6 +445,10 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
             return Ok(None);
         };
 
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
         let current_depth = deserializer.current_depth;
 
         if let Some(Event::End(bytes_end)) = deserializer.peek_event() {
@@ -478,6 +482,10 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
         else {
             return Ok(None);
         };
+
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
 
         let current_depth = deserializer.current_depth;
 
@@ -546,9 +554,13 @@ impl<'r> de::SeqAccess<'r> for SubSeqAccess<'_, 'r> {
             return Ok(None);
         };
 
-        current
-            .as_mut()
-            .expect("SubSeqAccess used after drop")
+        let deserializer = current.as_mut().expect("SubSeqAccess used after drop");
+
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
+        deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
             .map(Some)
     }
@@ -560,9 +572,14 @@ impl<'r> de::SeqAccess<'r> for SubSeqAccess<'_, 'r> {
         let Self::Filled { current, .. } = self else {
             return Ok(None);
         };
-        current
-            .as_mut()
-            .expect("SubSeqAccess used after drop")
+
+        let deserializer = current.as_mut().expect("SubSeqAccess used after drop");
+
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
+        deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize(deserializer))
             .map(Some)
     }
@@ -591,6 +608,10 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     where
         T: Deserialize<'r>,
     {
+        if self.deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
         self.deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
             .map(Some)
@@ -600,6 +621,10 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     where
         T: Deserialize<'r>,
     {
+        if self.deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
         self.deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize(deserializer))
             .map(Some)
