@@ -1,374 +1,229 @@
 use std::iter;
 
-use proc_macro2::Span;
-use quote::quote;
-use syn::{parse_quote, Ident, Index, Lifetime, LifetimeParam, Visibility};
+use proc_macro2::{Span, TokenStream};
+use quote::{quote, ToTokens};
+use syn::{
+    parse_quote, DeriveInput, Ident, ImplItemFn, Index, ItemImpl, ItemStruct, Lifetime,
+    LifetimeParam, Stmt,
+};
 
 use crate::{
     options::{
         GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts,
         XmlityFieldGroupDeriveOpts, XmlityRootGroupDeriveOpts,
     },
-    simple_compile_error, DeserializeBuilderField, FieldIdent, XmlityFieldAttributeGroupDeriveOpts,
-    XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+    simple_compile_error, DeriveError, DeriveMacro, DeserializeBuilderField, FieldIdent,
+    XmlityFieldDeriveOpts,
 };
 
 use super::{all_attributes_done, all_elements_done, constructor_expr, StructType};
 
-pub struct DeserializeGroupTraitImplBuilder<'a> {
-    ident: &'a proc_macro2::Ident,
-    generics: &'a syn::Generics,
-    deserialize_lifetime: &'a Lifetime,
-    builder_ident: &'a proc_macro2::Ident,
-    builder_constructor: &'a proc_macro2::TokenStream,
+trait DeserializationGroupBuilderBuilder {
+    /// Returns the content inside the `DeserializationGroupBuilder::contribute_attributes` function.
+    fn contribute_attributes_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        attributes_access_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn attributes_done_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn contribute_elements_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        elements_access_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn elements_done_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn finish_fn_body(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError>;
+
+    fn builder_definition(
+        &self,
+        ast: &syn::DeriveInput,
+        builder_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<ItemStruct, DeriveError>;
+
+    fn builder_constructor(
+        &self,
+        ast: &syn::DeriveInput,
+        builder_ident: &Ident,
+    ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
-impl<'a> DeserializeGroupTraitImplBuilder<'a> {
-    pub fn new(
-        ident: &'a proc_macro2::Ident,
-        generics: &'a syn::Generics,
-        deserialize_lifetime: &'a Lifetime,
-        builder_ident: &'a proc_macro2::Ident,
-        builder_constructor: &'a proc_macro2::TokenStream,
-    ) -> Self {
-        Self {
-            ident,
-            generics,
-            deserialize_lifetime,
-            builder_ident,
-            builder_constructor,
-        }
-    }
+trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderBuilder {
+    fn contribute_attributes_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
 
-    pub fn trait_impl(&self) -> proc_macro2::TokenStream {
-        let Self {
-            ident,
-            generics,
-            deserialize_lifetime,
-            builder_ident,
-            builder_constructor,
-        } = self;
+    fn attributes_done_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
 
-        let non_bound_generics = crate::non_bound_generics(generics);
+    fn contribute_elements_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
 
-        let mut builder_generics = (*generics).to_owned();
+    fn elements_done_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
 
-        builder_generics.params.insert(
-            0,
-            syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
-        );
-        let non_bound_builder_generics = crate::non_bound_generics(&builder_generics);
+    fn finish_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError>;
 
-        quote! {
-            impl #builder_generics ::xmlity::de::DeserializationGroup<#deserialize_lifetime> for #ident #non_bound_generics {
-                type Builder = #builder_ident #non_bound_builder_generics;
+    fn deserialization_group_builder_def(
+        &self,
+        ast: &syn::DeriveInput,
+    ) -> Result<ItemStruct, DeriveError>;
 
-                fn builder() -> Self::Builder {
-                    #builder_constructor
-                }
-            }
-        }
-    }
+    fn deserialization_group_builder_impl(
+        &self,
+        ast: &syn::DeriveInput,
+    ) -> Result<ItemImpl, DeriveError>;
+
+    fn deserialize_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError>;
+
+    fn total_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError>;
 }
 
-pub struct DeserializationGroupBuilderBuilder<
-    'a,
-    E: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>> + Clone,
-    A: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>>
-        + Clone,
-    G: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>> + Clone,
-    EG: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
-        + Clone,
-    AG: IntoIterator<
-            Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
-        > + Clone,
-> {
-    ident: &'a proc_macro2::Ident,
-    generics: &'a syn::Generics,
-    builder_ident: &'a proc_macro2::Ident,
-    constructor_type: StructType,
-    visibility: syn::Visibility,
-    deserialize_lifetime: &'a syn::Lifetime,
-    element_access_ident: &'a proc_macro2::Ident,
-    children_access_ident: &'a proc_macro2::Ident,
-    element_fields: E,
-    attribute_fields: A,
-    group_fields: G,
-    element_group_fields: EG,
-    attribute_group_fields: AG,
-    opts: XmlityRootGroupDeriveOpts,
-}
+impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentExt for T {
+    fn contribute_attributes_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let attributes_access_ident = syn::Ident::new("__element", proc_macro2::Span::call_site());
 
-impl<
-        'a,
-        E: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>>
-            + Clone,
-        A: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>>
-            + Clone,
-        G: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>>
-            + Clone,
-        EG: IntoIterator<
-                Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
-            > + Clone,
-        AG: IntoIterator<
-                Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
-            > + Clone,
-    > DeserializationGroupBuilderBuilder<'a, E, A, G, EG, AG>
-{
-    pub fn new(
-        ident: &'a proc_macro2::Ident,
-        generics: &'a syn::Generics,
-        builder_ident: &'a proc_macro2::Ident,
-        constructor_type: StructType,
-        visibility: syn::Visibility,
-        deserialize_lifetime: &'a syn::Lifetime,
-        element_access_ident: &'a proc_macro2::Ident,
-        children_access_ident: &'a proc_macro2::Ident,
-        element_fields: E,
-        attribute_fields: A,
-        group_fields: G,
-        element_group_fields: EG,
-        attribute_group_fields: AG,
-        opts: XmlityRootGroupDeriveOpts,
-    ) -> Self {
-        Self {
-            ident,
-            generics,
-            builder_ident,
-            constructor_type,
-            visibility,
+        let content = self.contribute_attributes_fn_body(
+            ast,
+            &attributes_access_ident,
             deserialize_lifetime,
-            element_access_ident,
-            children_access_ident,
-            element_fields,
-            attribute_fields,
-            group_fields,
-            element_group_fields,
-            attribute_group_fields,
-            opts,
-        }
-    }
+        )?;
 
-    pub fn definition(&self) -> proc_macro2::TokenStream {
-        let Self {
-            builder_ident,
-            generics,
-            deserialize_lifetime,
-            constructor_type,
-            visibility,
-            element_fields,
-            attribute_fields,
-            group_fields,
-            ..
-        } = self;
+        let Some(content) = content else {
+            return Ok(None);
+        };
 
-        let local_value_expressions_constructors = attribute_fields
-            .clone()
-            .into_iter()
-            .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
-            .chain(
-                element_fields
-                    .clone()
-                    .into_iter()
-                    .map(|a| a.map_options(XmlityFieldDeriveOpts::Element)),
-            )
-            .map(
-                |DeserializeBuilderField {
-                     builder_field_ident,
-                     field_type,
-                     ..
-                 }| {
-                    let expression = quote! {
-                        ::core::option::Option<#field_type>
-                    };
-                    (builder_field_ident, expression)
-                },
-            );
-        let group_value_expressions_constructors = group_fields.clone().into_iter().map(
-            |DeserializeBuilderField {
-                 builder_field_ident,
-                 field_type,
-                 ..
-             }| {
-                let expression = quote! {
-                    <#field_type as ::xmlity::de::DeserializationGroup<#deserialize_lifetime>>::Builder
-                };
-
-                (builder_field_ident, expression)
-            },
-        );
-
-        let value_expressions_constructors = local_value_expressions_constructors
-            .chain(group_value_expressions_constructors)
-            .chain(iter::once((
-                match constructor_type {
-                    StructType::Named => {
-                        FieldIdent::Named(Ident::new("__marker", Span::call_site()))
-                    }
-                    StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
-                },
-                quote! {
-                    ::core::marker::PhantomData<&#deserialize_lifetime ()>
-                },
-            )));
-
-        let mut generics = (*generics).to_owned();
-        // if group_fields.clone().into_iter().next().is_some()
-        generics.params.insert(
-            0,
-            syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
-        );
-
-        super::struct_definition_expr(
-            builder_ident,
-            // Builder only needs lifetime if there are groups
-            Some(&generics),
-            value_expressions_constructors,
-            constructor_type,
-            visibility,
-        )
-    }
-
-    pub fn contribute_attributes_fn(&self) -> proc_macro2::TokenStream {
-        let Self {
-            element_access_ident,
-            attribute_group_fields,
-            deserialize_lifetime,
-            opts,
-            ..
-        } = self;
-
-        let attribute_visit = super::builder_attribute_field_visitor(
-            element_access_ident,
-            quote! {self.},
-            attribute_group_fields.clone(),
-            quote! {return ::core::result::Result::Ok(false);},
-            quote! {return ::core::result::Result::Ok(true);},
-            quote! {return ::core::result::Result::Ok(true);},
-            match opts.attribute_order {
-                GroupOrder::Strict => quote! {},
-                GroupOrder::Loose => quote! {return ::core::result::Result::Ok(false);},
-                GroupOrder::None => quote! {},
-            },
-            false,
-        );
-
-        quote! {
-            fn contribute_attributes<D: xmlity::de::AttributesAccess<#deserialize_lifetime>>(
+        Ok(Some(parse_quote! {
+            fn contribute_attributes<A: ::xmlity::de::AttributesAccess<#deserialize_lifetime>>(
                 &mut self,
-                mut #element_access_ident: D,
-            ) -> Result<bool, <D as xmlity::de::AttributesAccess<#deserialize_lifetime>>::Error> {
-                #(#attribute_visit)*
-
-                Ok(false)
+                mut #attributes_access_ident: A,
+            ) -> Result<bool, <A as ::xmlity::de::AttributesAccess<#deserialize_lifetime>>::Error> {
+                #(#content)*
             }
-        }
+        }))
     }
 
-    pub fn attributes_done_fn(&self) -> proc_macro2::TokenStream {
-        let Self {
-            attribute_group_fields,
-            ..
-        } = self;
+    fn attributes_done_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let content = self.attributes_done_fn_body(ast, deserialize_lifetime)?;
 
-        let attributes_done_implementation =
-            all_attributes_done(attribute_group_fields.clone(), quote! {self.});
+        let Some(content) = content else {
+            return Ok(None);
+        };
 
-        quote! {
+        Ok(Some(parse_quote! {
             fn attributes_done(&self) -> bool {
-                #attributes_done_implementation
+                #(#content)*
             }
-        }
+        }))
     }
 
-    pub fn contribute_elements_fn(&self) -> proc_macro2::TokenStream {
-        let Self {
-            children_access_ident,
-            element_group_fields,
-            deserialize_lifetime,
-            opts,
-            ..
-        } = self;
+    fn contribute_elements_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let elements_access_ident = syn::Ident::new("__children", proc_macro2::Span::call_site());
 
-        let element_visit = super::builder_element_field_visitor(
-            children_access_ident,
-            quote! {self.},
-            element_group_fields.clone(),
-            quote! {return ::core::result::Result::Ok(false);},
-            quote! {return ::core::result::Result::Ok(true);},
-            quote! {return ::core::result::Result::Ok(true);},
-            match opts.children_order {
-                GroupOrder::Strict => quote! {},
-                GroupOrder::Loose => quote! {return ::core::result::Result::Ok(false);},
-                GroupOrder::None => quote! {},
-            },
-            match opts.children_order {
-                GroupOrder::Strict => true,
-                GroupOrder::Loose | GroupOrder::None => false,
-            },
-        );
+        let content =
+            self.contribute_elements_fn_body(ast, &elements_access_ident, deserialize_lifetime)?;
 
-        quote! {
-            fn contribute_elements<D: xmlity::de::SeqAccess<#deserialize_lifetime>>(
+        let Some(content) = content else {
+            return Ok(None);
+        };
+
+        Ok(Some(parse_quote! {
+            fn contribute_elements<A: ::xmlity::de::SeqAccess<#deserialize_lifetime>>(
                 &mut self,
-              mut #children_access_ident: D,
-            ) -> Result<bool, <D as xmlity::de::SeqAccess<#deserialize_lifetime>>::Error> {
-                #(#element_visit)*
-
-                Ok(false)
+              mut #elements_access_ident: A,
+            ) -> Result<bool, <A as ::xmlity::de::SeqAccess<#deserialize_lifetime>>::Error> {
+                #(#content)*
             }
-        }
+        }))
     }
 
-    pub fn elements_done_fn(&self) -> proc_macro2::TokenStream {
-        let Self {
-            element_group_fields,
-            ..
-        } = self;
+    fn elements_done_fn(
+        &self,
+        ast: &syn::DeriveInput,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let content = self.elements_done_fn_body(ast, deserialize_lifetime)?;
 
-        let elements_done_implementation =
-            all_elements_done(element_group_fields.clone(), quote! {self.});
+        let Some(content) = content else {
+            return Ok(None);
+        };
 
-        quote! {
-
+        Ok(Some(parse_quote! {
             fn elements_done(&self) -> bool {
-                #elements_done_implementation
+                #(#content)*
             }
-        }
+        }))
     }
 
-    pub fn finish_fn(&self) -> proc_macro2::TokenStream {
-        let Self {
-            element_fields,
-            attribute_fields,
-            group_fields,
-            constructor_type,
-            ..
-        } = self;
+    fn finish_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
+        let content = self.finish_fn_body(ast)?;
 
-        let finish_constructor = finish_constructor_expr(
-            quote! {Self::Value},
-            element_fields.clone(),
-            attribute_fields.clone(),
-            group_fields.clone(),
-            constructor_type,
-        );
-
-        quote! {
-        fn finish<E: xmlity::de::Error>(self) -> Result<Self::Value, E> {
-            Ok(#finish_constructor)
+        Ok(parse_quote! {
+        fn finish<E: ::xmlity::de::Error>(self) -> Result<Self::Value, E> {
+           #(#content)*
           }
-        }
+        })
     }
 
-    pub fn trait_impl(&self) -> proc_macro2::TokenStream {
-        let Self {
-            ident,
-            generics,
-            builder_ident,
-            deserialize_lifetime,
-            ..
-        } = self;
+    fn deserialization_group_builder_def(
+        &self,
+        ast: &syn::DeriveInput,
+    ) -> Result<ItemStruct, DeriveError> {
+        let deserialize_lifetime = Lifetime::new("'__builder", Span::call_site());
+
+        let builder_ident =
+            Ident::new(format!("__{}Builder", ast.ident).as_str(), ast.ident.span());
+
+        self.builder_definition(ast, &builder_ident, &deserialize_lifetime)
+    }
+
+    fn deserialization_group_builder_impl(
+        &self,
+        ast @ DeriveInput {
+            ident, generics, ..
+        }: &syn::DeriveInput,
+    ) -> Result<ItemImpl, DeriveError> {
+        let deserialize_lifetime = Lifetime::new("'__builder", Span::call_site());
+
+        let builder_ident =
+            Ident::new(format!("__{}Builder", ast.ident).as_str(), ast.ident.span());
 
         let non_bound_generics = crate::non_bound_generics(generics);
 
@@ -376,21 +231,21 @@ impl<
 
         builder_generics.params.insert(
             0,
-            syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
+            syn::GenericParam::Lifetime(LifetimeParam::new(deserialize_lifetime.clone())),
         );
         let non_bound_builder_generics = crate::non_bound_generics(&builder_generics);
 
-        let contribute_attributes_fn = self.contribute_attributes_fn();
+        let contribute_attributes_fn = self.contribute_attributes_fn(ast, &deserialize_lifetime)?;
 
-        let attributes_done_fn = self.attributes_done_fn();
+        let attributes_done_fn = self.attributes_done_fn(ast, &deserialize_lifetime)?;
 
-        let contribute_elements_fn = self.contribute_elements_fn();
+        let contribute_elements_fn = self.contribute_elements_fn(ast, &deserialize_lifetime)?;
 
-        let elements_done_fn = self.elements_done_fn();
+        let elements_done_fn = self.elements_done_fn(ast, &deserialize_lifetime)?;
 
-        let finish_fn = self.finish_fn();
+        let finish_fn = self.finish_fn(ast)?;
 
-        quote! {
+        Ok(parse_quote! {
         impl #builder_generics ::xmlity::de::DeserializationGroupBuilder<#deserialize_lifetime> for #builder_ident #non_bound_builder_generics {
           type Value = #ident #non_bound_generics;
 
@@ -404,7 +259,309 @@ impl<
 
             #finish_fn
         }
+        })
+    }
+
+    fn deserialize_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError> {
+        let syn::DeriveInput {
+            ident, generics, ..
+        } = ast;
+
+        let builder_ident =
+            Ident::new(format!("__{}Builder", ast.ident).as_str(), ast.ident.span());
+
+        let deserialize_lifetime = Lifetime::new("'__deserialize", Span::call_site());
+
+        let non_bound_generics = crate::non_bound_generics(generics);
+
+        let mut builder_generics = (*generics).to_owned();
+
+        builder_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new((deserialize_lifetime).clone())),
+        );
+        let non_bound_builder_generics = crate::non_bound_generics(&builder_generics);
+
+        let builder_constructor = self.builder_constructor(ast, &builder_ident)?;
+
+        Ok(parse_quote! {
+            impl #builder_generics ::xmlity::de::DeserializationGroup<#deserialize_lifetime> for #ident #non_bound_generics {
+                type Builder = #builder_ident #non_bound_builder_generics;
+
+                fn builder() -> Self::Builder {
+                    #(#builder_constructor)*
+                }
+            }
+        })
+    }
+
+    fn total_impl(&self, ast: &syn::DeriveInput) -> Result<TokenStream, DeriveError> {
+        let builder_def = self.deserialization_group_builder_def(ast)?;
+
+        let builder_impl = self.deserialization_group_builder_impl(ast)?;
+
+        let deserialize_impl = self.deserialize_impl(ast)?;
+        Ok(quote! {
+            #builder_def
+            #builder_impl
+            #deserialize_impl
+        })
+    }
+}
+
+pub struct StructGroup<'a> {
+    opts: &'a XmlityRootGroupDeriveOpts,
+}
+
+impl<'a> StructGroup<'a> {
+    pub fn new(opts: &'a XmlityRootGroupDeriveOpts) -> Self {
+        Self { opts }
+    }
+
+    pub fn constructor_type(ast: &syn::DeriveInput) -> StructType {
+        let data_struct = match ast.data {
+            syn::Data::Struct(ref data_struct) => data_struct,
+            _ => unreachable!(),
+        };
+        match &data_struct.fields {
+            syn::Fields::Named(_) => StructType::Named,
+            syn::Fields::Unnamed(_) => StructType::Unnamed,
+            _ => unreachable!(),
         }
+    }
+}
+
+impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
+    fn contribute_attributes_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        attributes_access_ident: &Ident,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let attribute_visit = super::builder_attribute_field_visitor(
+            attributes_access_ident,
+            quote! {self.},
+            crate::de::attribute_group_fields(ast)?,
+            parse_quote! {return ::core::result::Result::Ok(false);},
+            parse_quote! {return ::core::result::Result::Ok(true);},
+            parse_quote! {return ::core::result::Result::Ok(true);},
+            match self.opts.attribute_order {
+                GroupOrder::Strict => parse_quote! {},
+                GroupOrder::Loose => parse_quote! {return ::core::result::Result::Ok(false);},
+                GroupOrder::None => parse_quote! {},
+            },
+            false,
+        );
+
+        Ok(Some(parse_quote! {
+                #(#attribute_visit)*
+
+                Ok(false)
+
+        }))
+    }
+
+    fn attributes_done_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let expr = all_attributes_done(crate::de::attribute_group_fields(ast)?, quote! {self.});
+
+        Ok(Some(parse_quote!(
+            #expr
+        )))
+    }
+
+    fn contribute_elements_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        elements_access_ident: &Ident,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let element_visit = super::builder_element_field_visitor(
+            elements_access_ident,
+            quote! {self.},
+            crate::de::element_group_fields(ast)?,
+            parse_quote! {return ::core::result::Result::Ok(false);},
+            parse_quote! {return ::core::result::Result::Ok(true);},
+            parse_quote! {return ::core::result::Result::Ok(true);},
+            match self.opts.children_order {
+                GroupOrder::Strict => parse_quote! {},
+                GroupOrder::Loose => parse_quote! {return ::core::result::Result::Ok(false);},
+                GroupOrder::None => parse_quote! {},
+            },
+            match self.opts.children_order {
+                GroupOrder::Strict => true,
+                GroupOrder::Loose | GroupOrder::None => false,
+            },
+        );
+
+        Ok(Some(parse_quote! {
+            #(#element_visit)*
+
+            ::core::result::Result::Ok(false)
+        }))
+    }
+
+    fn elements_done_fn_body(
+        &self,
+        ast: &syn::DeriveInput,
+        _deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let expr = all_elements_done(crate::de::element_group_fields(ast)?, quote! {self.});
+
+        Ok(Some(parse_quote!(
+            #expr
+        )))
+    }
+
+    fn finish_fn_body(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError> {
+        let finish_constructor = finish_constructor_expr(
+            quote! {Self::Value},
+            crate::de::element_fields(ast)?,
+            crate::de::attribute_fields(ast)?,
+            crate::de::group_fields(ast)?,
+            &Self::constructor_type(ast),
+        );
+
+        Ok(parse_quote! {
+          ::std::result::Result::Ok(#finish_constructor)
+        })
+    }
+
+    fn builder_definition(
+        &self,
+        ast: &syn::DeriveInput,
+        builder_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<ItemStruct, DeriveError> {
+        let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
+            .into_iter()
+            .map(
+                |DeserializeBuilderField {
+                     builder_field_ident,
+                     field_type,
+                     ..
+                 }| {
+                    let expression = parse_quote! {
+                        ::core::option::Option<#field_type>
+                    };
+                    (builder_field_ident, expression)
+                },
+            )
+            .chain(crate::de::element_fields(ast)?.into_iter().map(
+                |DeserializeBuilderField {
+                     builder_field_ident,
+                     field_type,
+                     ..
+                 }| {
+                    let expression = parse_quote! {
+                        ::core::option::Option<#field_type>
+                    };
+                    (builder_field_ident, expression)
+                },
+            ));
+        let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
+            |DeserializeBuilderField {
+                 builder_field_ident,
+                 field_type,
+                 ..
+             }| {
+                let expression = parse_quote! {
+                    <#field_type as ::xmlity::de::DeserializationGroup<#deserialize_lifetime>>::Builder
+                };
+
+                (builder_field_ident, expression)
+            },
+        );
+
+        let value_expressions_constructors = local_value_expressions_constructors
+            .chain(group_value_expressions_constructors)
+            .chain(iter::once((
+                match Self::constructor_type(ast) {
+                    StructType::Named => {
+                        FieldIdent::Named(Ident::new("__marker", Span::call_site()))
+                    }
+                    StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
+                },
+                parse_quote! {
+                    ::core::marker::PhantomData<&#deserialize_lifetime ()>
+                },
+            )));
+
+        let mut generics = ast.generics.clone();
+        generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
+        );
+
+        Ok(syn::parse2(super::struct_definition_expr(
+            builder_ident,
+            // Builder only needs lifetime if there are groups
+            Some(&generics),
+            value_expressions_constructors,
+            &Self::constructor_type(ast),
+            &ast.vis,
+        ))?)
+    }
+
+    fn builder_constructor(
+        &self,
+        ast: &syn::DeriveInput,
+        builder_ident: &Ident,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
+            .into_iter()
+            .map(|DeserializeBuilderField { field_ident, .. }| {
+                let expression = quote! {
+                    ::core::option::Option::None
+                };
+                (field_ident, expression)
+            })
+            .chain(crate::de::element_fields(ast)?.into_iter().map(
+                |DeserializeBuilderField { field_ident, .. }| {
+                    let expression = quote! {
+                        ::core::option::Option::None
+                    };
+                    (field_ident, expression)
+                },
+            ));
+        let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
+            |DeserializeBuilderField {
+                 field_ident,
+                 field_type,
+                 ..
+             }| {
+                let expression = quote! {
+                    <#field_type as ::xmlity::de::DeserializationGroup>::builder()
+                };
+
+                (field_ident, expression)
+            },
+        );
+
+        let value_expressions_constructors = local_value_expressions_constructors
+            .chain(group_value_expressions_constructors)
+            .chain(iter::once((
+                match Self::constructor_type(ast) {
+                    StructType::Named => {
+                        FieldIdent::Named(Ident::new("__marker", Span::call_site()))
+                    }
+                    StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
+                },
+                quote! {
+                    ::core::marker::PhantomData
+                },
+            )));
+
+        let expr = constructor_expr(
+            builder_ident,
+            value_expressions_constructors,
+            &Self::constructor_type(ast),
+        );
+
+        Ok(parse_quote!(#expr))
     }
 }
 
@@ -456,218 +613,20 @@ fn finish_constructor_expr<T: quote::ToTokens>(
     constructor_expr(ident, value_expressions_constructors, constructor_type)
 }
 
-fn builder_constructor_expr<T: quote::ToTokens>(
-    ident: T,
-    element_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>,
-    >,
-    attribute_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
-    >,
-    group_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-    >,
-    constructor_type: &StructType,
-) -> proc_macro2::TokenStream {
-    let local_value_expressions_constructors = attribute_fields
-        .into_iter()
-        .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
-        .chain(
-            element_fields
-                .into_iter()
-                .map(|a| a.map_options(XmlityFieldDeriveOpts::Element)),
-        )
-        .map(|DeserializeBuilderField { field_ident, .. }| {
-            let expression = quote! {
-                ::core::option::Option::None
-            };
-            (field_ident, expression)
-        });
-    let group_value_expressions_constructors = group_fields.into_iter().map(
-        |DeserializeBuilderField {
-             field_ident,
-             field_type,
-             ..
-         }| {
-            let expression = quote! {
-                <#field_type as ::xmlity::de::DeserializationGroup>::builder()
-            };
+pub struct DeriveDeserializationGroup;
 
-            (field_ident, expression)
-        },
-    );
+impl DeriveMacro for DeriveDeserializationGroup {
+    fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
+        let opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
 
-    let value_expressions_constructors = local_value_expressions_constructors
-        .chain(group_value_expressions_constructors)
-        .chain(iter::once((
-            match constructor_type {
-                StructType::Named => FieldIdent::Named(Ident::new("__marker", Span::call_site())),
-                StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
-            },
-            quote! {
-                ::core::marker::PhantomData
-            },
-        )));
-
-    constructor_expr(ident, value_expressions_constructors, constructor_type)
-}
-
-pub fn derive_struct_deserialize_fn(
-    ident: &Ident,
-    generics: &syn::Generics,
-    builder_ident: &Ident,
-    data_struct: &syn::DataStruct,
-    opts: XmlityRootGroupDeriveOpts,
-    visibility: Visibility,
-) -> darling::Result<proc_macro2::TokenStream> {
-    let constructor_type = match &data_struct.fields {
-        syn::Fields::Named(_) => StructType::Named,
-        syn::Fields::Unnamed(_) => StructType::Unnamed,
-        _ => unreachable!(),
-    };
-
-    let fields = match &data_struct.fields {
-        syn::Fields::Named(fields) => fields
-            .named
-            .iter()
-            .map(|f| {
-                let field_ident = f.ident.clone().expect("Named struct");
-
-                darling::Result::Ok(DeserializeBuilderField {
-                    builder_field_ident: FieldIdent::Named(field_ident.clone()),
-                    field_ident: FieldIdent::Named(field_ident),
-                    options: XmlityFieldDeriveOpts::from_field(f)?,
-                    field_type: f.ty.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?,
-        syn::Fields::Unnamed(fields) => fields
-            .unnamed
-            .iter()
-            .enumerate()
-            .map(|(i, f)| {
-                darling::Result::Ok(DeserializeBuilderField {
-                    builder_field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                    field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                    options: XmlityFieldDeriveOpts::from_field(f)?,
-                    field_type: f.ty.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?,
-        _ => unreachable!(),
-    };
-
-    let element_fields = fields.clone().into_iter().filter_map(|field| {
-        field.map_options_opt(|opt| match opt {
-            XmlityFieldDeriveOpts::Element(opts) => Some(opts),
-            _ => None,
-        })
-    });
-
-    let attribute_fields = fields.clone().into_iter().filter_map(|field| {
-        field.map_options_opt(|opt| match opt {
-            XmlityFieldDeriveOpts::Attribute(opts) => Some(opts),
-            _ => None,
-        })
-    });
-
-    let group_fields = fields.clone().into_iter().filter_map(|field| {
-        field.map_options_opt(|opt| match opt {
-            XmlityFieldDeriveOpts::Group(opts) => Some(opts),
-            _ => None,
-        })
-    });
-
-    let attribute_group_fields = fields.clone().into_iter().filter_map(|field| {
-        field.map_options_opt(|opt| match opt {
-            XmlityFieldDeriveOpts::Attribute(opts) => {
-                Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
+        match &ast.data {
+            syn::Data::Struct(_) => StructGroup::new(&opts).total_impl(ast),
+            syn::Data::Enum(_) => {
+                Ok(simple_compile_error("Enums are not supported yet").to_token_stream())
             }
-            XmlityFieldDeriveOpts::Group(opts) => {
-                Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
+            syn::Data::Union(_) => {
+                Ok(simple_compile_error("Unions are not supported yet").to_token_stream())
             }
-            XmlityFieldDeriveOpts::Element(_) => None,
-        })
-    });
-
-    let element_group_fields = fields.clone().into_iter().filter_map(|field| {
-        field.map_options_opt(|opt| match opt {
-            XmlityFieldDeriveOpts::Element(opts) => {
-                Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
-            }
-            XmlityFieldDeriveOpts::Group(opts) => {
-                Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
-            }
-            XmlityFieldDeriveOpts::Attribute(_) => None,
-        })
-    });
-
-    let element_access_ident = syn::Ident::new("__element", proc_macro2::Span::call_site());
-    let children_access_ident = syn::Ident::new("__children", proc_macro2::Span::call_site());
-
-    let deserialize_lifetime = Lifetime::new("'__deserialize", Span::call_site());
-
-    let builder = DeserializationGroupBuilderBuilder::new(
-        ident,
-        generics,
-        builder_ident,
-        constructor_type,
-        visibility,
-        &deserialize_lifetime,
-        &element_access_ident,
-        &children_access_ident,
-        element_fields.clone(),
-        attribute_fields.clone(),
-        group_fields.clone(),
-        element_group_fields,
-        attribute_group_fields,
-        opts,
-    );
-
-    let builder_def = builder.definition();
-
-    let builder_impl = builder.trait_impl();
-
-    let builder_constructor = builder_constructor_expr(
-        quote! {Self::Builder},
-        element_fields,
-        attribute_fields,
-        group_fields,
-        &constructor_type,
-    );
-
-    let deserialize_impl = DeserializeGroupTraitImplBuilder::new(
-        ident,
-        generics,
-        &deserialize_lifetime,
-        builder_ident,
-        &builder_constructor,
-    )
-    .trait_impl();
-
-    Ok(quote! {
-        #builder_def
-        #builder_impl
-        #deserialize_impl
-    })
-}
-
-pub fn derive_deserialization_group_fn(
-    ast: syn::DeriveInput,
-    opts: XmlityRootGroupDeriveOpts,
-) -> darling::Result<proc_macro2::TokenStream> {
-    let builder_ident = Ident::new(format!("__{}Builder", ast.ident).as_str(), ast.ident.span());
-
-    match ast.data {
-        syn::Data::Struct(data_struct) => derive_struct_deserialize_fn(
-            &ast.ident,
-            &ast.generics,
-            &builder_ident,
-            &data_struct,
-            opts,
-            ast.vis,
-        ),
-        syn::Data::Enum(_) => Ok(simple_compile_error("Enums are not supported yet")),
-        syn::Data::Union(_) => Ok(simple_compile_error("Unions are not supported yet")),
+        }
     }
 }

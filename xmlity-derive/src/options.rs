@@ -1,5 +1,11 @@
+#![allow(dead_code)]
+use std::borrow::Cow;
+
 use darling::{FromAttributes, FromMeta};
+use quote::ToTokens;
 use syn::{DeriveInput, Ident};
+
+use crate::ExpandedName;
 
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
@@ -83,33 +89,76 @@ pub enum TextSerializationFormat {
     Text,
 }
 
-#[derive(Debug, Default)]
-pub struct LocalName(pub String);
+pub trait WithExpandedName {
+    fn expanded_name<'a>(&'a self, ident: &'a str) -> ExpandedName<'a>;
+}
 
-impl FromMeta for LocalName {
+#[derive(Debug, Default, Clone)]
+pub struct LocalName<'a>(pub Cow<'a, str>);
+
+impl<'a> LocalName<'a> {
+    pub fn as_ref<'b: 'a>(&'b self) -> LocalName<'b> {
+        Self(Cow::Borrowed(&self.0))
+    }
+}
+
+impl FromMeta for LocalName<'_> {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate local name
-        Ok(LocalName(value.to_owned()))
+        Ok(LocalName(Cow::Owned(value.to_owned())))
     }
 }
 
-#[derive(Debug, Default)]
-pub struct XmlNamespace(pub String);
+impl ToTokens for LocalName<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let name = &self.0;
+        tokens.extend(quote::quote! { <::xmlity::LocalName as ::core::str::FromStr>::from_str(#name).expect("XML name in derive macro is invalid. This is a bug in xmlity. Please report it.") })
+    }
+}
 
-impl FromMeta for XmlNamespace {
+#[derive(Debug, Default, Clone)]
+pub struct XmlNamespace<'a>(pub Cow<'a, str>);
+
+impl<'a> XmlNamespace<'a> {
+    pub fn as_ref<'b: 'a>(&'b self) -> XmlNamespace<'b> {
+        Self(Cow::Borrowed(&self.0))
+    }
+}
+
+impl FromMeta for XmlNamespace<'_> {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate namespace
-        Ok(XmlNamespace(value.to_owned()))
+        Ok(XmlNamespace(Cow::Owned(value.to_owned())))
     }
 }
 
-#[derive(Debug, Default)]
-pub struct PrefferedPrefix(pub String);
+impl ToTokens for XmlNamespace<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let namespace = &self.0;
+        tokens.extend(quote::quote! { <::xmlity::XmlNamespace as ::core::str::FromStr>::from_str(#namespace).expect("XML namespace in derive macro is invalid. This is a bug in xmlity. Please report it.") })
+    }
+}
 
-impl FromMeta for PrefferedPrefix {
+#[derive(Debug, Default, Clone)]
+pub struct Prefix<'a>(pub Cow<'a, str>);
+
+impl<'a> Prefix<'a> {
+    pub fn as_ref<'b: 'a>(&'b self) -> Prefix<'b> {
+        Self(Cow::Borrowed(&self.0))
+    }
+}
+
+impl FromMeta for Prefix<'_> {
     fn from_string(value: &str) -> darling::Result<Self> {
         // TODO: Validate prefix
-        Ok(PrefferedPrefix(value.to_owned()))
+        Ok(Prefix(Cow::Owned(value.to_owned())))
+    }
+}
+
+impl ToTokens for Prefix<'_> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let prefix = &self.0;
+        tokens.extend(quote::quote! { ::xmlity::Prefix::new(#prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.") })
     }
 }
 
@@ -117,13 +166,13 @@ impl FromMeta for PrefferedPrefix {
 #[darling(attributes(xelement))]
 pub struct XmlityRootElementDeriveOpts {
     #[darling(default)]
-    pub name: Option<LocalName>,
+    pub name: Option<LocalName<'static>>,
     #[darling(default)]
-    pub namespace: Option<XmlNamespace>,
+    pub namespace: Option<XmlNamespace<'static>>,
     #[darling(default)]
     pub namespace_path: Option<Ident>,
     #[darling(default)]
-    pub preferred_prefix: Option<PrefferedPrefix>,
+    pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
     pub enforce_prefix: bool,
     #[darling(default)]
@@ -158,15 +207,27 @@ impl XmlityRootElementDeriveOpts {
     }
 }
 
+impl WithExpandedName for XmlityRootElementDeriveOpts {
+    fn expanded_name<'a>(&'a self, default_name: &'a str) -> ExpandedName<'a> {
+        ExpandedName::new(
+            self.name
+                .as_ref()
+                .map(LocalName::as_ref)
+                .unwrap_or(LocalName(Cow::Borrowed(default_name))),
+            self.namespace.as_ref().map(XmlNamespace::as_ref),
+        )
+    }
+}
+
 #[derive(FromAttributes, Default)]
 #[darling(attributes(xattribute))]
 pub struct XmlityRootAttributeDeriveOpts {
     #[darling(default)]
-    pub name: Option<LocalName>,
+    pub name: Option<LocalName<'static>>,
     #[darling(default)]
-    pub namespace: Option<XmlNamespace>,
+    pub namespace: Option<XmlNamespace<'static>>,
     #[darling(default)]
-    pub preferred_prefix: Option<PrefferedPrefix>,
+    pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
     pub enforce_prefix: bool,
     #[darling(default)]
@@ -185,6 +246,18 @@ impl XmlityRootAttributeDeriveOpts {
 
         let opts = Self::from_attributes(&[attr.clone()])?;
         Ok(Some(opts))
+    }
+}
+
+impl WithExpandedName for XmlityRootAttributeDeriveOpts {
+    fn expanded_name<'a>(&'a self, default_name: &'a str) -> ExpandedName<'a> {
+        ExpandedName::new(
+            self.name
+                .as_ref()
+                .map(LocalName::as_ref)
+                .unwrap_or(LocalName(Cow::Borrowed(default_name))),
+            self.namespace.as_ref().map(XmlNamespace::as_ref),
+        )
     }
 }
 
