@@ -120,9 +120,7 @@ pub struct DeriveSerializationGroup;
 
 impl DeriveMacro for DeriveSerializationGroup {
     fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
-        let opts = XmlityRootGroupDeriveOpts::parse(ast)
-            .expect("Wrong options")
-            .unwrap_or_default();
+        let opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
 
         match &ast.data {
             syn::Data::Struct(DataStruct { fields, .. }) => {

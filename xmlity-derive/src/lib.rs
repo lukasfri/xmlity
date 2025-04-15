@@ -26,6 +26,8 @@ enum DeriveError {
     Custom(String),
 }
 
+type DeriveResult<T> = Result<T, DeriveError>;
+
 impl From<darling::Error> for DeriveError {
     fn from(e: darling::Error) -> Self {
         DeriveError::Darling(e)
@@ -93,9 +95,9 @@ enum DeriveDeserializeOption {
 
 impl DeriveDeserializeOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let element_opts = XmlityRootElementDeriveOpts::parse(ast).expect("Wrong options");
-        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast).expect("Wrong options");
-        let value_opts = XmlityRootValueDeriveOpts::parse(ast).expect("Wrong options");
+        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
+        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast)?;
+        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
 
         let opts = match (element_opts, attribute_opts, value_opts) {
             (Some(element_opts), None, None) => DeriveDeserializeOption::Element(element_opts),
@@ -154,7 +156,7 @@ enum XmlityFieldElementGroupDeriveOpts {
 }
 
 impl XmlityFieldDeriveOpts {
-    fn from_field(field: &syn::Field) -> Result<Self, darling::Error> {
+    fn from_field(field: &syn::Field) -> Result<Self, DeriveError> {
         let element = XmlityFieldElementDeriveOpts::from_field(field)?;
         let attribute = XmlityFieldAttributeDeriveOpts::from_field(field)?;
         let group = XmlityFieldGroupDeriveOpts::from_field(field)?;
@@ -164,8 +166,8 @@ impl XmlityFieldDeriveOpts {
             (None, None, Some(group)) => Self::Group(group),
             (None, None, None) => Self::Element(XmlityFieldElementDeriveOpts::default()),
             _ => {
-                return Err(darling::Error::custom(
-                    "Cannot have multiple xmlity field attributes on the same field",
+                return Err(DeriveError::custom(
+                    "Cannot have multiple xmlity field attributes on the same field.",
                 ))
             }
         })

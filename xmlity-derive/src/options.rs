@@ -5,7 +5,7 @@ use darling::{FromAttributes, FromMeta};
 use quote::ToTokens;
 use syn::{DeriveInput, Expr};
 
-use crate::ExpandedName;
+use crate::{DeriveError, ExpandedName};
 
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
@@ -215,7 +215,7 @@ pub struct XmlityRootElementDeriveOpts {
 }
 
 impl XmlityRootElementDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast
             .attrs
             .iter()
@@ -226,7 +226,7 @@ impl XmlityRootElementDeriveOpts {
 
         let opts = Self::from_attributes(&[attr.clone()])?;
         if opts.namespace_expr.is_some() && opts.namespace.is_some() {
-            return Err(darling::Error::custom(
+            return Err(DeriveError::custom(
                 "Cannot specify both `namespace` and `namespace_expr`",
             ));
         }
@@ -266,7 +266,7 @@ pub struct XmlityRootAttributeDeriveOpts {
 }
 
 impl XmlityRootAttributeDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast
             .attrs
             .iter()
@@ -304,7 +304,7 @@ pub struct XmlityRootGroupDeriveOpts {
 }
 
 impl XmlityRootGroupDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xgroup")) else {
             return Ok(None);
         };
@@ -325,7 +325,7 @@ pub struct XmlityRootValueDeriveOpts {
 }
 
 impl XmlityRootValueDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, darling::Error> {
+    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
         let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xvalue")) else {
             return Ok(None);
         };
@@ -343,7 +343,7 @@ pub struct XmlityFieldElementDeriveOpts {
 }
 
 impl XmlityFieldElementDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, darling::Error> {
+    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
             .attrs
             .iter()
@@ -352,7 +352,9 @@ impl XmlityFieldElementDeriveOpts {
         else {
             return Ok(None);
         };
-        Self::from_attributes(&[attribute]).map(Some)
+        Self::from_attributes(&[attribute])
+            .map(Some)
+            .map_err(DeriveError::Darling)
     }
 }
 
@@ -364,7 +366,7 @@ pub struct XmlityFieldAttributeDeriveOpts {
 }
 
 impl XmlityFieldAttributeDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, darling::Error> {
+    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
             .attrs
             .iter()
@@ -373,7 +375,9 @@ impl XmlityFieldAttributeDeriveOpts {
         else {
             return Ok(None);
         };
-        Self::from_attributes(&[attribute]).map(Some)
+        Self::from_attributes(&[attribute])
+            .map(Some)
+            .map_err(DeriveError::Darling)
     }
 }
 
@@ -382,7 +386,7 @@ impl XmlityFieldAttributeDeriveOpts {
 pub struct XmlityFieldGroupDeriveOpts {}
 
 impl XmlityFieldGroupDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, darling::Error> {
+    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
             .attrs
             .iter()
@@ -391,6 +395,8 @@ impl XmlityFieldGroupDeriveOpts {
         else {
             return Ok(None);
         };
-        Self::from_attributes(&[attribute]).map(Some)
+        Self::from_attributes(&[attribute])
+            .map(Some)
+            .map_err(DeriveError::Darling)
     }
 }
