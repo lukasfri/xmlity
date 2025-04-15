@@ -9,14 +9,14 @@ use syn::{
 
 use crate::{
     options::{
-        GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts,
-        XmlityFieldGroupDeriveOpts, XmlityRootGroupDeriveOpts,
+        GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts,
+        XmlityFieldValueDeriveOpts, XmlityRootGroupDeriveOpts,
     },
     simple_compile_error, DeriveError, DeriveMacro, DeserializeBuilderField, FieldIdent,
     XmlityFieldDeriveOpts,
 };
 
-use super::{all_attributes_done, all_elements_done, constructor_expr, StructType};
+use super::{all_attributes_done_expr, all_elements_done_expr, constructor_expr, StructType};
 
 trait DeserializationGroupBuilderBuilder {
     /// Returns the content inside the `DeserializationGroupBuilder::contribute_attributes` function.
@@ -366,7 +366,8 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_attributes_done(crate::de::attribute_group_fields(ast)?, quote! {self.});
+        let expr =
+            all_attributes_done_expr(crate::de::attribute_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
@@ -409,7 +410,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_elements_done(crate::de::element_group_fields(ast)?, quote! {self.});
+        let expr = all_elements_done_expr(crate::de::element_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
@@ -568,7 +569,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
 fn finish_constructor_expr<T: quote::ToTokens>(
     ident: T,
     element_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>,
+        Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
     >,
     attribute_fields: impl IntoIterator<
         Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
@@ -580,9 +581,9 @@ fn finish_constructor_expr<T: quote::ToTokens>(
 ) -> proc_macro2::TokenStream {
     let local_value_expressions_constructors = attribute_fields.into_iter()
       .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
-      .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Element)))
+      .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Value)))
       .map(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
-          let expression = if matches!(options, XmlityFieldDeriveOpts::Element(XmlityFieldElementDeriveOpts {default: true}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true})) {
+          let expression = if matches!(options, XmlityFieldDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true, ..})) {
               quote! {
                   ::core::option::Option::unwrap_or_default(self.#builder_field_ident)
               }

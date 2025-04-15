@@ -44,8 +44,8 @@ use syn::{parse_macro_input, DeriveInput, Expr};
 mod de;
 mod options;
 use options::{
-    LocalName, XmlNamespace, XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts,
-    XmlityFieldGroupDeriveOpts, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts,
+    LocalName, XmlNamespace, XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts,
+    XmlityFieldValueDeriveOpts, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts,
     XmlityRootValueDeriveOpts,
 };
 mod ser;
@@ -453,7 +453,7 @@ fn simple_compile_error(text: &str) -> proc_macro2::TokenStream {
 
 #[derive(Clone)]
 enum XmlityFieldDeriveOpts {
-    Element(XmlityFieldElementDeriveOpts),
+    Value(XmlityFieldValueDeriveOpts),
     Attribute(XmlityFieldAttributeDeriveOpts),
     Group(XmlityFieldGroupDeriveOpts),
 }
@@ -465,21 +465,21 @@ enum XmlityFieldAttributeGroupDeriveOpts {
 }
 
 #[derive(Clone)]
-enum XmlityFieldElementGroupDeriveOpts {
-    Element(XmlityFieldElementDeriveOpts),
+enum XmlityFieldValueGroupDeriveOpts {
+    Value(XmlityFieldValueDeriveOpts),
     Group(XmlityFieldGroupDeriveOpts),
 }
 
 impl XmlityFieldDeriveOpts {
     fn from_field(field: &syn::Field) -> Result<Self, DeriveError> {
-        let element = XmlityFieldElementDeriveOpts::from_field(field)?;
+        let element = XmlityFieldValueDeriveOpts::from_field(field)?;
         let attribute = XmlityFieldAttributeDeriveOpts::from_field(field)?;
         let group = XmlityFieldGroupDeriveOpts::from_field(field)?;
         Ok(match (element, attribute, group) {
-            (Some(element), None, None) => Self::Element(element),
+            (Some(element), None, None) => Self::Value(element),
             (None, Some(attribute), None) => Self::Attribute(attribute),
             (None, None, Some(group)) => Self::Group(group),
-            (None, None, None) => Self::Element(XmlityFieldElementDeriveOpts::default()),
+            (None, None, None) => Self::Value(XmlityFieldValueDeriveOpts::default()),
             _ => {
                 return Err(DeriveError::custom(
                     "Cannot have multiple xmlity field attributes on the same field.",
