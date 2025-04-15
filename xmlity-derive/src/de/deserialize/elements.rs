@@ -4,9 +4,15 @@ use syn::{parse_quote, spanned::Spanned, DeriveInput, Expr, Ident, Lifetime, Lif
 
 use crate::{
     de::{
-        all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor, common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt}, constructor_expr, common::SeqVisitLoop, StructType
+        all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
+        common::SeqVisitLoop,
+        common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+        constructor_expr, StructType,
     },
-    options::{ElementOrder, WithExpandedNameExt, XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts, XmlityRootElementDeriveOpts},
+    options::{
+        ElementOrder, WithExpandedNameExt, XmlityFieldAttributeDeriveOpts,
+        XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts, XmlityRootElementDeriveOpts,
+    },
     DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent,
     XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldValueGroupDeriveOpts,
 };
@@ -19,7 +25,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
     pub fn new(opts: &'a XmlityRootElementDeriveOpts) -> Self {
         Self { opts }
     }
-    
+
     pub fn field_decl(
         element_fields: impl IntoIterator<
             Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
@@ -65,12 +71,12 @@ impl<'a> StructElementVisitorBuilder<'a> {
                     }
                 },
             ));
-    
+
         parse_quote! {
             #(#getter_declarations)*
         }
     }
-    
+
     pub fn constructor_expr(
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
@@ -109,14 +115,14 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 let expression = parse_quote! {
                     ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
                 };
-    
+
                 (field_ident, expression)
             },
         );
-    
+
         let value_expressions_constructors =
             local_value_expressions_constructors.chain(group_value_expressions_constructors);
-    
+
         constructor_expr(ident, value_expressions_constructors, &constructor_type)
     }
 
@@ -145,7 +151,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 ElementOrder::None => false,
             },
         );
-    
+
         match order {
             ElementOrder::Loose => field_visits.into_iter().zip(fields).map(|(field_visit, field)| {
                 let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
@@ -159,7 +165,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                     }
                 } else {
                     let condition = attribute_done_expr(field, quote! {});
-    
+
                     parse_quote! {
                         if #condition {
                             break;
@@ -168,7 +174,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                         }
                     }
                 };
-    
+
                 parse_quote! {
                     loop {
                         #field_visit
@@ -187,7 +193,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                     }
                 } else {
                     let all_some_condition = all_attributes_done_expr(fields, quote! {});
-    
+
                     parse_quote! {
                         if #all_some_condition {
                             break;
@@ -196,7 +202,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                         }
                     }
                 };
-    
+
                 parse_quote! {
                     loop {
                         #(#field_visits)*

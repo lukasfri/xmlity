@@ -1,13 +1,17 @@
 use proc_macro2::Span;
 use syn::{
-    parse_quote, spanned::Spanned,  DeriveInput, Expr, ExprIf, Field, Ident, ItemStruct, Lifetime, LifetimeParam, Stmt, Variant
+    parse_quote, spanned::Spanned, DeriveInput, Expr, ExprIf, Field, Ident, ItemStruct, Lifetime,
+    LifetimeParam, Stmt, Variant,
 };
 
 use crate::{
     de::{
         common::{DeserializeBuilder, SeqVisitLoop, VisitorBuilder, VisitorBuilderExt},
         constructor_expr, StructType,
-    }, options::{ElementOrder, XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts}, DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent, XmlityFieldDeriveOpts, XmlityFieldValueGroupDeriveOpts
+    },
+    options::{ElementOrder, XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts},
+    DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent, XmlityFieldDeriveOpts,
+    XmlityFieldValueGroupDeriveOpts,
 };
 
 pub struct SerializeNoneStructBuilder;
@@ -51,7 +55,7 @@ impl SerializeNoneStructBuilder {
             #(#getter_declarations)*
         }
     }
-    
+
     pub fn constructor_expr(
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
@@ -63,7 +67,7 @@ impl SerializeNoneStructBuilder {
         >,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
-        let local_value_expressions_constructors = 
+        let local_value_expressions_constructors =
             element_fields.into_iter().map(|a| a.map_options(XmlityFieldValueGroupDeriveOpts::Value))
             .map::<(_, Expr), _>(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
                 let expression = if matches!(options, XmlityFieldValueGroupDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) ) {
@@ -86,14 +90,14 @@ impl SerializeNoneStructBuilder {
                 let expression = parse_quote! {
                     ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
                 };
-    
+
                 (field_ident, expression)
             },
         );
-    
+
         let value_expressions_constructors =
             local_value_expressions_constructors.chain(group_value_expressions_constructors);
-    
+
         constructor_expr(ident, value_expressions_constructors, &constructor_type)
     }
 
@@ -105,7 +109,6 @@ impl SerializeNoneStructBuilder {
         allow_unknown_children: bool,
         order: ElementOrder,
     ) -> Vec<Stmt> {
-
         let visit = SeqVisitLoop::new(access_ident, allow_unknown_children, order, fields);
 
         let field_storage = visit.field_storage();
@@ -177,7 +180,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder {
                 .collect::<Result<Vec<_>, _>>()?,
             _ => unreachable!(),
         };
-        
+
         let element_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 XmlityFieldDeriveOpts::Value(opts) => Some(opts),
@@ -192,11 +195,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder {
             })
         });
 
-        let getter_declarations = Self::field_decl(
-            element_fields.clone(),
-            group_fields.clone(),
-        );
-
+        let getter_declarations = Self::field_decl(element_fields.clone(), group_fields.clone());
 
         let element_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
