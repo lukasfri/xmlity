@@ -6,7 +6,6 @@ use crate::ser::SerializeSeq;
 use crate::{de::SeqAccess, Deserialize, Deserializer};
 use crate::{Serialize, Serializer};
 use core::fmt;
-use core::fmt::Debug;
 use std::iter::FromIterator;
 
 /// This visitor allows for deserializing an iterator of elements, which can be useful for deserializing sequences of elements into a collection/single value.
@@ -14,7 +13,22 @@ pub struct IteratorVisitor<T, V: FromIterator<T>> {
     _marker: PhantomData<(T, V)>,
 }
 
-impl<'de, T: Debug, V> Visitor<'de> for IteratorVisitor<T, V>
+impl<T, V: FromIterator<T>> IteratorVisitor<T, V> {
+    /// Creates a new [`IteratorVisitor`].
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T, V: FromIterator<T>> Default for IteratorVisitor<T, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'de, T, V> Visitor<'de> for IteratorVisitor<T, V>
 where
     T: Deserialize<'de>,
     V: FromIterator<T> + Deserialize<'de>,
@@ -29,27 +43,17 @@ where
     where
         S: SeqAccess<'de>,
     {
-        Ok(std::iter::repeat_with(|| seq.next_element_seq::<T>())
-            .take_while(|item| item.as_ref().is_ok_and(|item| item.is_some()))
-            .map(|item| {
-                item.expect("element in sequence")
-                    .expect("element in sequence")
-            })
-            .collect::<V>())
+        Ok(std::iter::from_fn(|| seq.next_element_seq::<T>().ok().flatten()).collect::<V>())
     }
 }
 
-impl<'de, T: Deserialize<'de> + Debug> Deserialize<'de> for Vec<T> {
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Vec<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_any(IteratorVisitor {
-            _marker: PhantomData,
-        })
+        reader.deserialize_any(IteratorVisitor::new())
     }
 
     fn deserialize_seq<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_seq(IteratorVisitor {
-            _marker: PhantomData,
-        })
+        reader.deserialize_seq(IteratorVisitor::new())
     }
 }
 

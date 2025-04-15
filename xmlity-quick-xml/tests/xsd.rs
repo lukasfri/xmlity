@@ -4,13 +4,13 @@
 use pretty_assertions::assert_eq;
 
 mod common;
-use common::quick_xml_deserialize_test;
+use common::{clean_string, quick_xml_deserialize_test};
 
 use std::fs;
 
 use xmlity::types::{
     utils::{IgnoredAny, XmlRoot},
-    value::{XmlComment, XmlDoctype},
+    value::{XmlComment, XmlDecl, XmlDoctype},
 };
 use xmlity::{Deserialize, Serialize, SerializeAttribute};
 
@@ -196,41 +196,43 @@ const XSD_XML_DOCTYPE: &str = r###"xs:schema PUBLIC "-//W3C//DTD XMLSCHEMA 20010
         ]"###;
 
 fn xsd_struct() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema {
-        sequence: vec![
-            SchemaEntry::Annotation(Annotation {}),
-            SchemaEntry::Annotation(Annotation {}),
-            SchemaEntry::Annotation(Annotation {}),
-        ],
-    })
-    .with_comments([
-        XmlComment::new(
-            " XML Schema schema for XML Schemas: Part 1: Structures "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " Note this schema is NOT the normative structures schema. "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " The prose copy in the structures REC is the normative "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " version (which shouldn't differ from this one except for "
-                .as_bytes()
-                .to_owned(),
-        ),
-        XmlComment::new(
-            " this comment and entity expansions, but just in case "
-                .as_bytes()
-                .to_owned(),
-        ),
-    ])
-    .with_doctype(XmlDoctype::new(XSD_XML_DOCTYPE.as_bytes()))
+    XmlRoot::new()
+        .with_decl(XmlDecl::new("1.0", Some("UTF-8"), None))
+        .with_comments([
+            XmlComment::new(
+                " XML Schema schema for XML Schemas: Part 1: Structures "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " Note this schema is NOT the normative structures schema. "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " The prose copy in the structures REC is the normative "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " version (which shouldn't differ from this one except for "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+            XmlComment::new(
+                " this comment and entity expansions, but just in case "
+                    .as_bytes()
+                    .to_owned(),
+            ),
+        ])
+        .with_doctype(XmlDoctype::new(XSD_XML_DOCTYPE.as_bytes()))
+        .with_element(Schema {
+            sequence: vec![
+                SchemaEntry::Annotation(Annotation {}),
+                SchemaEntry::Annotation(Annotation {}),
+                SchemaEntry::Annotation(Annotation {}),
+            ],
+        })
 }
 
 #[test]
@@ -255,12 +257,14 @@ const EMPTY_SCHEMA: &str = r####"
 "####;
 
 fn empty_schema() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema { sequence: vec![] })
+    XmlRoot::new()
+        .with_decl(XmlDecl::new("1.0", Some("UTF-8"), None))
+        .with_element(Schema { sequence: vec![] })
 }
 
 #[test]
 fn empty_schema_deserialize() {
-    let actual: XmlRoot<Schema> = quick_xml_deserialize_test(EMPTY_SCHEMA).unwrap();
+    let actual: XmlRoot<Schema> = quick_xml_deserialize_test(&clean_string(EMPTY_SCHEMA)).unwrap();
     let expected = empty_schema();
     assert_eq!(actual, expected);
 }
@@ -275,9 +279,11 @@ const SCHEMA_WITH_SINGLE_ANNOTATION: &str = r####"
 "####;
 
 fn schema_with_single_annotation() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema {
-        sequence: vec![SchemaEntry::Annotation(Annotation {})],
-    })
+    XmlRoot::new()
+        .with_decl(XmlDecl::new("1.0", Some("UTF-8"), None))
+        .with_element(Schema {
+            sequence: vec![SchemaEntry::Annotation(Annotation {})],
+        })
 }
 
 #[test]
@@ -751,9 +757,11 @@ const SCHEMA_WITH_SINGLE_ELEMENT: &str = r####"
 "####;
 
 fn schema_with_single_element() -> XmlRoot<Schema> {
-    XmlRoot::new(Schema {
-        sequence: vec![SchemaEntry::Element(single_element())],
-    })
+    XmlRoot::new()
+        .with_decl(XmlDecl::new("1.0", Some("UTF-8"), None))
+        .with_element(Schema {
+            sequence: vec![SchemaEntry::Element(single_element())],
+        })
 }
 
 #[test]

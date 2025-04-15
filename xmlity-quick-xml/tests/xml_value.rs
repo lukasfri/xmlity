@@ -4,7 +4,7 @@ mod common;
 use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
 use xmlity::{
-    types::value::{XmlAttribute, XmlChild, XmlElement, XmlText, XmlValue},
+    types::value::{XmlAttribute, XmlChild, XmlDecl, XmlElement, XmlText, XmlValue},
     ExpandedName, LocalName, XmlNamespace,
 };
 
@@ -108,6 +108,28 @@ fn complex_xml_value_deserialize() {
     let actual: XmlValue = quick_xml_deserialize_test(input.as_str()).unwrap();
 
     let expected = complex_xml_value();
+
+    assert_eq!(actual, expected);
+}
+
+const DECL_XML: &str = r###"<?xml version="1.0" encoding="UTF-8"?>"###;
+
+fn decl_xml_value() -> XmlDecl {
+    XmlDecl::new("1.0", Some("UTF-8"), None)
+}
+#[test]
+fn decl_xml_value_serialize() {
+    let actual = quick_xml_serialize_test(decl_xml_value()).unwrap();
+
+    assert_eq!(actual, clean_string(DECL_XML));
+}
+
+#[test]
+fn decl_xml_value_deserialize() {
+    let input = clean_string(DECL_XML);
+    let actual: XmlDecl = quick_xml_deserialize_test(input.as_str()).unwrap();
+
+    let expected = decl_xml_value();
 
     assert_eq!(actual, expected);
 }
