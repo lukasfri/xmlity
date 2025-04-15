@@ -9,8 +9,8 @@ use syn::{
 
 use crate::{
     options::{
-        GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts,
-        XmlityFieldGroupDeriveOpts, XmlityRootGroupDeriveOpts,
+        GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts,
+        XmlityFieldValueDeriveOpts, XmlityRootGroupDeriveOpts,
     },
     simple_compile_error, DeriveError, DeriveMacro, DeserializeBuilderField, FieldIdent,
     XmlityFieldDeriveOpts,
@@ -568,7 +568,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
 fn finish_constructor_expr<T: quote::ToTokens>(
     ident: T,
     element_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>,
+        Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
     >,
     attribute_fields: impl IntoIterator<
         Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
@@ -580,9 +580,9 @@ fn finish_constructor_expr<T: quote::ToTokens>(
 ) -> proc_macro2::TokenStream {
     let local_value_expressions_constructors = attribute_fields.into_iter()
       .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
-      .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Element)))
+      .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Value)))
       .map(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
-          let expression = if matches!(options, XmlityFieldDeriveOpts::Element(XmlityFieldElementDeriveOpts {default: true}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true})) {
+          let expression = if matches!(options, XmlityFieldDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true, ..})) {
               quote! {
                   ::core::option::Option::unwrap_or_default(self.#builder_field_ident)
               }

@@ -4,15 +4,15 @@ pub use element::DeriveDeserialize;
 pub use group::DeriveDeserializationGroup;
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{parse_quote, Expr, Ident, Stmt, Type, Visibility};
+use syn::{parse_quote, Expr, ExprWhile, Ident, Stmt, Type, Visibility};
 
 use crate::{
     options::{
-        XmlityFieldAttributeDeriveOpts, XmlityFieldElementDeriveOpts, XmlityFieldGroupDeriveOpts,
+        XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts,
     },
     utils::{self},
     DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent,
-    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldElementGroupDeriveOpts,
+    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldValueGroupDeriveOpts,
 };
 
 mod common;
@@ -279,7 +279,7 @@ fn builder_attribute_field_visitor<
 
 #[allow(clippy::too_many_arguments)]
 fn builder_element_field_visitor<
-    F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>,
+    F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>,
 >(
     access_ident: &Ident,
     builder_field_ident_prefix: proc_macro2::TokenStream,
@@ -296,8 +296,9 @@ fn builder_element_field_visitor<
         DeserializeBuilderField {
             builder_field_ident,
             field_type,
+            options: XmlityFieldValueDeriveOpts { extendable, .. },
             ..
-        }: DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>,
+        }: DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
         if_next_element_none: &[Stmt],
         finished_element: &[Stmt],
         after_attempt: &[Stmt],
@@ -306,24 +307,48 @@ fn builder_element_field_visitor<
         let temporary_value_ident = Ident::new("__v", Span::call_site());
 
         if pop_error {
+            let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
+            let extendable_loop: Option<ExprWhile> = if extendable {
+                Some(parse_quote! {
+                    while let Some(#loop_temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident)? {
+                        ::core::iter::Extend::extend_one(&mut #temporary_value_ident, #loop_temporary_value_ident);
+                    }
+                })
+            } else {
+                None
+            };
+
             parse_quote! {
                 if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
                     let #temporary_value_ident = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident)?;
                     let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
                         #(#if_next_element_none)*
                     };
+                    #extendable_loop
                     #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
 
                     #(#finished_element)*
                 }
             }
         } else {
+            let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
+            let extendable_loop: Option<ExprWhile> = if extendable {
+                Some(parse_quote! {
+                    while let Ok(Some(#loop_temporary_value_ident)) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident) {
+                        ::core::iter::Extend::extend_one(&mut #temporary_value_ident, #loop_temporary_value_ident);
+                    }
+                })
+            } else {
+                None
+            };
+
             parse_quote! {
                 if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
                     if let ::core::result::Result::Ok(#temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident) {
                         let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
                             #(#if_next_element_none)*
                         };
+                        #extendable_loop
                         #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
 
                         #(#finished_element)*
@@ -392,11 +417,11 @@ fn builder_element_field_visitor<
                     after_attempt,
                 ),
             )| match &var_field.options {
-                XmlityFieldElementGroupDeriveOpts::Element(_) => element_field_deserialize_impl(
+                XmlityFieldValueGroupDeriveOpts::Value(_) => element_field_deserialize_impl(
                     access_ident,
                     builder_field_ident_prefix,
                     var_field.map_options(|opts| match opts {
-                        XmlityFieldElementGroupDeriveOpts::Element(opts) => opts,
+                        XmlityFieldValueGroupDeriveOpts::Value(opts) => opts,
                         _ => unreachable!(),
                     }),
                     if_next_element_none.as_slice(),
@@ -404,11 +429,11 @@ fn builder_element_field_visitor<
                     after_attempt.as_slice(),
                     pop_error,
                 ),
-                XmlityFieldElementGroupDeriveOpts::Group(_) => group_field_deserialize_impl(
+                XmlityFieldValueGroupDeriveOpts::Group(_) => group_field_deserialize_impl(
                     access_ident,
                     builder_field_ident_prefix,
                     var_field.map_options(|opts| match opts {
-                        XmlityFieldElementGroupDeriveOpts::Group(opts) => opts,
+                        XmlityFieldValueGroupDeriveOpts::Group(opts) => opts,
                         _ => unreachable!(),
                     }),
                     if_contributed_to_groups.as_slice(),
@@ -462,7 +487,7 @@ fn all_attributes_done(
 }
 
 fn element_done(
-    field: DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
+    field: DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
     let DeserializeBuilderField {
@@ -471,10 +496,10 @@ fn element_done(
         ..
     } = field;
     match options {
-        XmlityFieldElementGroupDeriveOpts::Element(_) => parse_quote! {
+        XmlityFieldValueGroupDeriveOpts::Value(_) => parse_quote! {
             ::core::option::Option::is_some(&#builder_field_ident_prefix #builder_field_ident)
         },
-        XmlityFieldElementGroupDeriveOpts::Group(_) => parse_quote! {
+        XmlityFieldValueGroupDeriveOpts::Group(_) => parse_quote! {
             ::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident)
         },
     }
@@ -482,7 +507,7 @@ fn element_done(
 
 fn all_elements_done(
     fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>,
+        Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
     >,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
@@ -547,13 +572,12 @@ pub fn fields(
 fn element_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementDeriveOpts>>
-        + use<'_>,
+    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
         field.map_options_opt(|opt| match opt {
-            XmlityFieldDeriveOpts::Element(opts) => Some(opts),
+            XmlityFieldDeriveOpts::Value(opts) => Some(opts),
             _ => None,
         })
     }))
@@ -604,7 +628,7 @@ fn attribute_group_fields(
             XmlityFieldDeriveOpts::Group(opts) => {
                 Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
             }
-            XmlityFieldDeriveOpts::Element(_) => None,
+            XmlityFieldDeriveOpts::Value(_) => None,
         })
     }))
 }
@@ -612,17 +636,17 @@ fn attribute_group_fields(
 fn element_group_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldElementGroupDeriveOpts>>
+    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
         + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
         field.clone().map_options_opt(|opt| match opt {
-            XmlityFieldDeriveOpts::Element(opts) => {
-                Some(XmlityFieldElementGroupDeriveOpts::Element(opts))
+            XmlityFieldDeriveOpts::Value(opts) => {
+                Some(XmlityFieldValueGroupDeriveOpts::Value(opts))
             }
             XmlityFieldDeriveOpts::Group(opts) => {
-                Some(XmlityFieldElementGroupDeriveOpts::Group(opts))
+                Some(XmlityFieldValueGroupDeriveOpts::Group(opts))
             }
             XmlityFieldDeriveOpts::Attribute(_) => None,
         })
