@@ -11,7 +11,7 @@ use crate::{
         builder_element_field_visitor, constructor_expr, element_done,
     },
     options::{
-        ElementOrder, WithExpandedName, WithExpandedNameExt, XmlityRootAttributeDeriveOpts,
+        ElementOrder, WithExpandedNameExt, XmlityRootAttributeDeriveOpts,
         XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
     },
     simple_compile_error, DeriveDeserializeOption, DeriveError, DeriveMacro,

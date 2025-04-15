@@ -4,9 +4,7 @@ use syn::{
     parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt,
 };
 
-use crate::options::{
-    WithExpandedName, WithExpandedNameExt, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
-};
+use crate::options::{WithExpandedNameExt, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
 use crate::{DeriveError, DeriveMacro};
 
 trait SerializeBuilder {

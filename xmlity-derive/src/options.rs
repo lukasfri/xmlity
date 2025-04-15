@@ -95,9 +95,9 @@ pub trait WithExpandedName {
     // pub namespace: Option<XmlNamespace<'static>>,
     // #[darling(default)]
     // pub namespace_expr: Option<Expr>,
-    fn name<'a>(&'a self) -> Option<LocalName<'a>>;
-    fn namespace<'a>(&'a self) -> Option<XmlNamespace<'a>>;
-    fn namespace_expr<'a>(&'a self) -> Option<Expr>;
+    fn name(&self) -> Option<LocalName<'_>>;
+    fn namespace(&self) -> Option<XmlNamespace<'_>>;
+    fn namespace_expr(&self) -> Option<Expr>;
 }
 
 pub trait WithExpandedNameExt: WithExpandedName {
@@ -235,15 +235,15 @@ impl XmlityRootElementDeriveOpts {
 }
 
 impl WithExpandedName for XmlityRootElementDeriveOpts {
-    fn name<'a>(&'a self) -> Option<LocalName<'a>> {
+    fn name(&self) -> Option<LocalName<'_>> {
         self.name.clone()
     }
 
-    fn namespace<'a>(&'a self) -> Option<XmlNamespace<'a>> {
+    fn namespace(&self) -> Option<XmlNamespace<'_>> {
         self.namespace.clone()
     }
 
-    fn namespace_expr<'a>(&'a self) -> Option<Expr> {
+    fn namespace_expr(&self) -> Option<Expr> {
         self.namespace_expr.clone()
     }
 }
@@ -281,15 +281,15 @@ impl XmlityRootAttributeDeriveOpts {
 }
 
 impl WithExpandedName for XmlityRootAttributeDeriveOpts {
-    fn name<'a>(&'a self) -> Option<LocalName<'a>> {
+    fn name(&self) -> Option<LocalName<'_>> {
         self.name.clone()
     }
 
-    fn namespace<'a>(&'a self) -> Option<XmlNamespace<'a>> {
+    fn namespace(&self) -> Option<XmlNamespace<'_>> {
         self.namespace.clone()
     }
 
-    fn namespace_expr<'a>(&'a self) -> Option<Expr> {
+    fn namespace_expr(&self) -> Option<Expr> {
         self.namespace_expr.clone()
     }
 }
