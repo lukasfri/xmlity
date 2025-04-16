@@ -199,18 +199,25 @@ pub struct XmlityRootElementDeriveOpts {
     #[darling(default)]
     pub namespace_expr: Option<Expr>,
     #[darling(default)]
+    /// Serialize only
     pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
+    /// Serialize only
     pub enforce_prefix: bool,
     #[darling(default)]
+    /// Deserialize only
     pub allow_unknown_children: bool,
     #[darling(default)]
+    /// Deserialize only
     pub allow_unknown_attributes: bool,
     #[darling(default)]
+    /// Deserialize only
     pub deserialize_any_name: bool,
     #[darling(default)]
+    /// Deserialize only
     pub attribute_order: ElementOrder,
     #[darling(default)]
+    /// Deserialize only
     pub children_order: ElementOrder,
 }
 
@@ -258,10 +265,13 @@ pub struct XmlityRootAttributeDeriveOpts {
     #[darling(default)]
     pub namespace_expr: Option<Expr>,
     #[darling(default)]
+    /// Serialize only
     pub preferred_prefix: Option<Prefix<'static>>,
     #[darling(default)]
+    /// Serialize only
     pub enforce_prefix: bool,
     #[darling(default)]
+    /// Deserialize only
     pub deserialize_any_name: bool,
 }
 
@@ -298,8 +308,10 @@ impl WithExpandedName for XmlityRootAttributeDeriveOpts {
 #[darling(attributes(xgroup))]
 pub struct XmlityRootGroupDeriveOpts {
     #[darling(default)]
+    /// Deserialize only
     pub attribute_order: GroupOrder,
     #[darling(default)]
+    /// Deserialize only
     pub children_order: GroupOrder,
 }
 

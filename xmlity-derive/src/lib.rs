@@ -123,29 +123,147 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 /// ### #[xelement(...)]
 /// The `#[xelement(...)]` attribute can be applied to the root of a type to specify that the type should be serialized as an element.
 ///
+/// #### Options
+///
+/// <table style="width:100%;">
+/// <thead>
+/// <tr>
+/// <th>Name</th>
+/// <th>Type</th>
+/// <th>Description</th>
+/// </tr>
+/// </thead>
+/// <tbody style="vertical-align:top;">
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// name
+/// </th>
+/// <td>
+/// <code>String</code>
+/// </td>
+/// <td>
+/// Element name.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace
+/// </th>
+/// <td>
+/// <code>String</code>
+/// </td>
+/// <td>
+/// Must be a valid namespace string.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace_expr
+/// </th>
+/// <td>
+/// <code>Expr</code>
+/// </td>
+/// <td>
+/// Element namespace expression. This should be a value of type `xmlity::XmlNamespace`.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// preferred_prefix
+/// </th>
+/// <td>
+/// <code>String</code>
+/// </td>
+/// <td>
+/// Must be a valid XML prefix.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// enforce_prefix
+/// </th>
+/// <td>
+/// <code>bool</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// </tbody>
+/// </table>
+///
+/// #### Examples
+///
 /// <!-- Styling of docs inspired by quick-xml's docs :) -->
 /// <table style="width:100%;">
 /// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
 /// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
+/// <th>XML</th>
+/// <th>Rust XMLity types</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
 /// <tr>
 /// <td>
-/// A2
+///
+/// ```xml
+/// <note>
+///   <to>Tove</to>
+///   <from>Jani</from>
+///   <heading>Reminder</heading>
+///   <body>Message...</body>
+/// </note>
+/// ```
+///
 /// </td>
+/// <td rowspan="3">
+///
+///   ```rust
+///   #[derive(Serialize, Deserialize)]
+///   #[xelement(name = "from")]
+///   struct From(String);
+///
+///   #[derive(Serialize, Deserialize)]
+///   #[xelement(name = "heading")]
+///   struct Heading(String);
+///
+///   #[derive(Serialize, Deserialize)]
+///   #[xelement(name = "body")]
+///   struct Body(String);
+///
+///   #[derive(Serialize, Deserialize)]
+///   #[xelement(name = "note")]
+///   struct Note {
+///       to: To,
+///       from: From,
+///       heading: Heading,
+///       body: Body,
+///   }
+///   ```
+///
+/// </td>
+/// </tr>
+/// <tr>
+/// <th>Rust value</th>
+/// </tr>
+/// <tr>
 /// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
+///
+///   ```rust
+///   Note {
+///       to: To("Tove".to_string()),
+///       from: From("Jani".to_string()),
+///       heading: Heading("Reminder".to_string()),
+///       body: Body("Message...".to_string()),
+///   }
+///   ```
+///
 /// </td>
 /// </tr>
 /// </tbody>
@@ -155,31 +273,42 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 /// The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type should be serialized as a value. What this means differs based on the type of the root.
 /// - For enums, the enum will be serialized as a value, with the variant name (or specified name) as the value.
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
+/// #### Options
+///
 /// <table style="width:100%;">
 /// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
 /// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
+/// <th>Name</th>
+/// <th>Type</th>
+/// <th>Description</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
+/// <!--=================================================-->
 /// <tr>
+/// <th>
+/// rename_all
+/// </th>
 /// <td>
-/// A2
+/// <code>"lowercase"</code>, <code>"UPPERCASE"</code>, <code>"PascalCase"</code>, <code>"camelCase"</code>, <code>"snake_case"</code>, <code>"SCREAMING_SNAKE_CASE"</code>, <code>"kebab-case"</code>, <code>"SCREAMING-KEBAB-CASE"</code>
 /// </td>
 /// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
+/// Decides how enums should be serialized.
 /// </td>
 /// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// serialization_format
+/// </th>
+/// <td>
+/// <code>text</code>, <code>cdata</code>
+/// </td>
+/// <td>
+/// Decides in what form the value should be serialized.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
 /// </tbody>
 /// </table>
 ///
@@ -187,34 +316,6 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 /// If no root attribute is specified, the root will be serialized as a container with no individual serialization taking place. Instead it will defer to the fields of the root.
 /// - For structs, the fields will be serialized as a sequence of elements.
 /// - For enums, the active variant will be serialized as a sequence of elements.
-///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
-/// <table style="width:100%;">
-/// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
-/// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
-/// </tr>
-/// </thead>
-/// <tbody style="vertical-align:top;">
-/// <tr>
-/// <td>
-/// A2
-/// </td>
-/// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
-/// </td>
-/// </tr>
-/// </tbody>
-/// </table>
 #[proc_macro_derive(Serialize, attributes(xelement, xattribute, xgroup, xvalue))]
 pub fn derive_serialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     DeriveSerialize::derive(item)
@@ -236,26 +337,78 @@ pub fn derive_serialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenSt
 /// <thead>
 /// <tr><th colspan="2">
 ///
-/// #### Basics
+/// #### Options
 ///
-/// </th></tr>
+/// <table style="width:100%;">
+/// <thead>
 /// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
+/// <th>Name</th>
+/// <th>Type</th>
+/// <th>Description</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
+/// <!--=================================================-->
 /// <tr>
+/// <th>
+/// name
+/// </th>
 /// <td>
-/// A2
+/// <code>String</code>
 /// </td>
 /// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
+/// Element name.
 /// </td>
 /// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace
+/// </th>
+/// <td>
+/// <code>String</code>
+/// </td>
+/// <td>
+/// Must be a valid namespace string.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace_expr
+/// </th>
+/// <td>
+/// <code>Expr</code>
+/// </td>
+/// <td>
+/// Element namespace expression. This should be a value of type `xmlity::XmlNamespace`.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// preferred_prefix
+/// </th>
+/// <td>
+/// <code>String</code>
+/// </td>
+/// <td>
+/// Must be a valid XML prefix.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// enforce_prefix
+/// </th>
+/// <td>
+/// <code>bool</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
 /// </tbody>
 /// </table>
 #[proc_macro_derive(SerializeAttribute, attributes(xattribute))]
@@ -302,126 +455,227 @@ impl DeriveDeserializeOption {
 /// ### #[xelement(...)]
 /// The `#[xelement(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from an element.
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
+/// #### Options
+///
 /// <table style="width:100%;">
 /// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
 /// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
+/// <th>Name</th>
+/// <th>Type</th>
+/// <th>Description</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
+/// <!--=================================================-->
 /// <tr>
+/// <th>
+/// name
+/// </th>
 /// <td>
-/// A2
+/// <code>String</code>
 /// </td>
 /// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
+/// Element name.
 /// </td>
 /// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace
+/// </th>
+/// <td>
+/// <code>String</code>
+/// </td>
+/// <td>
+/// Must be a valid namespace string.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace_expr
+/// </th>
+/// <td>
+/// <code>Expr</code>
+/// </td>
+/// <td>
+/// Element namespace expression. This should be a value of type `xmlity::XmlNamespace`.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// allow_unknown_children
+/// </th>
+/// <td>
+/// <code>bool</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// allow_unknown_attributes
+/// </th>
+/// <td>
+/// <code>bool</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// deserialize_any_name
+/// </th>
+/// <td>
+/// <code>bool</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// attribute_order
+/// </th>
+/// <td>
+/// <code>"loose"</code>, <code>"none"</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// children_order
+/// </th>
+/// <td>
+/// <code>"loose"</code>, <code>"none"</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
 /// </tbody>
 /// </table>
 ///
 /// ### #[xvalue(...)]
 /// The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from a TEXT or CDATA node.
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
+/// #### Options
+///
 /// <table style="width:100%;">
 /// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
 /// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
+/// <th>Name</th>
+/// <th>Type</th>
+/// <th>Description</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
+/// <!--=================================================-->
 /// <tr>
+/// <th>
+/// rename_all
+/// </th>
 /// <td>
-/// A2
+/// <code>"lowercase"</code>, <code>"UPPERCASE"</code>, <code>"PascalCase"</code>, <code>"camelCase"</code>, <code>"snake_case"</code>, <code>"SCREAMING_SNAKE_CASE"</code>, <code>"kebab-case"</code>, <code>"SCREAMING-KEBAB-CASE"</code>
 /// </td>
 /// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
+/// Decides how enums should be deserialized.
 /// </td>
 /// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// serialization_format
+/// </th>
+/// <td>
+/// <code>text</code>, <code>cdata</code>
+/// </td>
+/// <td>
+/// Decides in what form the value should be deserialized from.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
 /// </tbody>
 /// </table>
 ///
 /// ### #[xattribute(...)]
 /// The `#[xattribute(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from an attribute.
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
+/// #### Options
+///
 /// <table style="width:100%;">
 /// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
 /// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
+/// <th>Name</th>
+/// <th>Type</th>
+/// <th>Description</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
+/// <!--=================================================-->
 /// <tr>
+/// <th>
+/// name
+/// </th>
 /// <td>
-/// A2
+/// <code>String</code>
 /// </td>
 /// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
+/// Element name.
 /// </td>
 /// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace
+/// </th>
+/// <td>
+/// <code>String</code>
+/// </td>
+/// <td>
+/// Must be a valid namespace string.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// namespace_expr
+/// </th>
+/// <td>
+/// <code>Expr</code>
+/// </td>
+/// <td>
+/// Element namespace expression. This should be a value of type `xmlity::XmlNamespace`.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// deserialize_any_name
+/// </th>
+/// <td>
+/// <code>bool</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
 /// </tbody>
 /// </table>
 ///
 /// ### No attribute
 /// If no attribute is specified, the type will be deserialized from a sequence. Of note is that enums will try to deserialize each variant in order, and the first one that succeeds will be used. This allows for a form of trial-and-error deserialization which can be useful in many situations, including supporting multiple types of elements or falling back to an [`xmlity::XmlValue`] in case of an unknown element.
-///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
-/// <table style="width:100%;">
-/// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
-/// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
-/// </tr>
-/// </thead>
-/// <tbody style="vertical-align:top;">
-/// <tr>
-/// <td>
-/// A2
-/// </td>
-/// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
-/// </td>
-/// </tr>
-/// </tbody>
-/// </table>
 #[proc_macro_derive(Deserialize, attributes(xelement, xattribute, xgroup, xvalue))]
 pub fn derive_deserialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     DeriveDeserialize::derive(item)
