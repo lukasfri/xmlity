@@ -9,9 +9,11 @@ use crate::{
         common::{DeserializeBuilder, SeqVisitLoop, VisitorBuilder, VisitorBuilderExt},
         constructor_expr, StructType,
     },
-    options::{ElementOrder, XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts},
-    DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent, XmlityFieldDeriveOpts,
-    XmlityFieldValueGroupDeriveOpts,
+    options::{
+        ElementOrder, XmlityFieldDeriveOpts, XmlityFieldGroupDeriveOpts,
+        XmlityFieldValueDeriveOpts, XmlityFieldValueGroupDeriveOpts,
+    },
+    DeriveError, DeriveResult, DeserializeField, FieldIdent,
 };
 
 pub struct SerializeNoneStructBuilder;
@@ -23,14 +25,12 @@ impl SerializeNoneStructBuilder {
 
     pub fn field_decl(
         element_fields: impl IntoIterator<
-            Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
+            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
         >,
-        group_fields: impl IntoIterator<
-            Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-        >,
+        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
     ) -> Vec<Stmt> {
         let getter_declarations = element_fields.into_iter().map::<Stmt, _>(
-                |DeserializeBuilderField {
+                |DeserializeField {
                      builder_field_ident,
                      field_type,
                      ..
@@ -40,7 +40,7 @@ impl SerializeNoneStructBuilder {
                     }
                 },
             ).chain(group_fields.into_iter().map::<Stmt, _>(
-                |DeserializeBuilderField {
+                |DeserializeField {
                      builder_field_ident,
                      field_type,
                      ..
@@ -60,16 +60,14 @@ impl SerializeNoneStructBuilder {
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
         element_fields: impl IntoIterator<
-            Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
+            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
         >,
-        group_fields: impl IntoIterator<
-            Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-        >,
+        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors =
             element_fields.into_iter().map(|a| a.map_options(XmlityFieldValueGroupDeriveOpts::Value))
-            .map::<(_, Expr), _>(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
+            .map::<(_, Expr), _>(|DeserializeField { builder_field_ident, field_ident, options, .. }| {
                 let expression = if matches!(options, XmlityFieldValueGroupDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) ) {
                     parse_quote! {
                         ::core::option::Option::unwrap_or_default(#builder_field_ident)
@@ -82,7 +80,7 @@ impl SerializeNoneStructBuilder {
                 (field_ident, expression)
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
-            |DeserializeBuilderField {
+            |DeserializeField {
                  builder_field_ident,
                  field_ident,
                  ..
@@ -103,9 +101,8 @@ impl SerializeNoneStructBuilder {
 
     pub fn seq_access(
         access_ident: &Ident,
-        fields: impl IntoIterator<
-                Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
-            > + Clone,
+        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
+            + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
     ) -> Vec<Stmt> {
@@ -154,7 +151,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder {
                 .map(|f| {
                     let field_ident = f.ident.clone().expect("Named struct");
 
-                    DeriveResult::Ok(DeserializeBuilderField {
+                    DeriveResult::Ok(DeserializeField {
                         builder_field_ident: FieldIdent::Named(field_ident.clone()),
                         field_ident: FieldIdent::Named(field_ident),
                         options: XmlityFieldDeriveOpts::from_field(f)?,
@@ -167,7 +164,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder {
                 .iter()
                 .enumerate()
                 .map(|(i, f)| {
-                    DeriveResult::Ok(DeserializeBuilderField {
+                    DeriveResult::Ok(DeserializeField {
                         builder_field_ident: FieldIdent::Named(Ident::new(
                             &format!("__{}", i),
                             f.span(),

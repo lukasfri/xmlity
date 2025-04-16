@@ -5,7 +5,7 @@ use darling::{FromAttributes, FromMeta};
 use quote::ToTokens;
 use syn::{DeriveInput, Expr};
 
-use crate::{DeriveError, ExpandedName};
+use crate::{DeriveError, ExpandedName, FieldIdent};
 
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
@@ -90,11 +90,6 @@ pub enum TextSerializationFormat {
 }
 
 pub trait WithExpandedName {
-    // pub name: Option<LocalName<'static>>,
-    // #[darling(default)]
-    // pub namespace: Option<XmlNamespace<'static>>,
-    // #[darling(default)]
-    // pub namespace_expr: Option<Expr>,
     fn name(&self) -> Option<LocalName<'_>>;
     fn namespace(&self) -> Option<XmlNamespace<'_>>;
     fn namespace_expr(&self) -> Option<Expr>;
@@ -120,7 +115,7 @@ impl<T: WithExpandedName> WithExpandedNameExt for T {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct LocalName<'a>(pub Cow<'a, str>);
 
 impl<'a> LocalName<'a> {
@@ -143,7 +138,7 @@ impl ToTokens for LocalName<'_> {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct XmlNamespace<'a>(pub Cow<'a, str>);
 
 impl<'a> XmlNamespace<'a> {
@@ -189,7 +184,7 @@ impl ToTokens for Prefix<'_> {
     }
 }
 
-#[derive(FromAttributes, Default)]
+#[derive(FromAttributes)]
 #[darling(attributes(xelement))]
 pub struct XmlityRootElementDeriveOpts {
     #[darling(default)]
@@ -248,7 +243,7 @@ impl WithExpandedName for XmlityRootElementDeriveOpts {
     }
 }
 
-#[derive(FromAttributes, Default)]
+#[derive(FromAttributes)]
 #[darling(attributes(xattribute))]
 pub struct XmlityRootAttributeDeriveOpts {
     #[darling(default)]
@@ -360,7 +355,7 @@ impl XmlityFieldValueDeriveOpts {
     }
 }
 
-#[derive(FromAttributes, Default, Clone)]
+#[derive(FromAttributes, Clone)]
 #[darling(attributes(xattribute))]
 pub struct XmlityFieldAttributeDeriveOpts {
     #[darling(default)]
@@ -383,7 +378,7 @@ impl XmlityFieldAttributeDeriveOpts {
     }
 }
 
-#[derive(FromAttributes, Default, Clone)]
+#[derive(FromAttributes, Clone)]
 #[darling(attributes(xgroup))]
 pub struct XmlityFieldGroupDeriveOpts {}
 
@@ -400,5 +395,102 @@ impl XmlityFieldGroupDeriveOpts {
         Self::from_attributes(&[attribute])
             .map(Some)
             .map_err(DeriveError::Darling)
+    }
+}
+
+#[derive(Clone)]
+pub enum XmlityFieldDeriveOpts {
+    Value(XmlityFieldValueDeriveOpts),
+    Attribute(XmlityFieldAttributeDeriveOpts),
+    Group(XmlityFieldGroupDeriveOpts),
+}
+
+#[derive(Clone)]
+pub enum XmlityFieldAttributeGroupDeriveOpts {
+    Attribute(XmlityFieldAttributeDeriveOpts),
+    Group(XmlityFieldGroupDeriveOpts),
+}
+
+#[derive(Clone)]
+pub enum XmlityFieldValueGroupDeriveOpts {
+    Value(XmlityFieldValueDeriveOpts),
+    Group(XmlityFieldGroupDeriveOpts),
+}
+
+impl XmlityFieldDeriveOpts {
+    pub fn from_field(field: &syn::Field) -> Result<Self, DeriveError> {
+        let element = XmlityFieldValueDeriveOpts::from_field(field)?;
+        let attribute = XmlityFieldAttributeDeriveOpts::from_field(field)?;
+        let group = XmlityFieldGroupDeriveOpts::from_field(field)?;
+        Ok(match (element, attribute, group) {
+            (Some(element), None, None) => Self::Value(element),
+            (None, Some(attribute), None) => Self::Attribute(attribute),
+            (None, None, Some(group)) => Self::Group(group),
+            (None, None, None) => Self::Value(XmlityFieldValueDeriveOpts::default()),
+            _ => {
+                return Err(DeriveError::custom(
+                    "Cannot have multiple xmlity field attributes on the same field.",
+                ))
+            }
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct DeserializeField<BuilderFieldIdent, OptionType> {
+    pub builder_field_ident: BuilderFieldIdent,
+    // If the field is indexed, this is none.
+    pub field_ident: FieldIdent,
+    pub field_type: syn::Type,
+    pub options: OptionType,
+}
+
+impl<A, T> DeserializeField<A, T> {
+    pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> DeserializeField<A, U> {
+        DeserializeField {
+            builder_field_ident: self.builder_field_ident,
+            field_ident: self.field_ident,
+            field_type: self.field_type,
+            options: f(self.options),
+        }
+    }
+
+    pub fn map_options_opt<U, F: FnOnce(T) -> Option<U>>(
+        self,
+        f: F,
+    ) -> Option<DeserializeField<A, U>> {
+        f(self.options).map(|options| DeserializeField {
+            builder_field_ident: self.builder_field_ident,
+            field_ident: self.field_ident,
+            field_type: self.field_type,
+            options,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct SerializeField<OptionType> {
+    // If the field is indexed, this is none.
+    pub field_ident: FieldIdent,
+    pub field_type: syn::Type,
+    pub options: OptionType,
+}
+
+#[allow(dead_code)]
+impl<T> SerializeField<T> {
+    pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> SerializeField<U> {
+        SerializeField {
+            field_ident: self.field_ident,
+            field_type: self.field_type,
+            options: f(self.options),
+        }
+    }
+
+    pub fn map_options_opt<U, F: FnOnce(T) -> Option<U>>(self, f: F) -> Option<SerializeField<U>> {
+        f(self.options).map(|options| SerializeField {
+            field_ident: self.field_ident,
+            field_type: self.field_type,
+            options,
+        })
     }
 }

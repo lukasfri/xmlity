@@ -4,13 +4,11 @@ use syn::{parse_quote, Arm, ImplItemFn, ItemImpl, Stmt};
 use syn::{DeriveInput, Ident};
 
 use crate::options::{WithExpandedNameExt, XmlityRootAttributeDeriveOpts};
-use crate::simple_compile_error;
 
 use crate::DeriveError;
 use crate::DeriveMacro;
 
 trait SerializeAttributeBuilder {
-    /// Returns the content inside the `Deserialize::deserialize` function.
     fn serialize_attribute_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -58,17 +56,17 @@ impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
     }
 }
 
-pub struct StructUnnamedSingleFieldAttributeSerializeBuilder<'a> {
+pub struct SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
     opts: &'a XmlityRootAttributeDeriveOpts,
 }
 
-impl<'a> StructUnnamedSingleFieldAttributeSerializeBuilder<'a> {
+impl<'a> SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
     pub fn new(opts: &'a XmlityRootAttributeDeriveOpts) -> Self {
         Self { opts }
     }
 }
 
-impl SerializeAttributeBuilder for StructUnnamedSingleFieldAttributeSerializeBuilder<'_> {
+impl SerializeAttributeBuilder for SerializeAttributeStructUnnamedSingleFieldBuilder<'_> {
     fn serialize_attribute_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -169,27 +167,49 @@ impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
     }
 }
 
+enum SerializeAttributeOption {
+    Attribute(XmlityRootAttributeDeriveOpts),
+}
+
+impl SerializeAttributeOption {
+    pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
+        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast)?.ok_or_else(|| {
+            DeriveError::custom("SerializeAttribute requires the `xattribute` option.")
+        })?;
+
+        Ok(SerializeAttributeOption::Attribute(attribute_opts))
+    }
+}
+
 pub struct DeriveSerializeAttribute;
 
 impl DeriveMacro for DeriveSerializeAttribute {
     fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
-        let opts = XmlityRootAttributeDeriveOpts::parse(ast)?.unwrap_or_default();
+        let SerializeAttributeOption::Attribute(opts) = SerializeAttributeOption::parse(ast)?;
 
         match &ast.data {
             syn::Data::Struct(syn::DataStruct { fields, .. }) => match fields {
+                syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => Err(
+                    DeriveError::custom("Structs with more than one field are not supported."),
+                ),
                 syn::Fields::Unnamed(_) => {
-                    StructUnnamedSingleFieldAttributeSerializeBuilder::new(&opts)
+                    SerializeAttributeStructUnnamedSingleFieldBuilder::new(&opts)
                         .serialize_attribute_trait_impl(ast)
                         .map(|x| x.to_token_stream())
                 }
-                syn::Fields::Named(_) | syn::Fields::Unit => {
-                    Ok(simple_compile_error("Named fields are not supported yet"))
+                syn::Fields::Named(_) => {
+                    Err(DeriveError::custom("Named fields are not supported yet."))
+                }
+                syn::Fields::Unit => {
+                    Err(DeriveError::custom("Unit structs are not supported yet."))
                 }
             },
             syn::Data::Enum(_) => EnumSingleFieldAttributeSerializeBuilder::new()
                 .serialize_attribute_trait_impl(ast)
                 .map(|x| x.to_token_stream()),
-            syn::Data::Union(_) => unreachable!(),
+            syn::Data::Union(_) => Err(DeriveError::custom(
+                "Unions are not supported for serialization to attributes.",
+            )),
         }
     }
 }

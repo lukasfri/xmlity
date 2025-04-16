@@ -8,11 +8,11 @@ use syn::{parse_quote, Expr, ExprWhile, Ident, Stmt, Type, Visibility};
 
 use crate::{
     options::{
-        XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts,
+        XmlityFieldAttributeDeriveOpts, XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts,
+        XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts, XmlityFieldValueGroupDeriveOpts,
     },
     utils::{self},
-    DeriveError, DeriveResult, DeserializeBuilderField, FieldIdent,
-    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldValueGroupDeriveOpts,
+    DeriveError, DeriveResult, DeserializeField, FieldIdent,
 };
 
 mod common;
@@ -137,11 +137,11 @@ fn struct_definition_expr<I: ToTokens>(
 fn attribute_field_deserialize_impl(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeBuilderField {
+    DeserializeField {
         builder_field_ident,
         field_type,
         ..
-    }: DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
+    }: DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
     if_next_attribute_none: &[Stmt],
     finished_attribute: &[Stmt],
     after_attempt: &[Stmt],
@@ -180,10 +180,10 @@ fn attribute_field_deserialize_impl(
 fn group_field_contribute_attributes(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeBuilderField {
+    DeserializeField {
         builder_field_ident,
         ..
-    }: DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
+    }: DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
@@ -216,7 +216,7 @@ fn group_field_contribute_attributes(
 
 #[allow(clippy::too_many_arguments)]
 fn builder_attribute_field_visitor<
-    F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>>,
+    F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>>,
 >(
     access_ident: &Ident,
     builder_field_ident_prefix: proc_macro2::TokenStream,
@@ -280,12 +280,12 @@ fn builder_attribute_field_visitor<
 fn element_field_deserialize_impl_pop_error(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeBuilderField {
+    DeserializeField {
         builder_field_ident,
         field_type,
         options: XmlityFieldValueDeriveOpts { extendable, .. },
         ..
-    }: DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
+    }: DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
     if_next_element_none: &[Stmt],
     finished_element: &[Stmt],
 ) -> Vec<Stmt> {
@@ -319,12 +319,12 @@ fn element_field_deserialize_impl_pop_error(
 fn element_field_deserialize_impl_ignore_error(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeBuilderField {
+    DeserializeField {
         builder_field_ident,
         field_type,
         options: XmlityFieldValueDeriveOpts { extendable, .. },
         ..
-    }: DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
+    }: DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
     if_next_element_none: &[Stmt],
     finished_element: &[Stmt],
     after_attempt: &[Stmt],
@@ -361,7 +361,7 @@ fn element_field_deserialize_impl_ignore_error(
 fn element_field_deserialize_impl(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    deserialize_builder_field: DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
+    deserialize_builder_field: DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
     if_next_element_none: &[Stmt],
     finished_element: &[Stmt],
     after_attempt: &[Stmt],
@@ -390,10 +390,10 @@ fn element_field_deserialize_impl(
 fn group_field_contribute_elements(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeBuilderField {
+    DeserializeField {
         builder_field_ident,
         ..
-    }: DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
+    }: DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
@@ -426,7 +426,7 @@ fn group_field_contribute_elements(
 
 #[allow(clippy::too_many_arguments)]
 fn builder_element_field_visitor<
-    F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>,
+    F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>,
 >(
     access_ident: &Ident,
     builder_field_ident_prefix: proc_macro2::TokenStream,
@@ -486,10 +486,10 @@ fn builder_element_field_visitor<
 }
 
 fn attribute_done_expr(
-    field: DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
+    field: DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
-    let DeserializeBuilderField {
+    let DeserializeField {
         builder_field_ident,
         options,
         ..
@@ -505,9 +505,7 @@ fn attribute_done_expr(
 }
 
 fn all_attributes_done_expr(
-    fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
-    >,
+    fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>>,
 
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
@@ -527,10 +525,10 @@ fn all_attributes_done_expr(
 }
 
 fn element_done_expr(
-    field: DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
+    field: DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
-    let DeserializeBuilderField {
+    let DeserializeField {
         builder_field_ident,
         options,
         ..
@@ -546,9 +544,7 @@ fn element_done_expr(
 }
 
 fn all_elements_done_expr(
-    fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
-    >,
+    fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
     let conditions = fields
@@ -569,7 +565,7 @@ fn all_elements_done_expr(
 pub fn fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldDeriveOpts>>,
+    impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldDeriveOpts>>,
     DeriveError,
 > {
     let data_struct = match ast.data {
@@ -584,7 +580,7 @@ pub fn fields(
             .map(|f| {
                 let field_ident = f.ident.clone().expect("Named struct");
 
-                DeriveResult::Ok(DeserializeBuilderField {
+                DeriveResult::Ok(DeserializeField {
                     builder_field_ident: FieldIdent::Named(field_ident.clone()),
                     field_ident: FieldIdent::Named(field_ident),
                     options: XmlityFieldDeriveOpts::from_field(f)?,
@@ -597,7 +593,7 @@ pub fn fields(
             .iter()
             .enumerate()
             .map(|(i, f)| {
-                DeriveResult::Ok(DeserializeBuilderField {
+                DeriveResult::Ok(DeserializeField {
                     builder_field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     options: XmlityFieldDeriveOpts::from_field(f)?,
@@ -612,7 +608,7 @@ pub fn fields(
 fn element_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>> + use<'_>,
+    impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
@@ -626,8 +622,7 @@ fn element_fields(
 fn attribute_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>>
-        + use<'_>,
+    impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
@@ -641,7 +636,7 @@ fn attribute_fields(
 fn group_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>> + use<'_>,
+    impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
@@ -655,9 +650,8 @@ fn group_fields(
 fn attribute_group_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<
-            Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
-        > + use<'_>,
+    impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>>
+        + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
@@ -676,8 +670,7 @@ fn attribute_group_fields(
 fn element_group_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
-        + use<'_>,
+    impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {

@@ -1,7 +1,7 @@
 use std::iter;
 
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::{
     parse_quote, DeriveInput, Ident, ImplItemFn, Index, ItemImpl, ItemStruct, Lifetime,
     LifetimeParam, Stmt,
@@ -9,17 +9,15 @@ use syn::{
 
 use crate::{
     options::{
-        GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts,
-        XmlityFieldValueDeriveOpts, XmlityRootGroupDeriveOpts,
+        GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldDeriveOpts,
+        XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts, XmlityRootGroupDeriveOpts,
     },
-    simple_compile_error, DeriveError, DeriveMacro, DeserializeBuilderField, FieldIdent,
-    XmlityFieldDeriveOpts,
+    DeriveError, DeriveMacro, DeserializeField, FieldIdent,
 };
 
 use super::{all_attributes_done_expr, all_elements_done_expr, constructor_expr, StructType};
 
 trait DeserializationGroupBuilderBuilder {
-    /// Returns the content inside the `DeserializationGroupBuilder::contribute_attributes` function.
     fn contribute_attributes_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -309,11 +307,11 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
     }
 }
 
-pub struct StructGroup<'a> {
+pub struct DeriveDeserializationGroupStruct<'a> {
     opts: &'a XmlityRootGroupDeriveOpts,
 }
 
-impl<'a> StructGroup<'a> {
+impl<'a> DeriveDeserializationGroupStruct<'a> {
     pub fn new(opts: &'a XmlityRootGroupDeriveOpts) -> Self {
         Self { opts }
     }
@@ -331,7 +329,7 @@ impl<'a> StructGroup<'a> {
     }
 }
 
-impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
+impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_> {
     fn contribute_attributes_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -440,7 +438,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
         let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
             .into_iter()
             .map(
-                |DeserializeBuilderField {
+                |DeserializeField {
                      builder_field_ident,
                      field_type,
                      ..
@@ -452,7 +450,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
                 },
             )
             .chain(crate::de::element_fields(ast)?.into_iter().map(
-                |DeserializeBuilderField {
+                |DeserializeField {
                      builder_field_ident,
                      field_type,
                      ..
@@ -464,7 +462,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
                 },
             ));
         let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
-            |DeserializeBuilderField {
+            |DeserializeField {
                  builder_field_ident,
                  field_type,
                  ..
@@ -514,14 +512,14 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
     ) -> Result<Vec<Stmt>, DeriveError> {
         let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
             .into_iter()
-            .map(|DeserializeBuilderField { field_ident, .. }| {
+            .map(|DeserializeField { field_ident, .. }| {
                 let expression = quote! {
                     ::core::option::Option::None
                 };
                 (field_ident, expression)
             })
             .chain(crate::de::element_fields(ast)?.into_iter().map(
-                |DeserializeBuilderField { field_ident, .. }| {
+                |DeserializeField { field_ident, .. }| {
                     let expression = quote! {
                         ::core::option::Option::None
                     };
@@ -529,7 +527,7 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
                 },
             ));
         let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
-            |DeserializeBuilderField {
+            |DeserializeField {
                  field_ident,
                  field_type,
                  ..
@@ -568,21 +566,17 @@ impl DeserializationGroupBuilderBuilder for StructGroup<'_> {
 
 fn finish_constructor_expr<T: quote::ToTokens>(
     ident: T,
-    element_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueDeriveOpts>,
-    >,
+    element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>>,
     attribute_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
+        Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
     >,
-    group_fields: impl IntoIterator<
-        Item = DeserializeBuilderField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-    >,
+    group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
     constructor_type: &StructType,
 ) -> proc_macro2::TokenStream {
     let local_value_expressions_constructors = attribute_fields.into_iter()
       .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
       .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Value)))
-      .map(|DeserializeBuilderField { builder_field_ident, field_ident, options, .. }| {
+      .map(|DeserializeField { builder_field_ident, field_ident, options, .. }| {
           let expression = if matches!(options, XmlityFieldDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true, ..})) {
               quote! {
                   ::core::option::Option::unwrap_or_default(self.#builder_field_ident)
@@ -595,7 +589,7 @@ fn finish_constructor_expr<T: quote::ToTokens>(
           (field_ident, expression)
       });
     let group_value_expressions_constructors = group_fields.into_iter().map(
-        |DeserializeBuilderField {
+        |DeserializeField {
              builder_field_ident,
              field_ident,
              ..
@@ -614,20 +608,32 @@ fn finish_constructor_expr<T: quote::ToTokens>(
     constructor_expr(ident, value_expressions_constructors, constructor_type)
 }
 
+enum DeserializationGroupOption {
+    Group(XmlityRootGroupDeriveOpts),
+}
+
+impl DeserializationGroupOption {
+    pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
+        let group_opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
+
+        Ok(DeserializationGroupOption::Group(group_opts))
+    }
+}
+
 pub struct DeriveDeserializationGroup;
 
 impl DeriveMacro for DeriveDeserializationGroup {
     fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
-        let opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
+        let DeserializationGroupOption::Group(opts) = DeserializationGroupOption::parse(ast)?;
 
         match &ast.data {
-            syn::Data::Struct(_) => StructGroup::new(&opts).total_impl(ast),
-            syn::Data::Enum(_) => {
-                Ok(simple_compile_error("Enums are not supported yet").to_token_stream())
-            }
-            syn::Data::Union(_) => {
-                Ok(simple_compile_error("Unions are not supported yet").to_token_stream())
-            }
+            syn::Data::Struct(_) => DeriveDeserializationGroupStruct::new(&opts).total_impl(ast),
+            syn::Data::Enum(_) => Err(DeriveError::custom(
+                "Enums are not supported for deserialization groups.",
+            )),
+            syn::Data::Union(_) => Err(DeriveError::custom(
+                "Unions are not supported for deserialization groups.",
+            )),
         }
     }
 }
