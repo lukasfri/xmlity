@@ -207,12 +207,11 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 ///
 /// #### Examples
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
 /// <table style="width:100%;">
 /// <thead>
 /// <tr>
 /// <th>XML</th>
-/// <th>Rust XMLity types</th>
+/// <th>Rust types</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
@@ -231,20 +230,20 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 /// </td>
 /// <td rowspan="3">
 ///
-///   ```rust
-///   #[derive(Serialize, Deserialize)]
+///   ```ignore
+///   #[derive(Serialize)]
 ///   #[xelement(name = "from")]
 ///   struct From(String);
 ///
-///   #[derive(Serialize, Deserialize)]
+///   #[derive(Serialize)]
 ///   #[xelement(name = "heading")]
 ///   struct Heading(String);
 ///
-///   #[derive(Serialize, Deserialize)]
+///   #[derive(Serialize)]
 ///   #[xelement(name = "body")]
 ///   struct Body(String);
 ///
-///   #[derive(Serialize, Deserialize)]
+///   #[derive(Serialize)]
 ///   #[xelement(name = "note")]
 ///   struct Note {
 ///       to: To,
@@ -262,7 +261,7 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 /// <tr>
 /// <td>
 ///
-///   ```rust
+///   ```ignore
 ///   Note {
 ///       to: To("Tove".to_string()),
 ///       from: From("Jani".to_string()),
@@ -339,7 +338,6 @@ pub fn derive_serialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenSt
 ///
 /// ### #[xattribute(...)]
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
 /// <table style="width:100%;">
 /// <thead>
 /// <tr><th colspan="2">
@@ -549,6 +547,76 @@ pub fn derive_serialize_attribute_fn(item: proc_macro::TokenStream) -> proc_macr
 /// </tbody>
 /// </table>
 ///
+/// #### Examples
+///
+/// <table style="width:100%;">
+/// <thead>
+/// <tr>
+/// <th>XML</th>
+/// <th>Rust types</th>
+/// </tr>
+/// </thead>
+/// <tbody style="vertical-align:top;">
+/// <tr>
+/// <td>
+///
+/// ```xml
+/// <note>
+///   <to>Tove</to>
+///   <from>Jani</from>
+///   <heading>Reminder</heading>
+///   <body>Message...</body>
+/// </note>
+/// ```
+///
+/// </td>
+/// <td rowspan="3">
+///
+///   ```ignore
+///   #[derive(Deserialize)]
+///   #[xelement(name = "from")]
+///   struct From(String);
+///
+///   #[derive(Deserialize)]
+///   #[xelement(name = "heading")]
+///   struct Heading(String);
+///
+///   #[derive(Deserialize)]
+///   #[xelement(name = "body")]
+///   struct Body(String);
+///
+///   #[derive(Deserialize)]
+///   #[xelement(name = "note")]
+///   struct Note {
+///       to: To,
+///       from: From,
+///       heading: Heading,
+///       body: Body,
+///   }
+///   ```
+///
+/// </td>
+/// </tr>
+/// <tr>
+/// <th>Rust value</th>
+/// </tr>
+/// <tr>
+/// <td>
+///
+///   ```ignore
+///   Note {
+///       to: To("Tove".to_string()),
+///       from: From("Jani".to_string()),
+///       heading: Heading("Reminder".to_string()),
+///       body: Body("Message...".to_string()),
+///   }
+///   ```
+///
+/// </td>
+/// </tr>
+/// </tbody>
+/// </table>
+///
 /// ### #[xvalue(...)]
 /// The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from a TEXT or CDATA node.
 ///
@@ -672,33 +740,9 @@ pub fn derive_deserialize_fn(item: proc_macro::TokenStream) -> proc_macro::Token
 ///
 /// ### #[xgroup(...)]
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
-/// <table style="width:100%;">
-/// <thead>
-/// <tr><th colspan="2">
+/// #### Options
 ///
-/// #### Basics
-///
-/// </th></tr>
-/// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
-/// </tr>
-/// </thead>
-/// <tbody style="vertical-align:top;">
-/// <tr>
-/// <td>
-/// A2
-/// </td>
-/// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
-/// </td>
-/// </tr>
-/// </tbody>
-/// </table>
+/// None for serialization currently.
 #[proc_macro_derive(SerializationGroup, attributes(xelement, xattribute, xgroup))]
 pub fn derive_serialization_group_attribute_fn(
     item: proc_macro::TokenStream,
@@ -714,31 +758,42 @@ pub fn derive_serialization_group_attribute_fn(
 ///
 /// ### #[xgroup(...)]
 ///
-/// <!-- Styling of docs inspired by quick-xml's docs :) -->
+/// #### Options
+///
 /// <table style="width:100%;">
 /// <thead>
-/// <tr><th colspan="2">
-///
-/// #### Basics
-///
-/// </th></tr>
 /// <tr>
-/// <th>To parse all these XML's...</th>
-/// <th>...use these Rust type(s)</th>
+/// <th>Name</th>
+/// <th>Type</th>
+/// <th>Description</th>
 /// </tr>
 /// </thead>
 /// <tbody style="vertical-align:top;">
+/// <!--=================================================-->
 /// <tr>
+/// <th>
+/// attribute_order
+/// </th>
 /// <td>
-/// A2
+/// <code>"strict"</code>, <code>"loose"</code>, <code>"none"</code>
 /// </td>
 /// <td>
-/// A3
-/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// A4
-/// </div>
+/// Element namespace.
 /// </td>
 /// </tr>
+/// <!--=================================================-->
+/// <tr>
+/// <th>
+/// children_order
+/// </th>
+/// <td>
+/// <code>"strict"</code>, <code>"loose"</code>, <code>"none"</code>
+/// </td>
+/// <td>
+/// Element namespace.
+/// </td>
+/// </tr>
+/// <!--=================================================-->
 /// </tbody>
 /// </table>
 #[proc_macro_derive(DeserializationGroup, attributes(xelement, xattribute, xgroup))]
