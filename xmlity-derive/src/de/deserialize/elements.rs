@@ -33,9 +33,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         attribute_fields: impl IntoIterator<
             Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
         >,
-        group_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-        >,
+        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
     ) -> Vec<Stmt> {
         let getter_declarations = attribute_fields
             .into_iter()
@@ -86,9 +84,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         attribute_fields: impl IntoIterator<
             Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
         >,
-        group_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>,
-        >,
+        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors = attribute_fields.into_iter()
@@ -129,9 +125,8 @@ impl<'a> StructElementVisitorBuilder<'a> {
     pub fn attribute_access(
         access_ident: &Ident,
         span: proc_macro2::Span,
-        fields: impl IntoIterator<
-                Item = DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>,
-            > + Clone,
+        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>>
+            + Clone,
         allow_unknown_attributes: bool,
         order: ElementOrder,
     ) -> Vec<Stmt> {
@@ -215,9 +210,8 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
     pub fn element_access(
         element_access_ident: &Ident,
-        fields: impl IntoIterator<
-                Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
-            > + Clone,
+        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
+            + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
     ) -> Vec<Stmt> {
