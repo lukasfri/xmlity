@@ -25,8 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- release v0.0.0
-
 ## [0.0.0](https://github.com/lukasfri/xmlity/releases/tag/xmlity-quick-xml-v0.0.0) - 2025-04-09
 
 ### Other
