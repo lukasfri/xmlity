@@ -104,7 +104,7 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
     }
 }
 
-/// Derives the [`xmlity::Serialize`] trait for a type.
+/// Derives the [`Serialize`] trait for a type.
 ///
 /// This macro works to serialize to XML-elements and other types of nodes including TEXT and CDATA.
 /// To serialize to attributes, use the [`SerializeAttribute`] derive macro instead.
@@ -152,7 +152,41 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 /// </table>
 ///
 /// ### #[xvalue(...)]
-/// The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type should be serialized as a value.
+/// The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type should be serialized as a value. What this means differs based on the type of the root.
+/// - For enums, the enum will be serialized as a value, with the variant name (or specified name) as the value.
+///
+/// <!-- Styling of docs inspired by quick-xml's docs :) -->
+/// <table style="width:100%;">
+/// <thead>
+/// <tr><th colspan="2">
+///
+/// #### Basics
+///
+/// </th></tr>
+/// <tr>
+/// <th>To parse all these XML's...</th>
+/// <th>...use these Rust type(s)</th>
+/// </tr>
+/// </thead>
+/// <tbody style="vertical-align:top;">
+/// <tr>
+/// <td>
+/// A2
+/// </td>
+/// <td>
+/// A3
+/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+/// A4
+/// </div>
+/// </td>
+/// </tr>
+/// </tbody>
+/// </table>
+///
+/// ### No root attribute
+/// If no root attribute is specified, the root will be serialized as a container with no individual serialization taking place. Instead it will defer to the fields of the root.
+/// - For structs, the fields will be serialized as a sequence of elements.
+/// - For enums, the active variant will be serialized as a sequence of elements.
 ///
 /// <!-- Styling of docs inspired by quick-xml's docs :) -->
 /// <table style="width:100%;">
@@ -186,12 +220,12 @@ pub fn derive_serialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenSt
     DeriveSerialize::derive(item)
 }
 
-/// Derives the [`xmlity::SerializeAttribute`] trait for a type.
+/// Derives the [`SerializeAttribute`] trait for a type.
 ///
 /// This macro works to serialize to XML-attributes.
 /// To serialize to elements, use the [`Serialize`] derive macro instead.
 ///
-/// To configure the serialization, use the `#[xattribute(...)]` attribute on the root of the type.
+/// To configure the serialization, use the `#[xattribute(...)]` attribute on the root of the type. This attribute is required.
 ///
 /// ## Configuration
 ///
@@ -253,16 +287,15 @@ impl DeriveDeserializeOption {
     }
 }
 
-/// Derives the [`xmlity::Deserialize`] trait for a type.
+/// Derives the [`Deserialize`] trait for a type.
 ///
 /// This macro supports deriving deserialization from elements, attributes and values.
 ///
-/// Any combination of the following can be applied to the root of a type:
+/// One of the following can be applied to the root of a type:
 /// - `#[xelement(...)]` - Specifies that the type can be deserialized as an element.
 /// - `#[xvalue(...)]` - Specifies that the type can be deserialized as a value.
 /// - `#[xattribute(...)]` - Specifies that the type can be deserialized as an attribute.
-///
-/// If a type is compatible, it will be able to deserialize a composite type.
+/// - No attribute/default behavior - Specifies that the type is a composite type. Can be deserialized from a sequence of elements.
 ///
 /// ## Configuration
 ///
@@ -358,14 +391,45 @@ impl DeriveDeserializeOption {
 /// </tr>
 /// </tbody>
 /// </table>
+///
+/// ### No attribute
+/// If no attribute is specified, the type will be deserialized from a sequence. Of note is that enums will try to deserialize each variant in order, and the first one that succeeds will be used. This allows for a form of trial-and-error deserialization which can be useful in many situations, including supporting multiple types of elements or falling back to an [`xmlity::XmlValue`] in case of an unknown element.
+///
+/// <!-- Styling of docs inspired by quick-xml's docs :) -->
+/// <table style="width:100%;">
+/// <thead>
+/// <tr><th colspan="2">
+///
+/// #### Basics
+///
+/// </th></tr>
+/// <tr>
+/// <th>To parse all these XML's...</th>
+/// <th>...use these Rust type(s)</th>
+/// </tr>
+/// </thead>
+/// <tbody style="vertical-align:top;">
+/// <tr>
+/// <td>
+/// A2
+/// </td>
+/// <td>
+/// A3
+/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+/// A4
+/// </div>
+/// </td>
+/// </tr>
+/// </tbody>
+/// </table>
 #[proc_macro_derive(Deserialize, attributes(xelement, xattribute, xgroup, xvalue))]
 pub fn derive_deserialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     DeriveDeserialize::derive(item)
 }
 
-/// Derives the [`xmlity::SerializationGroup`] trait for a type.
+/// Derives the [`SerializationGroup`] trait for a type.
 ///
-/// To configure the serialization, use the `#[xgroup(...)]` attribute on the root of the type.
+/// To configure the serialization, use the `#[xgroup(...)]` attribute on the root of the type. This trait/attribute is not mutually exclusive with the [`Serialize`] trait/attributes. This means that you could for example use a struct both as a sequence (Serialize with no attribute) and as a group (SerializationGroup with the attribute).
 ///
 /// ## Configuration
 ///
@@ -405,9 +469,9 @@ pub fn derive_serialization_group_attribute_fn(
     DeriveSerializationGroup::derive(item)
 }
 
-/// Derives the [`xmlity::DeserializationGroup`] trait for a type.
+/// Derives the [`DeserializationGroup`] trait for a type.
 ///
-/// To configure the deserialization, use the `#[xgroup(...)]` attribute on the root of the type.
+/// To configure the deserialization, use the `#[xgroup(...)]` attribute on the root of the type. This trait/attribute is not mutually exclusive with the [`Deserialize`] trait/attribute. This means that you could for example use a struct both as a sequence (Deserialize with no attribute) and as a group (DeserializationGroup with the attribute).
 ///
 /// ## Configuration
 ///

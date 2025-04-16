@@ -6,12 +6,12 @@
 //! Currently, XMLity does not currently optimize for ergonomics, which means that it is quite verbose to use. However, it is designed to be easy to use and extend.
 //!
 //! The most important types in XMLity are:
-//! - [`Deserialize`], [`Serialize`] and [`SerializeAttribute`] which lets you define how to (de)serialize types,
-//! - [`Deserializer`] and [`Serializer`] which lets you define readers and writers for XML documents.
-//! - [`DeserializationGroup`] and [`SerializationGroup`] which lets you define how to (de)serialize groups of types that can be extended upon in other elements/groups recursively.
+//! - [`Serialize`], [`SerializeAttribute`] and [`Deserialize`] which lets you define how to (de)serialize types,
+//! - [`Serializer`] and [`Deserializer`] which lets you define readers and writers for XML documents.
+//! - [`SerializationGroup`] and [`DeserializationGroup`] which lets you define how to (de)serialize groups of types that can be extended upon in other elements/groups recursively.
 //! - [`XmlValue`] and its variants which allow for generic deserialization of XML documents, similar to [`serde_json::Value`].
 //!
-//! The library includes derive macros for [`Deserialize`], [`Serialize`], [`SerializeAttribute`], [`DeserializationGroup`] and [`SerializationGroup`] which can be enabled with the `derive` feature. The macros can be used to create nearly any kind of XML structure you want. If there is something it cannot do, please open an issue or a pull request.
+//! The library includes derive macros for [`Serialize`], [`SerializeAttribute`], [`Deserialize`], [`SerializationGroup`] and [`DeserializationGroup`] which can be enabled with the `derive` feature. The macros can be used to create nearly any kind of XML structure you want. If there is something it cannot do, please open an issue or a pull request.
 //!
 //! The macro [`xml`] can be used to create [`XmlValues`](`XmlValue`) in a more ergonomic way. It is also possible to create [`XmlValues`](`XmlValue`) manually, but it is quite verbose.
 #[cfg(doctest)]
