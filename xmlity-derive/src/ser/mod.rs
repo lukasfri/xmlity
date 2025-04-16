@@ -6,8 +6,11 @@ pub use serialize::DeriveSerialize;
 pub use serialize_attribute::DeriveSerializeAttribute;
 
 use crate::{
-    options::XmlityFieldValueDeriveOpts, DeriveError, FieldIdent, SerializeField,
-    XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldValueGroupDeriveOpts,
+    options::{
+        XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldValueDeriveOpts,
+        XmlityFieldValueGroupDeriveOpts,
+    },
+    DeriveError, FieldIdent, SerializeField,
 };
 use quote::{quote, ToTokens};
 

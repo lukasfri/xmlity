@@ -8,9 +8,37 @@ use none::{EnumNoneVisitorBuilder, SerializeNoneStructBuilder};
 use quote::ToTokens;
 use values::EnumValueVisitorBuilder;
 
-use crate::{DeriveDeserializeOption, DeriveError, DeriveMacro};
+use crate::{
+    options::{
+        XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts,
+    },
+    DeriveError, DeriveMacro,
+};
 
 use super::common::DeserializeBuilderExt;
+
+enum DeriveDeserializeOption {
+    None,
+    Element(XmlityRootElementDeriveOpts),
+    Attribute(XmlityRootAttributeDeriveOpts),
+    Value(XmlityRootValueDeriveOpts),
+}
+
+impl DeriveDeserializeOption {
+    pub fn parse(ast: &syn::DeriveInput) -> Result<Self, DeriveError> {
+        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
+        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast)?;
+        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
+
+        match (element_opts, attribute_opts, value_opts) {
+            (Some(element_opts), None, None) => Ok(DeriveDeserializeOption::Element(element_opts)),
+            (None, Some(attribute_opts), None) => Ok(DeriveDeserializeOption::Attribute(attribute_opts)),
+            (None, None, Some(value_opts)) => Ok(DeriveDeserializeOption::Value(value_opts)),
+            (None, None, None) => Ok(DeriveDeserializeOption::None),
+            _ => Err(DeriveError::custom("Wrong options. Only one of `xelement`, `xattribute`, or `xvalue` can be used for root elements.")),
+        }
+    }
+}
 
 pub struct DeriveDeserialize;
 
@@ -19,35 +47,44 @@ impl DeriveMacro for DeriveDeserialize {
         let opts = DeriveDeserializeOption::parse(ast)?;
 
         match (&ast.data, &opts) {
+            // `xelement`
             (syn::Data::Struct(_), DeriveDeserializeOption::Element(opts)) => {
                 StructElementVisitorBuilder::new(opts)
                     .deserialize_trait_impl(ast)
                     .map(|a| a.to_token_stream())
             }
+            (syn::Data::Enum(_), DeriveDeserializeOption::Element(_)) => Err(DeriveError::custom(
+                "`xelement` is not compatible with enums.",
+            )),
+            // `xattribute`
             (syn::Data::Struct(_), DeriveDeserializeOption::Attribute(opts)) => {
                 StructAttributeVisitorBuilder::new(opts)
                     .deserialize_trait_impl(ast)
                     .map(|a| a.to_token_stream())
             }
+            (syn::Data::Enum(_), DeriveDeserializeOption::Attribute(_)) => Err(
+                DeriveError::custom("`xattribute` is not compatible with enums."),
+            ),
+            // `xvalue`
+            (syn::Data::Enum(_), DeriveDeserializeOption::Value(opts)) => {
+                EnumValueVisitorBuilder::new(opts)
+                    .deserialize_trait_impl(ast)
+                    .map(|a| a.to_token_stream())
+            }
+            (syn::Data::Struct(_), DeriveDeserializeOption::Value(_)) => Err(DeriveError::custom(
+                "`xvalue` is not compatible with structs.",
+            )),
+            // None
             (syn::Data::Struct(_), DeriveDeserializeOption::None) => {
                 SerializeNoneStructBuilder::new()
                     .deserialize_trait_impl(ast)
                     .map(|a| a.to_token_stream())
             }
-            (syn::Data::Struct(_), DeriveDeserializeOption::Value(_opts)) => Err(
-                DeriveError::custom("Structs with value options are not supported yet"),
-            ),
             (syn::Data::Enum(_), DeriveDeserializeOption::None) => EnumNoneVisitorBuilder::new()
                 .deserialize_trait_impl(ast)
                 .map(|a| a.to_token_stream()),
-            (syn::Data::Enum(_), DeriveDeserializeOption::Value(value_opts)) => {
-                EnumValueVisitorBuilder::new(value_opts)
-                    .deserialize_trait_impl(ast)
-                    .map(|a| a.to_token_stream())
-            }
-            (syn::Data::Union(_), _) => Err(DeriveError::custom("Unions are not supported yet")),
-            _ => Err(DeriveError::custom(
-                "Wrong options. Unsupported deserialize.",
+            (syn::Data::Union(_), _) => Err(DeriveError::custom(
+                "Unions are not supported for deserialization.",
             )),
         }
     }
