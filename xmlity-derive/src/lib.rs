@@ -113,11 +113,11 @@ impl<T: DeriveMacro> DeriveMacroExt for T {
 
 /// Derives the [`Serialize`] trait for a type.
 ///
-/// This macro works to serialize to XML-elements and other types of nodes including TEXT and CDATA.
+/// This macro works to serialize to XML-elements and other types of nodes including text and CDATA.
 /// To serialize to attributes, use the [`SerializeAttribute`] derive macro instead.
 ///
 /// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
-/// <strong>NOTE:</strong> It is perfectly possible to derive both [`Serialize`] and [`SerializeAttribute`] for the same type, allowing the parent to decide which serialization method to use. Since deserialization can work from multiple sources, simply deriving [`Deserialize`] is sufficient to deserialize from either elements or attributes (depending on what is enabled through the derive macro).
+/// <strong>NOTE:</strong> It is perfectly possible to derive both Serialize and SerializeAttribute for the same type, allowing the parent to decide which serialization method to use. Since deserialization can work from multiple sources, simply deriving Deserialize is sufficient to deserialize from either elements or attributes (depending on what is enabled through the derive macro).
 /// </div>
 ///
 /// ONE OF the following attributes can be applied to the root of a type to specify how the type should be serialized:
@@ -331,6 +331,10 @@ pub fn derive_serialize_fn(item: proc_macro::TokenStream) -> proc_macro::TokenSt
 ///
 /// This macro works to serialize to XML-attributes.
 /// To serialize to elements, use the [`Serialize`] derive macro instead.
+///
+/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+/// <strong>NOTE:</strong> It is perfectly possible to derive both Serialize and SerializeAttribute for the same type, allowing the parent to decide which serialization method to use. Since deserialization can work from multiple sources, simply deriving Deserialize is sufficient to deserialize from either elements or attributes (depending on what is enabled through the derive macro).
+/// </div>
 ///
 /// To configure the serialization, use the `#[xattribute(...)]` attribute on the root of the type. This attribute is required.
 ///
@@ -618,7 +622,7 @@ pub fn derive_serialize_attribute_fn(item: proc_macro::TokenStream) -> proc_macr
 /// </table>
 ///
 /// ### #[xvalue(...)]
-/// The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from a TEXT or CDATA node.
+/// The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from a text or CDATA node.
 ///
 /// #### Options
 ///
@@ -734,7 +738,11 @@ pub fn derive_deserialize_fn(item: proc_macro::TokenStream) -> proc_macro::Token
 
 /// Derives the [`SerializationGroup`] trait for a type.
 ///
-/// To configure the serialization, use the `#[xgroup(...)]` attribute on the root of the type. This trait/attribute is not mutually exclusive with the [`Serialize`] trait/attributes. This means that you could for example use a struct both as a sequence (Serialize with no attribute) and as a group (SerializationGroup with the attribute).
+/// To configure the serialization, use the `#[xgroup(...)]` attribute on the root of the type.
+///
+/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+/// <strong>NOTE:</strong> This trait/attribute is not mutually exclusive with the Serialize trait/attributes. This means that you could for example use a struct both as a sequence (Serialize with no attribute) and as a group (SerializationGroup with the attribute).
+/// </div>
 ///
 /// ## Configuration
 ///
@@ -752,7 +760,14 @@ pub fn derive_serialization_group_attribute_fn(
 
 /// Derives the [`DeserializationGroup`] trait for a type.
 ///
-/// To configure the deserialization, use the `#[xgroup(...)]` attribute on the root of the type. This trait/attribute is not mutually exclusive with the [`Deserialize`] trait/attribute. This means that you could for example use a struct both as a sequence (Deserialize with no attribute) and as a group (DeserializationGroup with the attribute).
+/// To configure the deserialization, use the `#[xgroup(...)]` attribute on the root of the type.
+///
+/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+/// <strong>NOTE:</strong> This trait/attribute is not mutually exclusive with the [Deserialize] trait/attribute. This means that you could for example use a struct both as a sequence ([Deserialize] with no attribute) and as a group ([DeserializationGroup] with the attribute).
+/// </div>
+///
+/// [Deserialize]: Deserialize
+/// [DeserializationGroup]: DeserializationGroup
 ///
 /// ## Configuration
 ///
