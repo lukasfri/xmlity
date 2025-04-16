@@ -43,17 +43,17 @@ use syn::{parse_macro_input, DeriveInput, Expr};
 
 mod de;
 mod options;
-use options::{
-    LocalName, XmlNamespace, XmlityFieldAttributeDeriveOpts, XmlityFieldGroupDeriveOpts,
-    XmlityFieldValueDeriveOpts, XmlityRootAttributeDeriveOpts, XmlityRootElementDeriveOpts,
-    XmlityRootValueDeriveOpts,
-};
+use options::{LocalName, XmlNamespace};
 mod ser;
 mod utils;
+use options::{DeserializeField, SerializeField};
 
 enum DeriveError {
     Darling(darling::Error),
-    Custom(String),
+    Custom {
+        message: String,
+        span: proc_macro2::Span,
+    },
 }
 
 type DeriveResult<T> = Result<T, DeriveError>;
@@ -74,14 +74,21 @@ impl DeriveError {
     fn into_compile_error(self) -> proc_macro2::TokenStream {
         match self {
             DeriveError::Darling(e) => e.write_errors(),
-            DeriveError::Custom(e) => {
-                syn::Error::new(proc_macro2::Span::call_site(), e).to_compile_error()
+            DeriveError::Custom { message, span } => {
+                syn::Error::new(span, message).to_compile_error()
             }
         }
     }
 
     fn custom<T: Into<String>>(error: T) -> Self {
-        Self::Custom(error.into())
+        Self::custom_with_span(error, proc_macro2::Span::call_site())
+    }
+
+    fn custom_with_span<T: Into<String>, S: Into<proc_macro2::Span>>(error: T, span: S) -> Self {
+        Self::Custom {
+            message: error.into(),
+            span: span.into(),
+        }
     }
 }
 
@@ -416,30 +423,6 @@ pub fn derive_serialize_attribute_fn(item: proc_macro::TokenStream) -> proc_macr
     DeriveSerializeAttribute::derive(item)
 }
 
-enum DeriveDeserializeOption {
-    None,
-    Element(XmlityRootElementDeriveOpts),
-    Attribute(XmlityRootAttributeDeriveOpts),
-    Value(XmlityRootValueDeriveOpts),
-}
-
-impl DeriveDeserializeOption {
-    pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
-        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast)?;
-        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
-
-        let opts = match (element_opts, attribute_opts, value_opts) {
-            (Some(element_opts), None, None) => DeriveDeserializeOption::Element(element_opts),
-            (None, Some(attribute_opts), None) => DeriveDeserializeOption::Attribute(attribute_opts),
-            (None, None, Some(value_opts)) => DeriveDeserializeOption::Value(value_opts),
-            (None, None, None) => DeriveDeserializeOption::None,
-            _ => panic!("Wrong options. Only one of xelement, xattribute, or xvalue can be used for root elements."),
-        };
-        Ok(opts)
-    }
-}
-
 /// Derives the [`Deserialize`] trait for a type.
 ///
 /// This macro supports deriving deserialization from elements, attributes and values.
@@ -763,50 +746,6 @@ pub fn derive_deserialization_group_fn(item: proc_macro::TokenStream) -> proc_ma
     DeriveDeserializationGroup::derive(item)
 }
 
-fn simple_compile_error(text: &str) -> proc_macro2::TokenStream {
-    quote! {
-        compile_error!(#text);
-    }
-}
-
-#[derive(Clone)]
-enum XmlityFieldDeriveOpts {
-    Value(XmlityFieldValueDeriveOpts),
-    Attribute(XmlityFieldAttributeDeriveOpts),
-    Group(XmlityFieldGroupDeriveOpts),
-}
-
-#[derive(Clone)]
-enum XmlityFieldAttributeGroupDeriveOpts {
-    Attribute(XmlityFieldAttributeDeriveOpts),
-    Group(XmlityFieldGroupDeriveOpts),
-}
-
-#[derive(Clone)]
-enum XmlityFieldValueGroupDeriveOpts {
-    Value(XmlityFieldValueDeriveOpts),
-    Group(XmlityFieldGroupDeriveOpts),
-}
-
-impl XmlityFieldDeriveOpts {
-    fn from_field(field: &syn::Field) -> Result<Self, DeriveError> {
-        let element = XmlityFieldValueDeriveOpts::from_field(field)?;
-        let attribute = XmlityFieldAttributeDeriveOpts::from_field(field)?;
-        let group = XmlityFieldGroupDeriveOpts::from_field(field)?;
-        Ok(match (element, attribute, group) {
-            (Some(element), None, None) => Self::Value(element),
-            (None, Some(attribute), None) => Self::Attribute(attribute),
-            (None, None, Some(group)) => Self::Group(group),
-            (None, None, None) => Self::Value(XmlityFieldValueDeriveOpts::default()),
-            _ => {
-                return Err(DeriveError::custom(
-                    "Cannot have multiple xmlity field attributes on the same field.",
-                ))
-            }
-        })
-    }
-}
-
 #[derive(Clone)]
 enum FieldIdent {
     Named(syn::Ident),
@@ -821,66 +760,6 @@ impl quote::ToTokens for FieldIdent {
         }
     }
 }
-
-#[derive(Clone)]
-struct DeserializeBuilderField<BuilderFieldIdent, OptionType> {
-    builder_field_ident: BuilderFieldIdent,
-    // If the field is indexed, this is none.
-    field_ident: FieldIdent,
-    field_type: syn::Type,
-    options: OptionType,
-}
-
-impl<A, T> DeserializeBuilderField<A, T> {
-    pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> DeserializeBuilderField<A, U> {
-        DeserializeBuilderField {
-            builder_field_ident: self.builder_field_ident,
-            field_ident: self.field_ident,
-            field_type: self.field_type,
-            options: f(self.options),
-        }
-    }
-
-    pub fn map_options_opt<U, F: FnOnce(T) -> Option<U>>(
-        self,
-        f: F,
-    ) -> Option<DeserializeBuilderField<A, U>> {
-        f(self.options).map(|options| DeserializeBuilderField {
-            builder_field_ident: self.builder_field_ident,
-            field_ident: self.field_ident,
-            field_type: self.field_type,
-            options,
-        })
-    }
-}
-
-#[derive(Clone)]
-struct SerializeField<OptionType> {
-    // If the field is indexed, this is none.
-    field_ident: FieldIdent,
-    field_type: syn::Type,
-    options: OptionType,
-}
-
-#[allow(dead_code)]
-impl<T> SerializeField<T> {
-    pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> SerializeField<U> {
-        SerializeField {
-            field_ident: self.field_ident,
-            field_type: self.field_type,
-            options: f(self.options),
-        }
-    }
-
-    pub fn map_options_opt<U, F: FnOnce(T) -> Option<U>>(self, f: F) -> Option<SerializeField<U>> {
-        f(self.options).map(|options| SerializeField {
-            field_ident: self.field_ident,
-            field_type: self.field_type,
-            options,
-        })
-    }
-}
-
 enum XmlNamespaceRef<'a> {
     Static(XmlNamespace<'a>),
     Dynamic(syn::Expr),

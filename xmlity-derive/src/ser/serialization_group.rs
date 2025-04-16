@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
-use syn::{parse_quote, DataEnum, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt};
+use syn::{parse_quote, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt};
 
-use crate::{options::XmlityRootGroupDeriveOpts, simple_compile_error, DeriveError, DeriveMacro};
+use crate::{options::XmlityRootGroupDeriveOpts, DeriveError, DeriveMacro};
 
 trait SerializationGroupBuilder {
     fn serialize_attributes_fn_body(
@@ -72,17 +72,17 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
 }
 
 #[allow(unused)]
-pub struct DeriveGroupStruct<'a> {
+pub struct DeriveSerializationGroupStruct<'a> {
     opts: &'a XmlityRootGroupDeriveOpts,
 }
 
-impl<'a> DeriveGroupStruct<'a> {
+impl<'a> DeriveSerializationGroupStruct<'a> {
     fn new(opts: &'a XmlityRootGroupDeriveOpts) -> Self {
         Self { opts }
     }
 }
 
-impl SerializationGroupBuilder for DeriveGroupStruct<'_> {
+impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
     fn serialize_attributes_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -116,26 +116,40 @@ impl SerializationGroupBuilder for DeriveGroupStruct<'_> {
     }
 }
 
+enum SerializationGroupOption {
+    Group(XmlityRootGroupDeriveOpts),
+}
+
+impl SerializationGroupOption {
+    pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
+        let group_opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
+
+        Ok(SerializationGroupOption::Group(group_opts))
+    }
+}
+
 pub struct DeriveSerializationGroup;
 
 impl DeriveMacro for DeriveSerializationGroup {
     fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
-        let opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
+        let SerializationGroupOption::Group(opts) = SerializationGroupOption::parse(ast)?;
 
         match &ast.data {
-            syn::Data::Struct(DataStruct { fields, .. }) => {
-                if let syn::Fields::Unit = fields {
-                    return Ok(simple_compile_error("Unit structs are not supported"));
-                };
-
-                DeriveGroupStruct::new(&opts)
-                    .serialize_trait_impl(ast)
-                    .map(|a| a.to_token_stream())
-            }
-            syn::Data::Enum(DataEnum { .. }) => {
-                Ok(simple_compile_error("Enum is not supported yet."))
-            }
-            syn::Data::Union(_) => Ok(simple_compile_error("Union is not supported.")),
+            syn::Data::Struct(DataStruct {
+                fields: syn::Fields::Unit,
+                ..
+            }) => Err(DeriveError::custom(
+                "Unit structs are not supported for serialization groups.",
+            )),
+            syn::Data::Struct(_) => DeriveSerializationGroupStruct::new(&opts)
+                .serialize_trait_impl(ast)
+                .map(|a| a.to_token_stream()),
+            syn::Data::Enum(_) => Err(DeriveError::custom(
+                "Enums are not supported for serialization groups.",
+            )),
+            syn::Data::Union(_) => Err(DeriveError::custom(
+                "Unions are not supported for serialization groups.",
+            )),
         }
     }
 }

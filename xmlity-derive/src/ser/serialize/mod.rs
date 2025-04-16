@@ -13,7 +13,6 @@ use crate::options::{XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
 use crate::{DeriveError, DeriveMacro};
 
 trait SerializeBuilder {
-    /// Returns the content inside the `Deserialize::deserialize` function.
     fn serialize_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -58,34 +57,61 @@ impl<T: SerializeBuilder> SerializeBuilderExt for T {
     }
 }
 
+enum DeriveSerializeOption {
+    Element(XmlityRootElementDeriveOpts),
+    Value(XmlityRootValueDeriveOpts),
+    None,
+}
+
+impl DeriveSerializeOption {
+    pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
+        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
+        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
+
+        match (element_opts, value_opts) {
+            (Some(element_opts), None) => Ok(DeriveSerializeOption::Element(element_opts)),
+            (None, Some(value_opts)) => Ok(DeriveSerializeOption::Value(value_opts)),
+            (None, None) => Ok(DeriveSerializeOption::None),
+            _ => Err(DeriveError::custom(
+                "Wrong options. Only one of `xelement` or `xvalue` can be used for root elements.",
+            )),
+        }
+    }
+}
+
 pub struct DeriveSerialize;
 
 impl DeriveMacro for DeriveSerialize {
     fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
-        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
-        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
+        let opts = DeriveSerializeOption::parse(ast)?;
 
-        match &ast.data {
-            syn::Data::Struct(_) => match element_opts {
-                Some(opts) => DeriveElementStruct::new(&opts)
+        match (&ast.data, &opts) {
+            // `xelement`
+            (syn::Data::Struct(_), DeriveSerializeOption::Element(opts)) => {
+                DeriveElementStruct::new(opts)
                     .serialize_trait_impl(ast)
-                    .map(|a| a.to_token_stream()),
-                None => DeriveNoneStruct::new()
-                    .serialize_trait_impl(ast)
-                    .map(|a| a.to_token_stream()),
-            },
-            syn::Data::Enum(_) => {
-                if let Some(value_opts) = value_opts.as_ref() {
-                    DeriveValueEnum::new(value_opts)
-                        .serialize_trait_impl(ast)
-                        .map(|a| a.to_token_stream())
-                } else {
-                    DeriveNoneEnum::new()
-                        .serialize_trait_impl(ast)
-                        .map(|a| a.to_token_stream())
-                }
+                    .map(|a| a.to_token_stream())
             }
-            syn::Data::Union(_) => unreachable!(),
+            (syn::Data::Enum(_), DeriveSerializeOption::Element(_)) => Err(DeriveError::custom(
+                "`xelement` is not compatible with enums.",
+            )),
+            // `xvalue`
+            (syn::Data::Struct(_), DeriveSerializeOption::Value(_)) => Err(DeriveError::custom(
+                "`xvalue` is not compatible with structs.",
+            )),
+            (syn::Data::Enum(_), DeriveSerializeOption::Value(opts)) => DeriveValueEnum::new(opts)
+                .serialize_trait_impl(ast)
+                .map(|a| a.to_token_stream()),
+            // None
+            (syn::Data::Struct(_), DeriveSerializeOption::None) => DeriveNoneStruct::new()
+                .serialize_trait_impl(ast)
+                .map(|a| a.to_token_stream()),
+            (syn::Data::Enum(_), DeriveSerializeOption::None) => DeriveNoneEnum::new()
+                .serialize_trait_impl(ast)
+                .map(|a| a.to_token_stream()),
+            (syn::Data::Union(_), _) => Err(DeriveError::custom(
+                "Unions are not supported for serialization.",
+            )),
         }
     }
 }

@@ -8,11 +8,11 @@ use crate::{
 };
 
 pub struct StructAttributeVisitorBuilder<'a> {
-    opts: &'a crate::XmlityRootAttributeDeriveOpts,
+    opts: &'a XmlityRootAttributeDeriveOpts,
 }
 
 impl<'a> StructAttributeVisitorBuilder<'a> {
-    pub fn new(opts: &'a crate::XmlityRootAttributeDeriveOpts) -> Self {
+    pub fn new(opts: &'a XmlityRootAttributeDeriveOpts) -> Self {
         Self { opts }
     }
 }

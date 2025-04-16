@@ -4,7 +4,7 @@ use syn::{
     Stmt,
 };
 
-use crate::DeriveError;
+use crate::{options::XmlityFieldValueGroupDeriveOpts, DeriveError};
 
 pub trait VisitorBuilder {
     fn visit_text_fn_body(
@@ -480,7 +480,6 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 }
 
 pub trait DeserializeBuilder {
-    /// Returns the content inside the `Deserialize::deserialize` function.
     fn deserialize_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -551,13 +550,12 @@ use syn::spanned::Spanned;
 use crate::{
     de::{all_elements_done_expr, builder_element_field_visitor, element_done_expr},
     options::ElementOrder,
-    DeserializeBuilderField, FieldIdent, XmlityFieldValueGroupDeriveOpts,
+    DeserializeField, FieldIdent,
 };
 
 pub struct SeqVisitLoop<
     'a,
-    F: IntoIterator<Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
-        + Clone,
+    F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>> + Clone,
 > {
     seq_access_ident: &'a Ident,
     allow_unknown_children: bool,
@@ -567,9 +565,7 @@ pub struct SeqVisitLoop<
 
 impl<
         'a,
-        F: IntoIterator<
-                Item = DeserializeBuilderField<FieldIdent, XmlityFieldValueGroupDeriveOpts>,
-            > + Clone,
+        F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>> + Clone,
     > SeqVisitLoop<'a, F>
 {
     pub fn new(
