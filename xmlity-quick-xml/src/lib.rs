@@ -19,7 +19,7 @@ pub mod ser;
 
 pub use de::{from_str, Deserializer};
 use quick_xml::name::{LocalName as QuickLocalName, Prefix as QuickPrefix, QName as QuickName};
-pub use ser::{to_string, Serializer};
+pub use ser::{to_string, to_string_pretty, Serializer};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
