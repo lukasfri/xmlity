@@ -125,9 +125,9 @@ pub struct HammerShape(String);
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 #[xgroup]
 pub struct Tool {
-    #[xelement]
+    #[xvalue]
     pub name: ToolName,
-    #[xelement]
+    #[xvalue]
     pub weight: Weight,
 }
 
@@ -243,9 +243,9 @@ pub struct CarShape(String);
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 #[xgroup(attribute_order = "loose", children_order = "loose")]
 pub struct Vehicle {
-    #[xelement]
+    #[xvalue]
     pub name: VehicleName,
-    #[xelement]
+    #[xvalue]
     pub weight: Weight,
 }
 
@@ -361,9 +361,9 @@ pub struct ClothingShape(String);
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 #[xgroup(attribute_order = "strict", children_order = "strict")]
 pub struct Clothing {
-    #[xelement]
+    #[xvalue]
     pub name: ClothingName,
-    #[xelement]
+    #[xvalue]
     pub weight: Weight,
 }
 

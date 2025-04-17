@@ -751,7 +751,7 @@ pub fn derive_deserialize_fn(item: proc_macro::TokenStream) -> proc_macro::Token
 /// #### Options
 ///
 /// None for serialization currently.
-#[proc_macro_derive(SerializationGroup, attributes(xelement, xattribute, xgroup))]
+#[proc_macro_derive(SerializationGroup, attributes(xvalue, xattribute, xgroup))]
 pub fn derive_serialization_group_attribute_fn(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -811,7 +811,7 @@ pub fn derive_serialization_group_attribute_fn(
 /// <!--=================================================-->
 /// </tbody>
 /// </table>
-#[proc_macro_derive(DeserializationGroup, attributes(xelement, xattribute, xgroup))]
+#[proc_macro_derive(DeserializationGroup, attributes(xvalue, xattribute, xgroup))]
 pub fn derive_deserialization_group_fn(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     DeriveDeserializationGroup::derive(item)
 }

@@ -49,7 +49,6 @@ pub enum NoteEnum<T: SerializeAttribute + DeserializeOwned> {
 }
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
-#[xelement(name = "note")]
 pub struct NoteGroup<T: SerializeAttribute + DeserializeOwned> {
     #[xattribute]
     pub to: T,
