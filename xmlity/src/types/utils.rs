@@ -28,17 +28,10 @@ impl<T: Serialize> crate::Serialize for XmlRoot<T> {
     where
         S: crate::Serializer,
     {
-        let __xml_name = crate::ExpandedName::new(
-            <crate::LocalName as ::core::str::FromStr>::from_str("XmlRoot").expect(
-                "XML name in derive macro is invalid. This is a bug in xmlity. Please report it.",
-            ),
-            ::core::option::Option::None,
-        );
-        let mut __element = crate::Serializer::serialize_element(serializer, &__xml_name)?;
-        let mut __children = crate::ser::SerializeElement::serialize_children(__element)?;
-        crate::ser::SerializeChildren::serialize_child(&mut __children, &self.decl)?;
-        crate::ser::SerializeChildren::serialize_child(&mut __children, &self.elements)?;
-        crate::ser::SerializeElementChildren::end(__children)
+        let mut __elements = crate::Serializer::serialize_seq(serializer)?;
+        crate::ser::SerializeSeq::serialize_element(&mut __elements, &self.decl)?;
+        crate::ser::SerializeSeq::serialize_element(&mut __elements, &self.elements)?;
+        crate::ser::SerializeSeq::end(__elements)
     }
 }
 
