@@ -18,7 +18,15 @@ pub fn to_string<T>(value: &T) -> Result<String, Error>
 where
     T: Serialize,
 {
-    let serializer = QuickXmlWriter::new(Vec::new());
+    to_string_pretty(value, 0)
+}
+
+pub fn to_string_pretty<T>(value: &T, indentation: usize) -> Result<String, Error>
+where
+    T: Serialize,
+{
+    let serializer = QuickXmlWriter::new_with_indent(Vec::new(), b' ', indentation);
+
     let mut serializer = Serializer::from(serializer);
     value.serialize(&mut serializer)?;
     let bytes = serializer.into_inner();
