@@ -37,13 +37,15 @@ impl<'a> NamespaceScope<'a> {
         }
     }
 
+    const XML_PREFIX: Prefix<'static> = Prefix::new_dangerous("xml");
+    const XML_NAMESPACE: XmlNamespace<'static> =
+        XmlNamespace::new_dangerous("http://www.w3.org/XML/1998/namespace");
+
     pub fn top_scope() -> Self {
         let mut scope = Self::new();
-        scope.defined_namespaces.insert(
-            Prefix::new("xml").expect("xml is a valid prefix"),
-            XmlNamespace::new("http://www.w3.org/XML/1998/namespace")
-                .expect("xml namespace is valid"),
-        );
+        scope
+            .defined_namespaces
+            .insert(Self::XML_PREFIX, Self::XML_NAMESPACE);
         scope
     }
 
