@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.1...xmlity-v0.0.2) - 2025-04-17
+
+### Fixed
+
+- *(core)* Changed XmlRoot to serialize correctly as sequence. ([#28](https://github.com/lukasfri/xmlity/pull/28))
+- *(core)* [**breaking**] Fixes incorrect function signatures for "dangerous" methods. ([#27](https://github.com/lukasfri/xmlity/pull/27))
+
 ## [0.0.1](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.0...xmlity-v0.0.1) - 2025-04-16
 
 ### Added

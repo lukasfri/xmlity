@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.1...xmlity-quick-xml-v0.0.2) - 2025-04-17
+
+### Added
+
+- *(quick-xml)* Added `to_string_pretty` that supports indentation. ([#23](https://github.com/lukasfri/xmlity/pull/23))
+
+### Fixed
+
+- *(derive)* [**breaking**] Fixed xvalue in SerializationGroup/DeserializationGroup. ([#25](https://github.com/lukasfri/xmlity/pull/25))
+- *(quick-xml)* Adds top-level scope including xml prefix. ([#26](https://github.com/lukasfri/xmlity/pull/26))
+
 ## [0.0.1](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.0...xmlity-quick-xml-v0.0.1) - 2025-04-16
 
 ### Added
