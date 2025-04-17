@@ -14,16 +14,32 @@ use crate::{declaration_into_attribute, Attribute, OwnedQuickName, XmlnsDeclarat
 
 use super::Error;
 
-pub fn to_string<T>(value: &T) -> Result<String, Error>
+fn serializer_to_string<T>(serializer: QuickXmlWriter<Vec<u8>>, value: &T) -> Result<String, Error>
 where
     T: Serialize,
 {
-    let serializer = QuickXmlWriter::new(Vec::new());
     let mut serializer = Serializer::from(serializer);
     value.serialize(&mut serializer)?;
     let bytes = serializer.into_inner();
 
     String::from_utf8(bytes).map_err(Error::InvalidUtf8)
+}
+
+pub fn to_string<T>(value: &T) -> Result<String, Error>
+where
+    T: Serialize,
+{
+    serializer_to_string(QuickXmlWriter::new(Vec::new()), value)
+}
+
+pub fn to_string_pretty<T>(value: &T, indentation: usize) -> Result<String, Error>
+where
+    T: Serialize,
+{
+    serializer_to_string(
+        QuickXmlWriter::new_with_indent(Vec::new(), b' ', indentation),
+        value,
+    )
 }
 
 struct NamespaceScope<'a> {
