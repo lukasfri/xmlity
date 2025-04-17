@@ -293,8 +293,8 @@ impl<'a> Prefix<'a> {
     ///
     /// # Safety
     /// This function does not validate the input value due to const context limitations involving the validation function. While this cannot create a memory safety issue, it can create a logical one.
-    pub const fn new_dangerous(value: &'a str) -> Result<Self, PrefixParseError> {
-        Ok(Self(Cow::Borrowed(value)))
+    pub const fn new_dangerous(value: &'a str) -> Self {
+        Self(Cow::Borrowed(value))
     }
 
     /// Converts this [`Prefix`] into an owned version.
@@ -376,8 +376,8 @@ impl<'a> LocalName<'a> {
     ///
     /// # Safety
     /// This function does not validate the input value due to const context limitations involving the validation function. While this cannot create a memory safety issue, it can create a logical one.
-    pub const fn new_dangerous(value: &'a str) -> Result<Self, PrefixParseError> {
-        Ok(Self(Cow::Borrowed(value)))
+    pub const fn new_dangerous(value: &'a str) -> Self {
+        Self(Cow::Borrowed(value))
     }
 
     /// Converts this [`LocalName`] into an owned version.
