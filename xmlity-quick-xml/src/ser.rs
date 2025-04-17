@@ -53,6 +53,18 @@ impl<'a> NamespaceScope<'a> {
         }
     }
 
+    const XML_PREFIX: Prefix<'static> = Prefix::new_dangerous("xml");
+    const XML_NAMESPACE: XmlNamespace<'static> =
+        XmlNamespace::new_dangerous("http://www.w3.org/XML/1998/namespace");
+
+    pub fn top_scope() -> Self {
+        let mut scope = Self::new();
+        scope
+            .defined_namespaces
+            .insert(Self::XML_PREFIX, Self::XML_NAMESPACE);
+        scope
+    }
+
     pub fn get_namespace<'b>(&'b self, prefix: &'b Prefix<'b>) -> Option<&'b XmlNamespace<'a>> {
         self.defined_namespaces.get(prefix)
     }
@@ -99,7 +111,7 @@ impl PrefixGenerator {
 impl<'a> NamespaceScopeContainer<'a> {
     pub fn new() -> Self {
         Self {
-            scopes: Vec::new(),
+            scopes: vec![NamespaceScope::top_scope()],
             prefix_generator: PrefixGenerator::new(),
         }
     }
