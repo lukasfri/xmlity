@@ -469,12 +469,8 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
         self.serializer.push_namespace_scope();
         let (bytes_start, end_name, serializer) = self.finish_start();
 
-        serializer
-            .writer
-            .write_event(Event::Start(bytes_start.as_quick_xml()))
-            .map_err(Error::Io)?;
-
         Ok(SerializeElementChildren {
+            bytes_start: Some(bytes_start),
             serializer,
             end_name,
         })
@@ -496,6 +492,7 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
 }
 
 pub struct SerializeElementChildren<'s, W: Write> {
+    bytes_start: Option<OwnedBytesStart>,
     serializer: &'s mut Serializer<W>,
     end_name: QName<'static>,
 }
@@ -505,20 +502,35 @@ impl<W: Write> ser::SerializeChildren for SerializeElementChildren<'_, W> {
     type Error = Error;
 
     fn serialize_child<V: Serialize>(&mut self, value: &V) -> Result<Self::Ok, Self::Error> {
+        if let Some(bytes_start) = self.bytes_start.take() {
+            self.serializer
+                .writer
+                .write_event(Event::Start(bytes_start.as_quick_xml()))
+                .map_err(Error::Io)?;
+        }
+
         value.serialize(self.serializer.deref_mut())
     }
 }
 
 impl<W: Write> ser::SerializeElementChildren for SerializeElementChildren<'_, W> {
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        let end_name = OwnedQuickName::new(&self.end_name);
+        // If we have a bytes_start, then we never wrote the start event, so we need to write an empty element instead.
+        if let Some(bytes_start) = self.bytes_start {
+            self.serializer
+                .writer
+                .write_event(Event::Empty(bytes_start.as_quick_xml()))
+                .map_err(Error::Io)?;
+        } else {
+            let end_name = OwnedQuickName::new(&self.end_name);
 
-        let bytes_end = BytesEnd::from(end_name.as_ref());
+            let bytes_end = BytesEnd::from(end_name.as_ref());
 
-        self.serializer
-            .writer
-            .write_event(Event::End(bytes_end))
-            .map_err(Error::Io)?;
+            self.serializer
+                .writer
+                .write_event(Event::End(bytes_end))
+                .map_err(Error::Io)?;
+        }
 
         self.serializer.pop_namespace_scope();
 
