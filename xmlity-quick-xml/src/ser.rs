@@ -557,7 +557,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
 
     fn serialize_text<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
         self.writer
-            .write_event(Event::Text(BytesText::new(text.as_ref())))
+            .write_event(Event::Text(BytesText::from_escaped(text.as_ref())))
             .map_err(Error::Io)
     }
 
@@ -603,7 +603,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
 
     fn serialize_comment<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
         self.writer
-            .write_event(Event::Comment(BytesText::new(
+            .write_event(Event::Comment(BytesText::from_escaped(
                 str::from_utf8(text.as_ref()).unwrap(),
             )))
             .map_err(Error::Io)
@@ -611,7 +611,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
 
     fn serialize_doctype<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
         self.writer
-            .write_event(Event::DocType(BytesText::new(
+            .write_event(Event::DocType(BytesText::from_escaped(
                 str::from_utf8(text.as_ref()).unwrap(),
             )))
             .map_err(Error::Io)
