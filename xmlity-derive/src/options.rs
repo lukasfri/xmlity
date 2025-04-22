@@ -349,11 +349,26 @@ pub struct XmlityFieldValueDeriveOpts {
     pub default: bool,
     #[darling(default)]
     pub extendable: bool,
+    #[darling(default)]
+    pub value: Option<String>,
 }
 
 impl XmlityFieldValueDeriveOpts {
     pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
         let Some(attribute) = field
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("xvalue"))
+            .cloned()
+        else {
+            return Ok(None);
+        };
+        Self::from_attributes(&[attribute])
+            .map(Some)
+            .map_err(DeriveError::Darling)
+    }
+    pub fn from_variant(variant: &syn::Variant) -> Result<Option<Self>, DeriveError> {
+        let Some(attribute) = variant
             .attrs
             .iter()
             .find(|attr| attr.path().is_ident("xvalue"))

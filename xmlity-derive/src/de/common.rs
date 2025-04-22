@@ -1,7 +1,8 @@
+use std::{borrow::Cow, ops::Deref};
+
 use proc_macro2::Span;
 use syn::{
-    parse_quote, DeriveInput, Ident, ImplItemFn, ItemImpl, ItemStruct, Lifetime, LifetimeParam,
-    Stmt,
+    parse_quote, Generics, Ident, ImplItemFn, ItemImpl, ItemStruct, Lifetime, LifetimeParam, Stmt,
 };
 
 use crate::{options::XmlityFieldValueGroupDeriveOpts, DeriveError};
@@ -9,11 +10,9 @@ use crate::{options::XmlityFieldValueGroupDeriveOpts, DeriveError};
 pub trait VisitorBuilder {
     fn visit_text_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
         value_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         let _ = value_ident;
         Ok(None)
@@ -21,11 +20,9 @@ pub trait VisitorBuilder {
 
     fn visit_cdata_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
         value_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         let _ = value_ident;
         Ok(None)
@@ -33,11 +30,9 @@ pub trait VisitorBuilder {
 
     fn visit_element_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
         element_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         let _ = element_access_ident;
         Ok(None)
@@ -45,11 +40,9 @@ pub trait VisitorBuilder {
 
     fn visit_attribute_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
         attribute_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         let _ = attribute_access_ident;
         Ok(None)
@@ -57,11 +50,9 @@ pub trait VisitorBuilder {
 
     fn visit_seq_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
         seq_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         let _ = seq_access_ident;
         Ok(None)
@@ -69,121 +60,91 @@ pub trait VisitorBuilder {
 
     fn visit_pi_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         Ok(None)
     }
 
     fn visit_decl_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         Ok(None)
     }
 
     fn visit_comment_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         Ok(None)
     }
 
     fn visit_doctype_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         Ok(None)
     }
 
     fn visit_none_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let _ = ast;
         let _ = visitor_lifetime;
         Ok(None)
     }
 
-    fn visitor_definition(&self, ast: &syn::DeriveInput) -> Result<ItemStruct, DeriveError>;
+    fn visitor_definition(&self) -> Result<ItemStruct, DeriveError>;
+
+    fn visitor_ident(&self) -> Cow<'_, Ident>;
+    fn visitor_generics(&self) -> Cow<'_, Generics>;
 }
 
 pub trait VisitorBuilderExt: VisitorBuilder {
-    fn visit_text_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_lifetime: &Lifetime,
-    ) -> Result<Option<ImplItemFn>, DeriveError>;
+    fn visit_text_fn(&self, visitor_lifetime: &Lifetime)
+        -> Result<Option<ImplItemFn>, DeriveError>;
 
     fn visit_cdata_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError>;
 
     fn visit_element_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError>;
 
     fn visit_attribute_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError>;
 
-    fn visit_seq_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_lifetime: &Lifetime,
-    ) -> Result<Option<ImplItemFn>, DeriveError>;
+    fn visit_seq_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError>;
 
-    fn visit_pi_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_lifetime: &Lifetime,
-    ) -> Result<Option<ImplItemFn>, DeriveError>;
+    fn visit_pi_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError>;
 
-    fn visit_decl_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_lifetime: &Lifetime,
-    ) -> Result<Option<ImplItemFn>, DeriveError>;
+    fn visit_decl_fn(&self, visitor_lifetime: &Lifetime)
+        -> Result<Option<ImplItemFn>, DeriveError>;
 
     fn visit_comment_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError>;
 
     fn visit_doctype_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError>;
 
-    fn visit_none_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_lifetime: &Lifetime,
-    ) -> Result<Option<ImplItemFn>, DeriveError>;
+    fn visit_none_fn(&self, visitor_lifetime: &Lifetime)
+        -> Result<Option<ImplItemFn>, DeriveError>;
 
     fn visitor_trait_impl(
         &self,
-        ast: &syn::DeriveInput,
         visitor_ident: &Ident,
         formatter_expecting: &str,
     ) -> Result<ItemImpl, DeriveError>;
@@ -192,12 +153,11 @@ pub trait VisitorBuilderExt: VisitorBuilder {
 impl<T: VisitorBuilder> VisitorBuilderExt for T {
     fn visit_text_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
 
-        let body = self.visit_text_fn_body(ast, visitor_lifetime, &value_ident)?;
+        let body = self.visit_text_fn_body(visitor_lifetime, &value_ident)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -216,12 +176,11 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_cdata_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
 
-        let body = self.visit_cdata_fn_body(ast, visitor_lifetime, &value_ident)?;
+        let body = self.visit_cdata_fn_body(visitor_lifetime, &value_ident)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -240,12 +199,11 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_element_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let element_access_ident = Ident::new("__element_access", Span::mixed_site());
 
-        let body = self.visit_element_fn_body(ast, visitor_lifetime, &element_access_ident)?;
+        let body = self.visit_element_fn_body(visitor_lifetime, &element_access_ident)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -263,12 +221,11 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_attribute_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let attribute_access_ident = Ident::new("__attribute_access", Span::mixed_site());
 
-        let body = self.visit_attribute_fn_body(ast, visitor_lifetime, &attribute_access_ident)?;
+        let body = self.visit_attribute_fn_body(visitor_lifetime, &attribute_access_ident)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -284,14 +241,10 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         }))
     }
 
-    fn visit_seq_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_lifetime: &Lifetime,
-    ) -> Result<Option<ImplItemFn>, DeriveError> {
+    fn visit_seq_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError> {
         let seq_access_ident = Ident::new("__seq_access", Span::mixed_site());
 
-        let body = self.visit_seq_fn_body(ast, visitor_lifetime, &seq_access_ident)?;
+        let body = self.visit_seq_fn_body(visitor_lifetime, &seq_access_ident)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -307,14 +260,10 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         }))
     }
 
-    fn visit_pi_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        visitor_lifetime: &Lifetime,
-    ) -> Result<Option<ImplItemFn>, DeriveError> {
+    fn visit_pi_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
 
-        let body = self.visit_pi_fn_body(ast, visitor_lifetime)?;
+        let body = self.visit_pi_fn_body(visitor_lifetime)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -332,14 +281,13 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_decl_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let version_ident = Ident::new("__version", Span::mixed_site());
         let encoding_ident = Ident::new("__encoding", Span::mixed_site());
         let standalone_ident = Ident::new("__standalone", Span::mixed_site());
 
-        let body = self.visit_decl_fn_body(ast, visitor_lifetime)?;
+        let body = self.visit_decl_fn_body(visitor_lifetime)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -362,12 +310,11 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_comment_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
 
-        let body = self.visit_comment_fn_body(ast, visitor_lifetime)?;
+        let body = self.visit_comment_fn_body(visitor_lifetime)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -385,12 +332,11 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_doctype_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
 
-        let body = self.visit_doctype_fn_body(ast, visitor_lifetime)?;
+        let body = self.visit_doctype_fn_body(visitor_lifetime)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -408,10 +354,9 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_none_fn(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
-        let body = self.visit_none_fn_body(ast, visitor_lifetime)?;
+        let body = self.visit_none_fn_body(visitor_lifetime)?;
 
         let Some(body) = body else {
             return Ok(None);
@@ -429,26 +374,24 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visitor_trait_impl(
         &self,
-        ast: &syn::DeriveInput,
         visitor_ident: &Ident,
         formatter_expecting: &str,
     ) -> Result<ItemImpl, DeriveError> {
-        let DeriveInput {
-            ident, generics, ..
-        } = ast;
+        let ident = self.visitor_ident();
+        let generics = self.visitor_generics();
         let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());
 
-        let visit_text_fn = self.visit_text_fn(ast, &visitor_lifetime)?;
-        let visit_cdata_fn = self.visit_cdata_fn(ast, &visitor_lifetime)?;
-        let visit_element_fn = self.visit_element_fn(ast, &visitor_lifetime)?;
-        let visit_attribute_fn = self.visit_attribute_fn(ast, &visitor_lifetime)?;
-        let visit_seq_fn = self.visit_seq_fn(ast, &visitor_lifetime)?;
-        let visit_comment_fn = self.visit_comment_fn(ast, &visitor_lifetime)?;
-        let visit_pi_fn = self.visit_pi_fn(ast, &visitor_lifetime)?;
-        let visit_decl_fn = self.visit_decl_fn(ast, &visitor_lifetime)?;
-        let visit_doctype_fn = self.visit_doctype_fn(ast, &visitor_lifetime)?;
-        let visit_none_fn = self.visit_none_fn(ast, &visitor_lifetime)?;
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let visit_text_fn = self.visit_text_fn(&visitor_lifetime)?;
+        let visit_cdata_fn = self.visit_cdata_fn(&visitor_lifetime)?;
+        let visit_element_fn = self.visit_element_fn(&visitor_lifetime)?;
+        let visit_attribute_fn = self.visit_attribute_fn(&visitor_lifetime)?;
+        let visit_seq_fn = self.visit_seq_fn(&visitor_lifetime)?;
+        let visit_comment_fn = self.visit_comment_fn(&visitor_lifetime)?;
+        let visit_pi_fn = self.visit_pi_fn(&visitor_lifetime)?;
+        let visit_decl_fn = self.visit_decl_fn(&visitor_lifetime)?;
+        let visit_doctype_fn = self.visit_doctype_fn(&visitor_lifetime)?;
+        let visit_none_fn = self.visit_none_fn(&visitor_lifetime)?;
+        let non_bound_generics = crate::non_bound_generics(generics.deref());
 
         let mut deserialize_generics = (*generics).to_owned();
 
@@ -482,30 +425,24 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 pub trait DeserializeBuilder {
     fn deserialize_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         deserializer_ident: &Ident,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError>;
+
+    fn ident(&self) -> Cow<'_, Ident>;
+    fn generics(&self) -> Cow<'_, Generics>;
 }
 
 pub trait DeserializeBuilderExt: DeserializeBuilder {
-    fn deserialize_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        deserialize_lifetime: &Lifetime,
-    ) -> Result<ImplItemFn, DeriveError>;
+    fn deserialize_fn(&self, deserialize_lifetime: &Lifetime) -> Result<ImplItemFn, DeriveError>;
 
-    fn deserialize_trait_impl(&self, ast: &syn::DeriveInput) -> Result<ItemImpl, DeriveError>;
+    fn deserialize_trait_impl(&self) -> Result<ItemImpl, DeriveError>;
 }
 
 impl<T: DeserializeBuilder> DeserializeBuilderExt for T {
-    fn deserialize_fn(
-        &self,
-        ast: &syn::DeriveInput,
-        deserialize_lifetime: &Lifetime,
-    ) -> Result<ImplItemFn, DeriveError> {
+    fn deserialize_fn(&self, deserialize_lifetime: &Lifetime) -> Result<ImplItemFn, DeriveError> {
         let deserializer_ident = Ident::new("__deserializer", Span::mixed_site());
-        let body = self.deserialize_fn_body(ast, &deserializer_ident, deserialize_lifetime)?;
+        let body = self.deserialize_fn_body(&deserializer_ident, deserialize_lifetime)?;
         Ok(parse_quote! {
                 fn deserialize<D>(#deserializer_ident: D) -> Result<Self, <D as ::xmlity::Deserializer<#deserialize_lifetime>>::Error>
                 where
@@ -517,15 +454,12 @@ impl<T: DeserializeBuilder> DeserializeBuilderExt for T {
         })
     }
 
-    fn deserialize_trait_impl(
-        &self,
-        ast @ DeriveInput {
-            ident, generics, ..
-        }: &syn::DeriveInput,
-    ) -> Result<ItemImpl, DeriveError> {
+    fn deserialize_trait_impl(&self) -> Result<ItemImpl, DeriveError> {
+        let ident = self.ident();
+        let generics = self.generics();
         let deserialize_lifetime = Lifetime::new("'__deserialize", ident.span());
 
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let non_bound_generics = crate::non_bound_generics(generics.deref());
 
         let mut deserialize_generics = (*generics).to_owned();
 
@@ -534,7 +468,7 @@ impl<T: DeserializeBuilder> DeserializeBuilderExt for T {
             syn::GenericParam::Lifetime(LifetimeParam::new((deserialize_lifetime).clone())),
         );
 
-        let deserialize_fn = self.deserialize_fn(ast, &deserialize_lifetime)?;
+        let deserialize_fn = self.deserialize_fn(&deserialize_lifetime)?;
 
         Ok(parse_quote! {
             impl #deserialize_generics ::xmlity::Deserialize<#deserialize_lifetime> for #ident #non_bound_generics  {
