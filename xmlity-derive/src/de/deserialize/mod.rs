@@ -4,9 +4,8 @@ mod none;
 mod values;
 use attributes::StructAttributeVisitorBuilder;
 use elements::StructElementVisitorBuilder;
-use none::{EnumNoneVisitorBuilder, SerializeNoneStructBuilder};
+use none::{EnumVisitorBuilder, SerializeNoneStructBuilder};
 use quote::ToTokens;
-use values::EnumValueVisitorBuilder;
 
 use crate::{
     options::{
@@ -49,8 +48,8 @@ impl DeriveMacro for DeriveDeserialize {
         match (&ast.data, &opts) {
             // `xelement`
             (syn::Data::Struct(_), DeriveDeserializeOption::Element(opts)) => {
-                StructElementVisitorBuilder::new(opts)
-                    .deserialize_trait_impl(ast)
+                StructElementVisitorBuilder::new(opts, ast)
+                    .deserialize_trait_impl()
                     .map(|a| a.to_token_stream())
             }
             (syn::Data::Enum(_), DeriveDeserializeOption::Element(_)) => Err(DeriveError::custom(
@@ -58,8 +57,8 @@ impl DeriveMacro for DeriveDeserialize {
             )),
             // `xattribute`
             (syn::Data::Struct(_), DeriveDeserializeOption::Attribute(opts)) => {
-                StructAttributeVisitorBuilder::new(opts)
-                    .deserialize_trait_impl(ast)
+                StructAttributeVisitorBuilder::new(opts, ast)
+                    .deserialize_trait_impl()
                     .map(|a| a.to_token_stream())
             }
             (syn::Data::Enum(_), DeriveDeserializeOption::Attribute(_)) => Err(
@@ -67,8 +66,8 @@ impl DeriveMacro for DeriveDeserialize {
             ),
             // `xvalue`
             (syn::Data::Enum(_), DeriveDeserializeOption::Value(opts)) => {
-                EnumValueVisitorBuilder::new(opts)
-                    .deserialize_trait_impl(ast)
+                EnumVisitorBuilder::new_with_value_opts(ast, opts)
+                    .deserialize_trait_impl()
                     .map(|a| a.to_token_stream())
             }
             (syn::Data::Struct(_), DeriveDeserializeOption::Value(_)) => Err(DeriveError::custom(
@@ -76,12 +75,12 @@ impl DeriveMacro for DeriveDeserialize {
             )),
             // None
             (syn::Data::Struct(_), DeriveDeserializeOption::None) => {
-                SerializeNoneStructBuilder::new()
-                    .deserialize_trait_impl(ast)
+                SerializeNoneStructBuilder::new(ast)
+                    .deserialize_trait_impl()
                     .map(|a| a.to_token_stream())
             }
-            (syn::Data::Enum(_), DeriveDeserializeOption::None) => EnumNoneVisitorBuilder::new()
-                .deserialize_trait_impl(ast)
+            (syn::Data::Enum(_), DeriveDeserializeOption::None) => EnumVisitorBuilder::new(ast)
+                .deserialize_trait_impl()
                 .map(|a| a.to_token_stream()),
             (syn::Data::Union(_), _) => Err(DeriveError::custom(
                 "Unions are not supported for deserialization.",

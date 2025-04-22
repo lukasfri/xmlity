@@ -1,3 +1,5 @@
+use std::{borrow::Cow, ops::Deref};
+
 use proc_macro2::Span;
 use syn::{parse_quote, Data, DeriveInput, Ident, Lifetime, LifetimeParam, Stmt};
 
@@ -9,22 +11,22 @@ use crate::{
 
 pub struct StructAttributeVisitorBuilder<'a> {
     opts: &'a XmlityRootAttributeDeriveOpts,
+    ast: &'a syn::DeriveInput,
 }
 
 impl<'a> StructAttributeVisitorBuilder<'a> {
-    pub fn new(opts: &'a XmlityRootAttributeDeriveOpts) -> Self {
-        Self { opts }
+    pub fn new(opts: &'a XmlityRootAttributeDeriveOpts, ast: &'a syn::DeriveInput) -> Self {
+        Self { opts, ast }
     }
 }
 
 impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
     fn visit_attribute_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         visitor_lifetime: &Lifetime,
         attribute_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let DeriveInput { ident, data, .. } = ast;
+        let DeriveInput { ident, data, .. } = &self.ast;
 
         let Data::Struct(data_struct) = data else {
             unreachable!()
@@ -68,11 +70,11 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
         }))
     }
 
-    fn visitor_definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
-        let DeriveInput {
-            ident, generics, ..
-        } = ast;
-        let non_bound_generics = crate::non_bound_generics(generics);
+    fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {
+        let ident = self.visitor_ident();
+        let generics = self.visitor_generics();
+
+        let non_bound_generics = crate::non_bound_generics(generics.deref());
 
         let mut deserialize_generics = (*generics).to_owned();
 
@@ -91,22 +93,28 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
             }
         })
     }
+
+    fn visitor_ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn visitor_generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(&self.ast.generics)
+    }
 }
 
 impl DeserializeBuilder for StructAttributeVisitorBuilder<'_> {
     fn deserialize_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let formatter_expecting = format!("struct {}", ast.ident);
+        let formatter_expecting = format!("struct {}", self.visitor_ident());
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
-        let visitor_def = self.visitor_definition(ast)?;
-        let visitor_trait_impl =
-            self.visitor_trait_impl(ast, &visitor_ident, &formatter_expecting)?;
+        let visitor_def = self.visitor_definition()?;
+        let visitor_trait_impl = self.visitor_trait_impl(&visitor_ident, &formatter_expecting)?;
 
         Ok(parse_quote! {
             #visitor_def
@@ -118,5 +126,13 @@ impl DeserializeBuilder for StructAttributeVisitorBuilder<'_> {
                 marker: ::core::marker::PhantomData,
             })
         })
+    }
+
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(&self.ast.generics)
     }
 }
