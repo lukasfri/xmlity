@@ -28,7 +28,7 @@ const SIMPLE_2D_STRUCT_TEST_XML_WRONG_ORDER: &str = r###"
 const SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML: &str = r###"
 <note to="Tove" from="Jani">
   <heading>Reminder</heading>
-  <body>Don&apos;t forget me this weekend!</body>
+  <body>Don't forget me this weekend!</body>
 </note>
 "###;
 

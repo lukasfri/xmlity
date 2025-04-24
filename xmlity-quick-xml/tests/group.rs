@@ -14,12 +14,6 @@ const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
 </note>
 "###;
 
-const SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML: &str = r###"
-<note to="Tove" from="Jani" heading="Reminder">
-  <body>Don&apos;t forget me this weekend!</body>
-</note>
-"###;
-
 #[derive(Debug, PartialEq, SerializeAttribute, Deserialize)]
 #[xattribute(name = "to")]
 pub struct To(String);
@@ -69,7 +63,7 @@ fn simple_2d_struct_using_group_result() -> Note {
 fn struct_2d_using_group_serialize() {
     let actual = quick_xml_serialize_test(simple_2d_struct_using_group_result()).unwrap();
 
-    let expected = clean_string(SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML);
+    let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
 
     assert_eq!(actual, expected);
 }
@@ -258,7 +252,7 @@ fn multi_level_group_struct_2d_using_group_serialize() {
     let actual =
         quick_xml_serialize_test(multi_level_group_2d_struct_using_group_result()).unwrap();
 
-    let expected = clean_string(SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML);
+    let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
 
     assert_eq!(actual, expected);
 }
