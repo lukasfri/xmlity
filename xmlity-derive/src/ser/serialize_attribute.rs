@@ -3,7 +3,8 @@ use syn::spanned::Spanned;
 use syn::{parse_quote, Arm, ImplItemFn, ItemImpl, Stmt};
 use syn::{DeriveInput, Ident};
 
-use crate::options::{WithExpandedNameExt, XmlityRootAttributeDeriveOpts};
+use crate::options::structs::roots::RootAttributeOpts;
+use crate::options::WithExpandedNameExt;
 
 use crate::DeriveError;
 use crate::DeriveMacro;
@@ -57,11 +58,11 @@ impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
 }
 
 pub struct SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
-    opts: &'a XmlityRootAttributeDeriveOpts,
+    opts: &'a RootAttributeOpts,
 }
 
 impl<'a> SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
-    pub fn new(opts: &'a XmlityRootAttributeDeriveOpts) -> Self {
+    pub fn new(opts: &'a RootAttributeOpts) -> Self {
         Self { opts }
     }
 }
@@ -74,7 +75,7 @@ impl SerializeAttributeBuilder for SerializeAttributeStructUnnamedSingleFieldBui
     ) -> Result<Vec<Stmt>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
 
-        let XmlityRootAttributeDeriveOpts {
+        let RootAttributeOpts {
             preferred_prefix,
             enforce_prefix,
             ..
@@ -168,12 +169,12 @@ impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
 }
 
 enum SerializeAttributeOption {
-    Attribute(XmlityRootAttributeDeriveOpts),
+    Attribute(RootAttributeOpts),
 }
 
 impl SerializeAttributeOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast)?.ok_or_else(|| {
+        let attribute_opts = RootAttributeOpts::parse(ast)?.ok_or_else(|| {
             DeriveError::custom("SerializeAttribute requires the `xattribute` option.")
         })?;
 

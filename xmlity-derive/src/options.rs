@@ -184,282 +184,535 @@ impl ToTokens for Prefix<'_> {
     }
 }
 
-#[derive(FromAttributes)]
-#[darling(attributes(xelement))]
-pub struct XmlityRootElementDeriveOpts {
-    #[darling(default)]
-    pub name: Option<LocalName<'static>>,
-    #[darling(default)]
-    pub namespace: Option<XmlNamespace<'static>>,
-    #[darling(default)]
-    pub namespace_expr: Option<Expr>,
-    #[darling(default)]
-    /// Serialize only
-    pub preferred_prefix: Option<Prefix<'static>>,
-    #[darling(default)]
-    /// Serialize only
-    pub enforce_prefix: bool,
-    #[darling(default)]
-    /// Deserialize only
-    pub allow_unknown_children: bool,
-    #[darling(default)]
-    /// Deserialize only
-    pub allow_unknown_attributes: bool,
-    #[darling(default)]
-    /// Deserialize only
-    pub deserialize_any_name: bool,
-    #[darling(default)]
-    /// Deserialize only
-    pub attribute_order: ElementOrder,
-    #[darling(default)]
-    /// Deserialize only
-    pub children_order: ElementOrder,
-}
+pub mod structs {
+    use super::*;
 
-impl XmlityRootElementDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-        let Some(attr) = ast
-            .attrs
-            .iter()
-            .find(|attr| attr.path().is_ident("xelement"))
-        else {
-            return Ok(None);
-        };
+    pub mod roots {
+        use super::*;
 
-        let opts = Self::from_attributes(&[attr.clone()])?;
-        if opts.namespace_expr.is_some() && opts.namespace.is_some() {
-            return Err(DeriveError::custom(
-                "Cannot specify both `namespace` and `namespace_expr`",
-            ));
+        #[derive(FromAttributes)]
+        #[darling(attributes(xelement))]
+        pub struct RootElementOpts {
+            #[darling(default)]
+            pub name: Option<LocalName<'static>>,
+            #[darling(default)]
+            pub namespace: Option<XmlNamespace<'static>>,
+            #[darling(default)]
+            pub namespace_expr: Option<Expr>,
+            #[darling(default)]
+            /// Serialize only
+            pub preferred_prefix: Option<Prefix<'static>>,
+            #[darling(default)]
+            /// Serialize only
+            pub enforce_prefix: bool,
+            #[darling(default)]
+            /// Deserialize only
+            pub allow_unknown_children: bool,
+            #[darling(default)]
+            /// Deserialize only
+            pub allow_unknown_attributes: bool,
+            #[darling(default)]
+            /// Deserialize only
+            pub deserialize_any_name: bool,
+            #[darling(default)]
+            /// Deserialize only
+            pub attribute_order: ElementOrder,
+            #[darling(default)]
+            /// Deserialize only
+            pub children_order: ElementOrder,
         }
-        Ok(Some(opts))
-    }
-}
 
-impl WithExpandedName for XmlityRootElementDeriveOpts {
-    fn name(&self) -> Option<LocalName<'_>> {
-        self.name.clone()
-    }
+        impl RootElementOpts {
+            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = ast
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xelement"))
+                else {
+                    return Ok(None);
+                };
 
-    fn namespace(&self) -> Option<XmlNamespace<'_>> {
-        self.namespace.clone()
-    }
-
-    fn namespace_expr(&self) -> Option<Expr> {
-        self.namespace_expr.clone()
-    }
-}
-
-#[derive(FromAttributes)]
-#[darling(attributes(xattribute))]
-pub struct XmlityRootAttributeDeriveOpts {
-    #[darling(default)]
-    pub name: Option<LocalName<'static>>,
-    #[darling(default)]
-    pub namespace: Option<XmlNamespace<'static>>,
-    #[darling(default)]
-    pub namespace_expr: Option<Expr>,
-    #[darling(default)]
-    /// Serialize only
-    pub preferred_prefix: Option<Prefix<'static>>,
-    #[darling(default)]
-    /// Serialize only
-    pub enforce_prefix: bool,
-    #[darling(default)]
-    /// Deserialize only
-    pub deserialize_any_name: bool,
-}
-
-impl XmlityRootAttributeDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-        let Some(attr) = ast
-            .attrs
-            .iter()
-            .find(|attr| attr.path().is_ident("xattribute"))
-        else {
-            return Ok(None);
-        };
-
-        let opts = Self::from_attributes(&[attr.clone()])?;
-        Ok(Some(opts))
-    }
-}
-
-impl WithExpandedName for XmlityRootAttributeDeriveOpts {
-    fn name(&self) -> Option<LocalName<'_>> {
-        self.name.clone()
-    }
-
-    fn namespace(&self) -> Option<XmlNamespace<'_>> {
-        self.namespace.clone()
-    }
-
-    fn namespace_expr(&self) -> Option<Expr> {
-        self.namespace_expr.clone()
-    }
-}
-
-#[derive(FromAttributes, Default)]
-#[darling(attributes(xgroup))]
-pub struct XmlityRootGroupDeriveOpts {
-    #[darling(default)]
-    /// Deserialize only
-    pub attribute_order: GroupOrder,
-    #[darling(default)]
-    /// Deserialize only
-    pub children_order: GroupOrder,
-}
-
-impl XmlityRootGroupDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-        let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xgroup")) else {
-            return Ok(None);
-        };
-
-        let opts = Self::from_attributes(&[attr.clone()])?;
-        Ok(Some(opts))
-    }
-}
-
-#[derive(FromAttributes, Default)]
-#[darling(attributes(xvalue))]
-pub struct XmlityRootValueDeriveOpts {
-    #[darling(default)]
-    pub rename_all: RenameRule,
-    #[darling(default)]
-    #[allow(dead_code)]
-    pub serialization_format: TextSerializationFormat,
-}
-
-impl XmlityRootValueDeriveOpts {
-    pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-        let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xvalue")) else {
-            return Ok(None);
-        };
-
-        let opts = Self::from_attributes(&[attr.clone()])?;
-        Ok(Some(opts))
-    }
-}
-
-#[derive(FromAttributes, Default, Clone)]
-#[darling(attributes(xvalue))]
-pub struct XmlityFieldValueDeriveOpts {
-    #[darling(default)]
-    pub default: bool,
-    #[darling(default)]
-    pub extendable: bool,
-    #[darling(default)]
-    pub value: Option<String>,
-}
-
-impl XmlityFieldValueDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
-        let Some(attribute) = field
-            .attrs
-            .iter()
-            .find(|attr| attr.path().is_ident("xvalue"))
-            .cloned()
-        else {
-            return Ok(None);
-        };
-        Self::from_attributes(&[attribute])
-            .map(Some)
-            .map_err(DeriveError::Darling)
-    }
-    pub fn from_variant(variant: &syn::Variant) -> Result<Option<Self>, DeriveError> {
-        let Some(attribute) = variant
-            .attrs
-            .iter()
-            .find(|attr| attr.path().is_ident("xvalue"))
-            .cloned()
-        else {
-            return Ok(None);
-        };
-        Self::from_attributes(&[attribute])
-            .map(Some)
-            .map_err(DeriveError::Darling)
-    }
-}
-
-#[derive(FromAttributes, Clone)]
-#[darling(attributes(xattribute))]
-pub struct XmlityFieldAttributeDeriveOpts {
-    #[darling(default)]
-    pub default: bool,
-}
-
-impl XmlityFieldAttributeDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
-        let Some(attribute) = field
-            .attrs
-            .iter()
-            .find(|attr| attr.path().is_ident("xattribute"))
-            .cloned()
-        else {
-            return Ok(None);
-        };
-        Self::from_attributes(&[attribute])
-            .map(Some)
-            .map_err(DeriveError::Darling)
-    }
-}
-
-#[derive(FromAttributes, Clone)]
-#[darling(attributes(xgroup))]
-pub struct XmlityFieldGroupDeriveOpts {}
-
-impl XmlityFieldGroupDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
-        let Some(attribute) = field
-            .attrs
-            .iter()
-            .find(|attr| attr.path().is_ident("xgroup"))
-            .cloned()
-        else {
-            return Ok(None);
-        };
-        Self::from_attributes(&[attribute])
-            .map(Some)
-            .map_err(DeriveError::Darling)
-    }
-}
-
-#[derive(Clone)]
-pub enum XmlityFieldDeriveOpts {
-    Value(XmlityFieldValueDeriveOpts),
-    Attribute(XmlityFieldAttributeDeriveOpts),
-    Group(XmlityFieldGroupDeriveOpts),
-}
-
-#[derive(Clone)]
-pub enum XmlityFieldAttributeGroupDeriveOpts {
-    Attribute(XmlityFieldAttributeDeriveOpts),
-    Group(XmlityFieldGroupDeriveOpts),
-}
-
-#[derive(Clone)]
-pub enum XmlityFieldValueGroupDeriveOpts {
-    Value(XmlityFieldValueDeriveOpts),
-    Group(XmlityFieldGroupDeriveOpts),
-}
-
-impl XmlityFieldDeriveOpts {
-    pub fn from_field(field: &syn::Field) -> Result<Self, DeriveError> {
-        let element = XmlityFieldValueDeriveOpts::from_field(field)?;
-        let attribute = XmlityFieldAttributeDeriveOpts::from_field(field)?;
-        let group = XmlityFieldGroupDeriveOpts::from_field(field)?;
-        Ok(match (element, attribute, group) {
-            (Some(element), None, None) => Self::Value(element),
-            (None, Some(attribute), None) => Self::Attribute(attribute),
-            (None, None, Some(group)) => Self::Group(group),
-            (None, None, None) => Self::Value(XmlityFieldValueDeriveOpts::default()),
-            _ => {
-                return Err(DeriveError::custom(
-                    "Cannot have multiple xmlity field attributes on the same field.",
-                ))
+                let opts = Self::from_attributes(&[attr.clone()])?;
+                if opts.namespace_expr.is_some() && opts.namespace.is_some() {
+                    return Err(DeriveError::custom(
+                        "Cannot specify both `namespace` and `namespace_expr`",
+                    ));
+                }
+                Ok(Some(opts))
             }
-        })
+        }
+
+        impl WithExpandedName for RootElementOpts {
+            fn name(&self) -> Option<LocalName<'_>> {
+                self.name.clone()
+            }
+
+            fn namespace(&self) -> Option<XmlNamespace<'_>> {
+                self.namespace.clone()
+            }
+
+            fn namespace_expr(&self) -> Option<Expr> {
+                self.namespace_expr.clone()
+            }
+        }
+
+        #[derive(FromAttributes)]
+        #[darling(attributes(xattribute))]
+        pub struct RootAttributeOpts {
+            #[darling(default)]
+            pub name: Option<LocalName<'static>>,
+            #[darling(default)]
+            pub namespace: Option<XmlNamespace<'static>>,
+            #[darling(default)]
+            pub namespace_expr: Option<Expr>,
+            #[darling(default)]
+            /// Serialize only
+            pub preferred_prefix: Option<Prefix<'static>>,
+            #[darling(default)]
+            /// Serialize only
+            pub enforce_prefix: bool,
+            #[darling(default)]
+            /// Deserialize only
+            pub deserialize_any_name: bool,
+        }
+
+        impl RootAttributeOpts {
+            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = ast
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xattribute"))
+                else {
+                    return Ok(None);
+                };
+
+                let opts = Self::from_attributes(&[attr.clone()])?;
+                Ok(Some(opts))
+            }
+        }
+
+        impl WithExpandedName for RootAttributeOpts {
+            fn name(&self) -> Option<LocalName<'_>> {
+                self.name.clone()
+            }
+
+            fn namespace(&self) -> Option<XmlNamespace<'_>> {
+                self.namespace.clone()
+            }
+
+            fn namespace_expr(&self) -> Option<Expr> {
+                self.namespace_expr.clone()
+            }
+        }
+
+        #[derive(FromAttributes)]
+        #[darling(attributes(xvalue))]
+        pub struct RootValueOpts {}
+
+        impl RootValueOpts {
+            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xvalue"))
+                else {
+                    return Ok(None);
+                };
+
+                let opts = Self::from_attributes(&[attr.clone()])?;
+                Ok(Some(opts))
+            }
+        }
+
+        #[derive(FromAttributes, Default)]
+        #[darling(attributes(xgroup))]
+        pub struct RootGroupOpts {
+            #[darling(default)]
+            /// Deserialize only
+            pub attribute_order: GroupOrder,
+            #[darling(default)]
+            /// Deserialize only
+            pub children_order: GroupOrder,
+        }
+
+        impl RootGroupOpts {
+            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xgroup"))
+                else {
+                    return Ok(None);
+                };
+
+                let opts = Self::from_attributes(&[attr.clone()])?;
+                Ok(Some(opts))
+            }
+        }
+
+        pub enum SerializeRootOpts {
+            None,
+            Element(RootElementOpts),
+            Value(RootValueOpts),
+        }
+
+        impl SerializeRootOpts {
+            pub fn parse(ast: &syn::DeriveInput) -> Result<Self, DeriveError> {
+                let element_opts = RootElementOpts::parse(ast)?;
+                let value_opts = RootValueOpts::parse(ast)?;
+
+                match (element_opts, value_opts) {
+                    (Some(element_opts), None) => Ok(Self::Element(element_opts)),
+                    (None, Some(value_opts)) => Ok(Self::Value(value_opts)),
+                    (None, None) => Ok(Self::None),
+                    _ => Err(DeriveError::custom("Wrong options. Only one of `xelement`, `xattribute`, or `xvalue` can be used for root elements.")),
+                }
+            }
+        }
+
+        pub enum DeserializeRootOpts {
+            None,
+            Element(RootElementOpts),
+            Attribute(RootAttributeOpts),
+            Value(RootValueOpts),
+        }
+
+        impl DeserializeRootOpts {
+            pub fn parse(ast: &syn::DeriveInput) -> Result<Self, DeriveError> {
+                let element_opts = RootElementOpts::parse(ast)?;
+                let attribute_opts = RootAttributeOpts::parse(ast)?;
+                let value_opts = RootValueOpts::parse(ast)?;
+
+                match (element_opts, attribute_opts, value_opts) {
+                    (Some(element_opts), None, None) => Ok(Self::Element(element_opts)),
+                    (None, Some(attribute_opts), None) => Ok(Self::Attribute(attribute_opts)),
+                    (None, None, Some(value_opts)) => Ok(Self::Value(value_opts)),
+                    (None, None, None) => Ok(Self::None),
+                    _ => Err(DeriveError::custom("Wrong options. Only one of `xelement`, `xattribute`, or `xvalue` can be used for root elements.")),
+                }
+            }
+        }
+    }
+
+    pub mod fields {
+        use super::*;
+
+        #[derive(FromAttributes, Clone)]
+        #[darling(attributes(xelement))]
+        pub struct ElementOpts {
+            #[darling(default)]
+            pub default: bool,
+            #[darling(default)]
+            pub extendable: bool,
+            #[darling(default)]
+            pub name: Option<String>,
+            #[darling(default)]
+            pub namespace: Option<String>,
+        }
+
+        #[derive(FromAttributes, Clone, Default)]
+        #[darling(attributes(xvalue))]
+        pub struct ValueOpts {
+            #[darling(default)]
+            pub default: bool,
+            #[darling(default)]
+            pub extendable: bool,
+        }
+
+        #[derive(Clone)]
+        pub enum ChildOpts {
+            Value(ValueOpts),
+            Element(ElementOpts),
+        }
+
+        impl Default for ChildOpts {
+            fn default() -> Self {
+                Self::Value(ValueOpts::default())
+            }
+        }
+
+        impl ChildOpts {
+            pub fn should_unwrap_default(&self) -> bool {
+                match self {
+                    ChildOpts::Value(ValueOpts { default, .. }) => *default,
+                    ChildOpts::Element(ElementOpts { default, .. }) => *default,
+                }
+            }
+
+            pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
+                let xvalue_attribute = field
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xvalue"))
+                    .cloned();
+                let xelement_attribute = field
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xelement"))
+                    .cloned();
+
+                match (xvalue_attribute, xelement_attribute) {
+                    (None, None) => Ok(None),
+                    (Some(_), Some(_)) => Err(DeriveError::custom(
+                        "Cannot have both `xvalue` and `xelement` attributes on the same field.",
+                    )),
+                    (Some(xvalue_attribute), None) => Self::from_xvalue_attribute(xvalue_attribute),
+                    (None, Some(xelement_attribute)) => {
+                        Self::from_xelement_attribute(xelement_attribute)
+                    }
+                }
+            }
+
+            pub fn from_xvalue_attribute(
+                xvalue_attribute: syn::Attribute,
+            ) -> Result<Option<Self>, DeriveError> {
+                let opts = ValueOpts::from_attributes(&[xvalue_attribute])?;
+                Ok(Some(ChildOpts::Value(opts)))
+            }
+
+            pub fn from_xelement_attribute(
+                xelement_attribute: syn::Attribute,
+            ) -> Result<Option<Self>, DeriveError> {
+                let opts = ElementOpts::from_attributes(&[xelement_attribute])?;
+                Ok(Some(ChildOpts::Element(opts)))
+            }
+        }
+
+        #[derive(Clone)]
+        pub struct AttributeDeferredOpts {
+            pub default: bool,
+        }
+
+        #[derive(Clone)]
+        pub struct AttributeDeclaredOpts {
+            pub default: bool,
+            pub name: String,
+            pub namespace: Option<String>,
+        }
+
+        #[derive(Clone)]
+        pub enum AttributeOpts {
+            Deferred(AttributeDeferredOpts),
+            Declared(AttributeDeclaredOpts),
+        }
+
+        impl AttributeOpts {
+            pub fn should_unwrap_default(&self) -> bool {
+                match self {
+                    AttributeOpts::Deferred(AttributeDeferredOpts { default }) => *default,
+                    AttributeOpts::Declared(AttributeDeclaredOpts { default, .. }) => *default,
+                }
+            }
+
+            pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
+                let Some(attribute) = field
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xattribute"))
+                    .cloned()
+                else {
+                    return Ok(None);
+                };
+
+                #[derive(FromAttributes)]
+                #[darling(attributes(xattribute))]
+                pub struct FieldAttributeRawOpts {
+                    #[darling(default)]
+                    pub default: bool,
+                    #[darling(default)]
+                    pub name: Option<String>,
+                    #[darling(default)]
+                    pub namespace: Option<String>,
+                }
+
+                let raw = FieldAttributeRawOpts::from_attributes(&[attribute])
+                    .map(Some)
+                    .map_err(DeriveError::Darling)?;
+
+                let Some(raw) = raw else {
+                    return Ok(None);
+                };
+
+                if raw.name.is_some() {
+                    Ok(Some(Self::Declared(AttributeDeclaredOpts {
+                        default: raw.default,
+                        name: raw.name.expect("name should be set"),
+                        namespace: raw.namespace,
+                    })))
+                } else {
+                    if raw.namespace.is_some() {
+                        return Err(DeriveError::custom(
+                            "namespace can only be set if name is set",
+                        ));
+                    }
+
+                    Ok(Some(Self::Deferred(AttributeDeferredOpts {
+                        default: raw.default,
+                    })))
+                }
+            }
+        }
+
+        #[derive(FromAttributes, Clone)]
+        #[darling(attributes(xgroup))]
+        pub struct GroupOpts {}
+
+        impl GroupOpts {
+            pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
+                let Some(attribute) = field
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xgroup"))
+                    .cloned()
+                else {
+                    return Ok(None);
+                };
+                Self::from_attributes(&[attribute])
+                    .map(Some)
+                    .map_err(DeriveError::Darling)
+            }
+        }
+
+        #[derive(Clone)]
+        pub enum FieldOpts {
+            Value(ChildOpts),
+            Attribute(AttributeOpts),
+            Group(GroupOpts),
+        }
+
+        #[derive(Clone)]
+        pub enum FieldAttributeGroupOpts {
+            Attribute(AttributeOpts),
+            Group(GroupOpts),
+        }
+
+        #[derive(Clone)]
+        pub enum FieldValueGroupOpts {
+            Value(ChildOpts),
+            Group(GroupOpts),
+        }
+
+        impl FieldOpts {
+            pub fn from_field(field: &syn::Field) -> Result<Self, DeriveError> {
+                let element = ChildOpts::from_field(field)?;
+                let attribute = AttributeOpts::from_field(field)?;
+                let group = GroupOpts::from_field(field)?;
+                Ok(match (element, attribute, group) {
+                    (Some(element), None, None) => Self::Value(element),
+                    (None, Some(attribute), None) => Self::Attribute(attribute),
+                    (None, None, Some(group)) => Self::Group(group),
+                    (None, None, None) => Self::Value(ChildOpts::default()),
+                    _ => {
+                        return Err(DeriveError::custom(
+                            "Cannot have multiple xmlity field attributes on the same field.",
+                        ))
+                    }
+                })
+            }
+        }
+    }
+}
+
+pub mod enums {
+    use super::*;
+
+    pub mod roots {
+        use super::*;
+
+        #[derive(FromAttributes, Default)]
+        #[darling(attributes(xvalue))]
+        pub struct RootValueOpts {
+            #[darling(default)]
+            pub rename_all: RenameRule,
+            #[darling(default)]
+            #[allow(dead_code)]
+            pub serialization_format: TextSerializationFormat,
+        }
+
+        impl RootValueOpts {
+            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xvalue"))
+                else {
+                    return Ok(None);
+                };
+
+                let opts = Self::from_attributes(&[attr.clone()])?;
+                Ok(Some(opts))
+            }
+        }
+
+        pub enum RootOpts {
+            None,
+            Value(RootValueOpts),
+        }
+
+        impl RootOpts {
+            pub fn parse(ast: &syn::DeriveInput) -> Result<Self, DeriveError> {
+                let value_opts = RootValueOpts::parse(ast)?;
+
+                match value_opts {
+                    Some(value_opts) => Ok(RootOpts::Value(value_opts)),
+                    None => Ok(RootOpts::None),
+                }
+            }
+        }
+    }
+
+    pub mod variants {
+        use super::*;
+
+        #[derive(FromAttributes, Clone)]
+        #[darling(attributes(xelement))]
+        pub struct ElementOpts {
+            pub name: String,
+            pub namespace: Option<String>,
+        }
+
+        #[derive(FromAttributes, Clone, Default)]
+        #[darling(attributes(xvalue))]
+        pub struct ValueOpts {
+            pub value: Option<String>,
+        }
+
+        #[derive(Clone)]
+        pub enum VariantOpts {
+            Value(ValueOpts),
+            Element(ElementOpts),
+        }
+
+        impl VariantOpts {
+            pub fn from_variant(variant: &syn::Variant) -> Result<Option<Self>, DeriveError> {
+                let xvalue_attribute = variant
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xvalue"))
+                    .cloned();
+                let xelement_attribute = variant
+                    .attrs
+                    .iter()
+                    .find(|attr| attr.path().is_ident("xelement"))
+                    .cloned();
+
+                match (xvalue_attribute, xelement_attribute) {
+                    (None, None) => Ok(None),
+                    (Some(_), Some(_)) => Err(DeriveError::custom(
+                        "Cannot have both `xvalue` and `xelement` attributes on the same field.",
+                    )),
+                    (Some(xvalue_attribute), None) => Self::from_xvalue_attribute(xvalue_attribute),
+                    (None, Some(xelement_attribute)) => {
+                        Self::from_xelement_attribute(xelement_attribute)
+                    }
+                }
+            }
+
+            pub fn from_xvalue_attribute(
+                xvalue_attribute: syn::Attribute,
+            ) -> Result<Option<Self>, DeriveError> {
+                let opts = ValueOpts::from_attributes(&[xvalue_attribute])?;
+                Ok(Some(VariantOpts::Value(opts)))
+            }
+
+            pub fn from_xelement_attribute(
+                xelement_attribute: syn::Attribute,
+            ) -> Result<Option<Self>, DeriveError> {
+                let opts = ElementOpts::from_attributes(&[xelement_attribute])?;
+                Ok(Some(VariantOpts::Element(opts)))
+            }
+        }
     }
 }
 

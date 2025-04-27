@@ -5,7 +5,7 @@ use syn::{
     parse_quote, Generics, Ident, ImplItemFn, ItemImpl, ItemStruct, Lifetime, LifetimeParam, Stmt,
 };
 
-use crate::{options::XmlityFieldValueGroupDeriveOpts, DeriveError};
+use crate::{options::structs::fields::FieldValueGroupOpts, DeriveError};
 
 pub trait VisitorBuilder {
     fn visit_text_fn_body(
@@ -489,7 +489,7 @@ use crate::{
 
 pub struct SeqVisitLoop<
     'a,
-    F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>> + Clone,
+    F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone,
 > {
     seq_access_ident: &'a Ident,
     allow_unknown_children: bool,
@@ -497,10 +497,8 @@ pub struct SeqVisitLoop<
     fields: F,
 }
 
-impl<
-        'a,
-        F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>> + Clone,
-    > SeqVisitLoop<'a, F>
+impl<'a, F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone>
+    SeqVisitLoop<'a, F>
 {
     pub fn new(
         seq_access_ident: &'a Ident,

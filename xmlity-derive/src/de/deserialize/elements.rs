@@ -7,36 +7,36 @@ use syn::{parse_quote, spanned::Spanned, DeriveInput, Expr, Ident, Lifetime, Lif
 use crate::{
     de::{
         all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
-        common::SeqVisitLoop,
-        common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+        common::{DeserializeBuilder, SeqVisitLoop, VisitorBuilder, VisitorBuilderExt},
         constructor_expr, StructType,
     },
     options::{
-        ElementOrder, WithExpandedNameExt, XmlityFieldAttributeDeriveOpts,
-        XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldGroupDeriveOpts,
-        XmlityFieldValueDeriveOpts, XmlityFieldValueGroupDeriveOpts, XmlityRootElementDeriveOpts,
+        structs::{
+            fields::{
+                AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
+                GroupOpts,
+            },
+            roots::RootElementOpts,
+        },
+        ElementOrder, WithExpandedNameExt,
     },
     DeriveError, DeriveResult, DeserializeField, FieldIdent,
 };
 
 pub struct StructElementVisitorBuilder<'a> {
     ast: &'a syn::DeriveInput,
-    opts: &'a XmlityRootElementDeriveOpts,
+    opts: &'a RootElementOpts,
 }
 
 impl<'a> StructElementVisitorBuilder<'a> {
-    pub fn new(opts: &'a XmlityRootElementDeriveOpts, ast: &'a syn::DeriveInput) -> Self {
+    pub fn new(opts: &'a RootElementOpts, ast: &'a syn::DeriveInput) -> Self {
         Self { ast, opts }
     }
 
     pub fn field_decl(
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
-        >,
-        attribute_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
+        element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>>,
+        attribute_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>>,
+        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>>,
     ) -> Vec<Stmt> {
         let getter_declarations = attribute_fields
             .into_iter()
@@ -81,20 +81,24 @@ impl<'a> StructElementVisitorBuilder<'a> {
     pub fn constructor_expr(
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
-        >,
-        attribute_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
+        element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>>,
+        attribute_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>>,
+        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>>,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors = attribute_fields.into_iter()
-            .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
-            .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Value)))
-            .map::<(_, Expr), _>(|DeserializeField { builder_field_ident, field_ident, options, .. }| {
-                let expression = if matches!(options, XmlityFieldDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true, ..})) {
+            .map(|a: DeserializeField<FieldIdent, AttributeOpts>| (
+                a.builder_field_ident,
+                a.field_ident,
+                a.options.should_unwrap_default()
+            ))
+            .chain(element_fields.into_iter().map(|a: DeserializeField<FieldIdent, ChildOpts>| (
+                a.builder_field_ident,
+                a.field_ident,
+                a.options.should_unwrap_default()
+            )))
+            .map::<(_, Expr), _>(|(builder_field_ident, field_ident, default_unwrap)| {
+                let expression = if default_unwrap {
                     parse_quote! {
                         ::core::option::Option::unwrap_or_default(#builder_field_ident)
                     }
@@ -128,8 +132,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
     pub fn attribute_access(
         access_ident: &Ident,
         span: proc_macro2::Span,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>>
-            + Clone,
+        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldAttributeGroupOpts>> + Clone,
         allow_unknown_attributes: bool,
         order: ElementOrder,
     ) -> Vec<Stmt> {
@@ -213,8 +216,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
     pub fn element_access(
         element_access_ident: &Ident,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
-            + Clone,
+        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
     ) -> Vec<Stmt> {
@@ -247,26 +249,26 @@ impl<'a> StructElementVisitorBuilder<'a> {
         allow_unknown_attributes: bool,
     ) -> Vec<Stmt>
     where
-        T: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldDeriveOpts>> + Clone,
+        T: IntoIterator<Item = DeserializeField<FieldIdent, FieldOpts>> + Clone,
         T::IntoIter: Clone,
     {
         let element_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Value(opts) => Some(opts),
+                FieldOpts::Value(opts) => Some(opts),
                 _ => None,
             })
         });
 
         let attribute_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Attribute(opts) => Some(opts),
+                FieldOpts::Attribute(opts) => Some(opts),
                 _ => None,
             })
         });
 
         let group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Group(opts) => Some(opts),
+                FieldOpts::Group(opts) => Some(opts),
                 _ => None,
             })
         });
@@ -279,25 +281,17 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
         let attribute_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Attribute(opts) => {
-                    Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                }
-                XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                }
-                XmlityFieldDeriveOpts::Value(_) => None,
+                FieldOpts::Attribute(opts) => Some(FieldAttributeGroupOpts::Attribute(opts)),
+                FieldOpts::Group(opts) => Some(FieldAttributeGroupOpts::Group(opts)),
+                FieldOpts::Value(_) => None,
             })
         });
 
         let element_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Value(opts) => {
-                    Some(XmlityFieldValueGroupDeriveOpts::Value(opts))
-                }
-                XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldValueGroupDeriveOpts::Group(opts))
-                }
-                XmlityFieldDeriveOpts::Attribute(_) => None,
+                FieldOpts::Value(opts) => Some(FieldValueGroupOpts::Value(opts)),
+                FieldOpts::Group(opts) => Some(FieldValueGroupOpts::Group(opts)),
+                FieldOpts::Attribute(_) => None,
             })
         });
 
@@ -371,7 +365,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                     DeriveResult::Ok(DeserializeField {
                         builder_field_ident: FieldIdent::Named(field_ident.clone()),
                         field_ident: FieldIdent::Named(field_ident),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
+                        options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),
                     })
                 })
@@ -387,7 +381,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                             f.span(),
                         )),
                         field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
+                        options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),
                     })
                 })
@@ -422,7 +416,7 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
         element_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput { ident, data, .. } = &self.ast;
-        let XmlityRootElementDeriveOpts {
+        let RootElementOpts {
             deserialize_any_name,
             allow_unknown_attributes,
             allow_unknown_children,

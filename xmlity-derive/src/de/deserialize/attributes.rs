@@ -5,17 +5,17 @@ use syn::{parse_quote, Data, DeriveInput, Ident, Lifetime, LifetimeParam, Stmt};
 
 use crate::{
     de::common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-    options::{WithExpandedNameExt, XmlityRootAttributeDeriveOpts},
+    options::{structs::roots::RootAttributeOpts, WithExpandedNameExt},
     DeriveError,
 };
 
 pub struct StructAttributeVisitorBuilder<'a> {
-    opts: &'a XmlityRootAttributeDeriveOpts,
+    opts: &'a RootAttributeOpts,
     ast: &'a syn::DeriveInput,
 }
 
 impl<'a> StructAttributeVisitorBuilder<'a> {
-    pub fn new(opts: &'a XmlityRootAttributeDeriveOpts, ast: &'a syn::DeriveInput) -> Self {
+    pub fn new(opts: &'a RootAttributeOpts, ast: &'a syn::DeriveInput) -> Self {
         Self { opts, ast }
     }
 }
@@ -31,7 +31,7 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
         let Data::Struct(data_struct) = data else {
             unreachable!()
         };
-        let XmlityRootAttributeDeriveOpts {
+        let RootAttributeOpts {
             deserialize_any_name,
             ..
         } = self.opts;

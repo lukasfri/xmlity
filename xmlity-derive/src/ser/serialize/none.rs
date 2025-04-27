@@ -2,7 +2,10 @@ use quote::quote;
 use syn::{parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Ident, Stmt};
 
 use crate::{
-    options::{XmlityFieldValueDeriveOpts, XmlityRootValueDeriveOpts},
+    options::enums::{
+        roots::RootValueOpts,
+        variants::{ValueOpts, VariantOpts},
+    },
     DeriveError,
 };
 
@@ -49,11 +52,11 @@ impl SerializeBuilder for DeriveNoneStruct {
 }
 
 pub struct DeriveEnum<'a> {
-    value_opts: Option<&'a XmlityRootValueDeriveOpts>,
+    value_opts: Option<&'a RootValueOpts>,
 }
 
 impl<'a> DeriveEnum<'a> {
-    pub fn new(value_opts: Option<&'a XmlityRootValueDeriveOpts>) -> Self {
+    pub fn new(value_opts: Option<&'a RootValueOpts>) -> Self {
         Self { value_opts }
     }
 }
@@ -97,11 +100,16 @@ impl SerializeBuilder for DeriveEnum<'_> {
                     syn::Fields::Unit => {
                         let variant_ident = &variant.ident;
 
-                        let variant_opts = XmlityFieldValueDeriveOpts::from_variant(variant)?;
+                        let variant_opts = VariantOpts::from_variant(variant)?;
 
                         let value = variant_opts
                             .as_ref()
-                            .and_then(|a| a.value.clone())
+                            .and_then(|a| match a {
+                                VariantOpts::Value(ValueOpts {
+                                    value: Some(value), ..
+                                }) => Some(value.clone()),
+                                _ => None,
+                            })
                             .unwrap_or_else(|| {
                                 self.value_opts
                                     .as_ref()

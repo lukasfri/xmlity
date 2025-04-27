@@ -9,8 +9,11 @@ use syn::{
 
 use crate::{
     options::{
-        GroupOrder, XmlityFieldAttributeDeriveOpts, XmlityFieldDeriveOpts,
-        XmlityFieldGroupDeriveOpts, XmlityFieldValueDeriveOpts, XmlityRootGroupDeriveOpts,
+        structs::{
+            fields::{AttributeOpts, ChildOpts, GroupOpts},
+            roots::RootGroupOpts,
+        },
+        GroupOrder,
     },
     DeriveError, DeriveMacro, DeserializeField, FieldIdent,
 };
@@ -308,11 +311,11 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
 }
 
 pub struct DeriveDeserializationGroupStruct<'a> {
-    opts: &'a XmlityRootGroupDeriveOpts,
+    opts: &'a RootGroupOpts,
 }
 
 impl<'a> DeriveDeserializationGroupStruct<'a> {
-    pub fn new(opts: &'a XmlityRootGroupDeriveOpts) -> Self {
+    pub fn new(opts: &'a RootGroupOpts) -> Self {
         Self { opts }
     }
 
@@ -566,18 +569,24 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
 
 fn finish_constructor_expr<T: quote::ToTokens>(
     ident: T,
-    element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>>,
-    attribute_fields: impl IntoIterator<
-        Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
-    >,
-    group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
+    element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>>,
+    attribute_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>>,
+    group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>>,
     constructor_type: &StructType,
 ) -> proc_macro2::TokenStream {
     let local_value_expressions_constructors = attribute_fields.into_iter()
-      .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
-      .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Value)))
-      .map(|DeserializeField { builder_field_ident, field_ident, options, .. }| {
-          let expression = if matches!(options, XmlityFieldDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true, ..})) {
+        .map(|a: DeserializeField<FieldIdent, AttributeOpts>| (
+            a.builder_field_ident,
+            a.field_ident,
+            a.options.should_unwrap_default()
+        ))
+        .chain(element_fields.into_iter().map(|a: DeserializeField<FieldIdent, ChildOpts>| (
+            a.builder_field_ident,
+            a.field_ident,
+            a.options.should_unwrap_default()
+        )))
+      .map(|( builder_field_ident, field_ident, should_unwrap_default )| {
+          let expression = if should_unwrap_default {
               quote! {
                   ::core::option::Option::unwrap_or_default(self.#builder_field_ident)
               }
@@ -609,12 +618,12 @@ fn finish_constructor_expr<T: quote::ToTokens>(
 }
 
 enum DeserializationGroupOption {
-    Group(XmlityRootGroupDeriveOpts),
+    Group(RootGroupOpts),
 }
 
 impl DeserializationGroupOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let group_opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
+        let group_opts = RootGroupOpts::parse(ast)?.unwrap_or_default();
 
         Ok(DeserializationGroupOption::Group(group_opts))
     }

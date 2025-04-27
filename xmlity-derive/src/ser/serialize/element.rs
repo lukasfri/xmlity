@@ -1,17 +1,17 @@
 use quote::quote;
 use syn::{parse_quote, Data, DataStruct, Ident, Stmt};
 
-use crate::options::{WithExpandedNameExt, XmlityRootElementDeriveOpts};
+use crate::options::{structs::roots::RootElementOpts, WithExpandedNameExt};
 use crate::DeriveError;
 
 use super::SerializeBuilder;
 
 pub struct DeriveElementStruct<'a> {
-    opts: &'a XmlityRootElementDeriveOpts,
+    opts: &'a RootElementOpts,
 }
 
 impl<'a> DeriveElementStruct<'a> {
-    pub fn new(opts: &'a XmlityRootElementDeriveOpts) -> Self {
+    pub fn new(opts: &'a RootElementOpts) -> Self {
         Self { opts }
     }
 }
@@ -22,7 +22,7 @@ impl SerializeBuilder for DeriveElementStruct<'_> {
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let XmlityRootElementDeriveOpts {
+        let RootElementOpts {
             preferred_prefix,
             enforce_prefix,
             ..

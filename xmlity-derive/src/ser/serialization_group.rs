@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt};
 
-use crate::{options::XmlityRootGroupDeriveOpts, DeriveError, DeriveMacro};
+use crate::{options::structs::roots::RootGroupOpts, DeriveError, DeriveMacro};
 
 trait SerializationGroupBuilder {
     fn serialize_attributes_fn_body(
@@ -73,11 +73,11 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
 
 #[allow(unused)]
 pub struct DeriveSerializationGroupStruct<'a> {
-    opts: &'a XmlityRootGroupDeriveOpts,
+    opts: &'a RootGroupOpts,
 }
 
 impl<'a> DeriveSerializationGroupStruct<'a> {
-    fn new(opts: &'a XmlityRootGroupDeriveOpts) -> Self {
+    fn new(opts: &'a RootGroupOpts) -> Self {
         Self { opts }
     }
 }
@@ -117,12 +117,12 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
 }
 
 enum SerializationGroupOption {
-    Group(XmlityRootGroupDeriveOpts),
+    Group(RootGroupOpts),
 }
 
 impl SerializationGroupOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let group_opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
+        let group_opts = RootGroupOpts::parse(ast)?.unwrap_or_default();
 
         Ok(SerializationGroupOption::Group(group_opts))
     }

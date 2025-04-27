@@ -7,7 +7,7 @@ use quote::ToTokens;
 use syn::spanned::Spanned;
 use syn::{parse_quote, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt};
 
-use crate::options::{XmlityRootElementDeriveOpts, XmlityRootValueDeriveOpts};
+use crate::options::{enums, structs};
 use crate::{DeriveError, DeriveMacro};
 
 trait SerializeBuilder {
@@ -55,59 +55,40 @@ impl<T: SerializeBuilder> SerializeBuilderExt for T {
     }
 }
 
-enum DeriveSerializeOption {
-    Element(XmlityRootElementDeriveOpts),
-    Value(XmlityRootValueDeriveOpts),
-    None,
-}
-
-impl DeriveSerializeOption {
-    pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let element_opts = XmlityRootElementDeriveOpts::parse(ast)?;
-        let value_opts = XmlityRootValueDeriveOpts::parse(ast)?;
-
-        match (element_opts, value_opts) {
-            (Some(element_opts), None) => Ok(DeriveSerializeOption::Element(element_opts)),
-            (None, Some(value_opts)) => Ok(DeriveSerializeOption::Value(value_opts)),
-            (None, None) => Ok(DeriveSerializeOption::None),
-            _ => Err(DeriveError::custom(
-                "Wrong options. Only one of `xelement` or `xvalue` can be used for root elements.",
-            )),
-        }
-    }
-}
-
 pub struct DeriveSerialize;
 
 impl DeriveMacro for DeriveSerialize {
     fn input_to_derive(ast: &DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
-        let opts = DeriveSerializeOption::parse(ast)?;
-
-        match (&ast.data, &opts) {
-            // `xelement`
-            (syn::Data::Struct(_), DeriveSerializeOption::Element(opts)) => {
-                DeriveElementStruct::new(opts)
-                    .serialize_trait_impl(ast)
-                    .map(|a| a.to_token_stream())
+        match &ast.data {
+            syn::Data::Struct(_) => {
+                let opts = structs::roots::SerializeRootOpts::parse(ast)?;
+                match opts {
+                    structs::roots::SerializeRootOpts::Element(opts) => {
+                        DeriveElementStruct::new(&opts)
+                            .serialize_trait_impl(ast)
+                            .map(|a| a.to_token_stream())
+                    }
+                    structs::roots::SerializeRootOpts::None => DeriveNoneStruct::new()
+                        .serialize_trait_impl(ast)
+                        .map(|a| a.to_token_stream()),
+                    structs::roots::SerializeRootOpts::Value(_) => Err(DeriveError::custom(
+                        "`xvalue` is not compatible with structs.",
+                    )),
+                }
             }
-            (syn::Data::Enum(_), DeriveSerializeOption::Element(_)) => Err(DeriveError::custom(
-                "`xelement` is not compatible with enums.",
-            )),
-            // `xvalue`
-            (syn::Data::Struct(_), DeriveSerializeOption::Value(_)) => Err(DeriveError::custom(
-                "`xvalue` is not compatible with structs.",
-            )),
-            (syn::Data::Enum(_), DeriveSerializeOption::Value(opts)) => DeriveEnum::new(Some(opts))
-                .serialize_trait_impl(ast)
-                .map(|a| a.to_token_stream()),
-            // None
-            (syn::Data::Struct(_), DeriveSerializeOption::None) => DeriveNoneStruct::new()
-                .serialize_trait_impl(ast)
-                .map(|a| a.to_token_stream()),
-            (syn::Data::Enum(_), DeriveSerializeOption::None) => DeriveEnum::new(None)
-                .serialize_trait_impl(ast)
-                .map(|a| a.to_token_stream()),
-            (syn::Data::Union(_), _) => Err(DeriveError::custom(
+            syn::Data::Enum(_) => {
+                let opts = enums::roots::RootOpts::parse(ast)?;
+
+                match opts {
+                    enums::roots::RootOpts::Value(opts) => DeriveEnum::new(Some(&opts))
+                        .serialize_trait_impl(ast)
+                        .map(|a| a.to_token_stream()),
+                    enums::roots::RootOpts::None => DeriveEnum::new(None)
+                        .serialize_trait_impl(ast)
+                        .map(|a| a.to_token_stream()),
+                }
+            }
+            syn::Data::Union(_) => Err(DeriveError::custom(
                 "Unions are not supported for serialization.",
             )),
         }
