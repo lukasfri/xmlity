@@ -3,8 +3,8 @@
 //! This has nothing to do with the actual XSD crate/generator, it's just some tests that happen to use the same thing.
 use pretty_assertions::assert_eq;
 
-mod common;
-use common::{clean_string, quick_xml_deserialize_test};
+pub mod utils;
+use utils::{clean_string, quick_xml_deserialize_test};
 
 use std::fs;
 

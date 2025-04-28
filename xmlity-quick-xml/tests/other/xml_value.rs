@@ -1,7 +1,4 @@
-use pretty_assertions::assert_eq;
-
-mod common;
-use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
+use crate::{define_test, utils::clean_string};
 
 use xmlity::{
     types::value::{XmlAttribute, XmlChild, XmlDecl, XmlElement, XmlText, XmlValue},
@@ -18,22 +15,11 @@ fn xml_value() -> XmlValue {
             .with_children(vec![XmlChild::Text(XmlText::new("Tove"))]),
     )
 }
-#[test]
-fn simple_1d_struct_serialize() {
-    let actual = quick_xml_serialize_test(xml_value()).unwrap();
 
-    assert_eq!(actual, clean_string(SIMPLE_1D_STRUCT_TEST_XML));
-}
-
-#[test]
-fn simple_1d_struct_deserialize() {
-    let input = clean_string(SIMPLE_1D_STRUCT_TEST_XML);
-    let actual: XmlValue = quick_xml_deserialize_test(input.as_str()).unwrap();
-
-    let expected = xml_value();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    xml_value_1d_element,
+    [(xml_value(), clean_string(SIMPLE_1D_STRUCT_TEST_XML))]
+);
 
 const COMPLEX_XML_EXAMPLE: &str = r###"
 <note>
@@ -83,41 +69,19 @@ fn complex_xml_value() -> XmlValue {
     )
 }
 
-#[test]
-fn complex_xml_value_serialize() {
-    let actual = quick_xml_serialize_test(complex_xml_value()).unwrap();
-
-    assert_eq!(actual, clean_string(COMPLEX_XML_EXAMPLE));
-}
-
-#[test]
-fn complex_xml_value_deserialize() {
-    let input = clean_string(COMPLEX_XML_EXAMPLE);
-    let actual: XmlValue = quick_xml_deserialize_test(input.as_str()).unwrap();
-
-    let expected = complex_xml_value();
-
-    assert_eq!(actual, expected);
-}
-
-const DECL_XML: &str = r###"<?xml version="1.0" encoding="UTF-8"?>"###;
+define_test!(
+    complex_xml_value,
+    [(complex_xml_value(), clean_string(COMPLEX_XML_EXAMPLE))]
+);
 
 fn decl_xml_value() -> XmlDecl {
     XmlDecl::new("1.0", Some("UTF-8"), None)
 }
-#[test]
-fn decl_xml_value_serialize() {
-    let actual = quick_xml_serialize_test(decl_xml_value()).unwrap();
 
-    assert_eq!(actual, clean_string(DECL_XML));
-}
-
-#[test]
-fn decl_xml_value_deserialize() {
-    let input = clean_string(DECL_XML);
-    let actual: XmlDecl = quick_xml_deserialize_test(input.as_str()).unwrap();
-
-    let expected = decl_xml_value();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    complex_xml_decl,
+    [(
+        decl_xml_value(),
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#
+    )]
+);
