@@ -2,7 +2,6 @@ use core::str;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::io::Write;
-use std::ops::DerefMut;
 
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer as QuickXmlWriter;
