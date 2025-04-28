@@ -41,3 +41,35 @@ pub fn quick_xml_deserialize_test<T: xmlity::DeserializeOwned + std::fmt::Debug>
 pub fn clean_string(input: &str) -> String {
     input.trim().lines().map(str::trim).collect::<String>()
 }
+
+#[macro_export]
+macro_rules! define_test {
+    ($name: ident, [$(($xml:expr, $value:expr)),*]) =>  {
+        $crate::define_test!($name, [$(($xml, $value)),*], []);
+    };
+    ($name: ident, [$(($xml:expr, $value:expr)),*], []) => {
+        mod $name {
+            #[allow(unused_imports)]
+            use super::*;
+            #[rstest::rstest]
+            $(
+                #[case($value, $xml)]
+            )*
+            fn serialize<T: xmlity::Serialize + std::fmt::Debug + PartialEq>(#[case] to: T, #[case] expected: &str) {
+                let actual = $crate::utils::quick_xml_serialize_test(to).unwrap();
+
+                pretty_assertions::assert_eq!(actual, expected);
+            }
+
+            #[rstest::rstest]
+            $(
+                #[case($value, $xml)]
+            )*
+            fn deserialize<T: xmlity::DeserializeOwned + std::fmt::Debug + PartialEq>(#[case] expected: T, #[case] xml: &str) {
+                let actual: T = $crate::utils::quick_xml_deserialize_test(xml).unwrap();
+
+                pretty_assertions::assert_eq!(actual, expected);
+            }
+        }
+    };
+}

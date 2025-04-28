@@ -3,8 +3,9 @@ use std::str::FromStr;
 
 use pretty_assertions::assert_eq;
 
-mod common;
-use common::{clean_string, quick_xml_deserialize_test};
+use crate::utils::{
+    clean_string, quick_xml_deserialize_test, quick_xml_serialize_test_with_default,
+};
 use rstest::rstest;
 use xmlity::{types::string::Trim, ExpandedName, XmlNamespace};
 use xmlity::{Deserialize, Serialize};
@@ -49,8 +50,6 @@ fn simple_ns_1d_struct_serialize(
     #[case] test_xml: &str,
     #[case] default_namespace: Option<&'static str>,
 ) {
-    use common::quick_xml_serialize_test_with_default;
-
     let actual = quick_xml_serialize_test_with_default(
         simple_ns_1d_struct(),
         default_namespace.map(XmlNamespace::new).map(Result::unwrap),
@@ -300,8 +299,6 @@ fn simple_3d_list_test_value() -> BreakfastMenu {
 )]
 #[case::no_default_ns(SIMPLE_3D_NS_LIST_TEST_XML, None)]
 fn simple_3d_struct_serialize(#[case] xml: &str, #[case] default_ns: Option<&'static str>) {
-    use common::quick_xml_serialize_test_with_default;
-
     let actual = quick_xml_serialize_test_with_default(
         simple_3d_list_test_value(),
         default_ns.map(XmlNamespace::new).map(Result::unwrap),

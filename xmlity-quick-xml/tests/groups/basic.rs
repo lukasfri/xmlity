@@ -1,10 +1,11 @@
 //! Tests for basic functionality. These tests are the most basic and do not include any attributes. They are simply used to test the default behavior of the library.
 use pretty_assertions::assert_eq;
 
-mod common;
-use common::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
+use crate::utils::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
-use xmlity::{Deserialize, Serialize, SerializeAttribute};
+use xmlity::{
+    DeserializationGroup, Deserialize, SerializationGroup, Serialize, SerializeAttribute,
+};
 
 const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
 <note to="Tove" from="Jani" heading="Reminder">
@@ -28,9 +29,8 @@ pub struct Heading(String);
 #[xelement(name = "body")]
 pub struct Body(String);
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xelement(name = "note")]
-pub struct Note {
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+pub struct NoteGroup {
     #[xattribute]
     pub to: To,
     #[xattribute]
@@ -40,18 +40,27 @@ pub struct Note {
     pub body: Body,
 }
 
-fn simple_2d_struct_result() -> Note {
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "note")]
+pub struct Note {
+    #[xgroup]
+    pub group: NoteGroup,
+}
+
+fn simple_2d_struct_using_group_result() -> Note {
     Note {
-        to: To("Tove".to_string()),
-        from: From("Jani".to_string()),
-        heading: Heading("Reminder".to_string()),
-        body: Body("Don't forget me this weekend!".to_string()),
+        group: NoteGroup {
+            to: To("Tove".to_string()),
+            from: From("Jani".to_string()),
+            heading: Heading("Reminder".to_string()),
+            body: Body("Don't forget me this weekend!".to_string()),
+        },
     }
 }
 
 #[test]
-fn struct_2d_with_attributes_serialize() {
-    let actual = quick_xml_serialize_test(simple_2d_struct_result()).unwrap();
+fn struct_2d_using_group_serialize() {
+    let actual = quick_xml_serialize_test(simple_2d_struct_using_group_result()).unwrap();
 
     let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
 
@@ -59,11 +68,11 @@ fn struct_2d_with_attributes_serialize() {
 }
 
 #[test]
-fn struct_2d_with_attributes_deserialize() {
+fn struct_2d_using_group_deserialize() {
     let actual: Note =
         quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
 
-    let expected = simple_2d_struct_result();
+    let expected = simple_2d_struct_using_group_result();
 
     assert_eq!(actual, expected);
 }
@@ -182,7 +191,7 @@ fn simple_3d_list_test_value() -> BreakfastMenu {
 }
 
 #[test]
-fn struct_3d_with_attributes_serialize() {
+fn struct_3d_using_group_serialize() {
     let actual = quick_xml_serialize_test(simple_3d_list_test_value()).unwrap();
 
     let expected = clean_string(SIMPLE_3D_LIST_TEST_XML);
@@ -191,11 +200,68 @@ fn struct_3d_with_attributes_serialize() {
 }
 
 #[test]
-fn struct_3d_with_attributes_deserialize() {
+fn struct_3d_using_group_deserialize() {
     let actual: BreakfastMenu =
         quick_xml_deserialize_test(clean_string(SIMPLE_3D_LIST_TEST_XML).as_str()).unwrap();
 
     let expected = simple_3d_list_test_value();
+
+    assert_eq!(actual, expected);
+}
+
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+pub struct NoteGroup2 {
+    #[xattribute]
+    pub heading: Heading,
+    pub body: Body,
+}
+
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+pub struct NoteGroup1 {
+    #[xattribute]
+    pub to: To,
+    #[xattribute]
+    pub from: From,
+    #[xgroup]
+    pub group: NoteGroup2,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "note")]
+pub struct Note2 {
+    #[xgroup]
+    pub group: NoteGroup1,
+}
+
+fn multi_level_group_2d_struct_using_group_result() -> Note2 {
+    Note2 {
+        group: NoteGroup1 {
+            to: To("Tove".to_string()),
+            from: From("Jani".to_string()),
+            group: NoteGroup2 {
+                heading: Heading("Reminder".to_string()),
+                body: Body("Don't forget me this weekend!".to_string()),
+            },
+        },
+    }
+}
+
+#[test]
+fn multi_level_group_struct_2d_using_group_serialize() {
+    let actual =
+        quick_xml_serialize_test(multi_level_group_2d_struct_using_group_result()).unwrap();
+
+    let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn multi_level_group_struct_2d_using_group_deserialize() {
+    let actual: Note2 =
+        quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
+
+    let expected = multi_level_group_2d_struct_using_group_result();
 
     assert_eq!(actual, expected);
 }
