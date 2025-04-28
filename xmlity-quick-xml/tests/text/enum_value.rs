@@ -1,6 +1,4 @@
-use pretty_assertions::assert_eq;
-
-use crate::utils::quick_xml_deserialize_test;
+use crate::{define_test, utils::quick_xml_deserialize_test};
 
 use rstest::rstest;
 use xmlity::{Deserialize, Serialize};
@@ -13,16 +11,13 @@ pub enum Union {
     Extension,
 }
 
-#[rstest]
-#[case::restriction("restriction", Union::Restriction)]
-#[case::extension("extension", Union::Extension)]
-fn union_test(#[case] xml: &str, #[case] expected: Union) {
-    let union: Result<Union, _> = quick_xml_deserialize_test(xml);
-
-    assert!(union.is_ok(), "Successfully deserialized \"Union\")");
-    let union = union.unwrap();
-    assert_eq!(union, expected);
-}
+define_test!(
+    union_test,
+    [
+        (Union::Restriction, "restriction"),
+        (Union::Extension, "extension")
+    ]
+);
 
 #[rstest]
 #[case::restriction("Restriction")]

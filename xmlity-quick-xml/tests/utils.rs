@@ -53,18 +53,18 @@ macro_rules! define_test {
             $(
                 #[case($value, $serialize_xml)]
             )*
-            fn serialize<T: xmlity::Serialize + std::fmt::Debug + PartialEq>(#[case] to: T, #[case] expected: &str) {
+            fn serialize<T: xmlity::Serialize + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] to: T, #[case] expected: U) {
                 let actual = $crate::utils::quick_xml_serialize_test(to).unwrap();
 
-                pretty_assertions::assert_eq!(actual, expected);
+                pretty_assertions::assert_eq!(actual, expected.as_ref());
             }
 
             #[rstest::rstest]
             $(
                 #[case($value, $deserialize_xml)]
             )*
-            fn deserialize<T: xmlity::DeserializeOwned + std::fmt::Debug + PartialEq>(#[case] expected: T, #[case] xml: &str) {
-                let actual: T = $crate::utils::quick_xml_deserialize_test(xml).unwrap();
+            fn deserialize<T: xmlity::DeserializeOwned + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] expected: T, #[case] xml: U) {
+                let actual: T = $crate::utils::quick_xml_deserialize_test(xml.as_ref()).unwrap();
 
                 pretty_assertions::assert_eq!(actual, expected);
             }

@@ -1,4 +1,3 @@
-//! Tests for namespace-aware structs.
 use std::str::FromStr;
 
 use pretty_assertions::assert_eq;

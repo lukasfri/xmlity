@@ -1,6 +1,4 @@
-use pretty_assertions::assert_eq;
-
-use crate::utils::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
+use crate::{define_test, utils::clean_string};
 
 use xmlity::{
     DeserializationGroup, Deserialize, SerializationGroup, Serialize, SerializeAttribute,
@@ -57,24 +55,13 @@ fn simple_2d_struct_using_group_result() -> Note {
     }
 }
 
-#[test]
-fn struct_2d_using_group_serialize() {
-    let actual = quick_xml_serialize_test(simple_2d_struct_using_group_result()).unwrap();
-
-    let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
-
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn struct_2d_using_group_deserialize() {
-    let actual: Note =
-        quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
-
-    let expected = simple_2d_struct_using_group_result();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    simple_2d_struct_using_group,
+    [(
+        simple_2d_struct_using_group_result(),
+        clean_string(SIMPLE_2D_STRUCT_TEST_XML)
+    )]
+);
 
 const SIMPLE_3D_LIST_TEST_XML: &str = r###"
 <breakfast_menu>
@@ -189,24 +176,13 @@ fn simple_3d_list_test_value() -> BreakfastMenu {
     }
 }
 
-#[test]
-fn struct_3d_using_group_serialize() {
-    let actual = quick_xml_serialize_test(simple_3d_list_test_value()).unwrap();
-
-    let expected = clean_string(SIMPLE_3D_LIST_TEST_XML);
-
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn struct_3d_using_group_deserialize() {
-    let actual: BreakfastMenu =
-        quick_xml_deserialize_test(clean_string(SIMPLE_3D_LIST_TEST_XML).as_str()).unwrap();
-
-    let expected = simple_3d_list_test_value();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    struct_3d_using_group,
+    [(
+        simple_3d_list_test_value(),
+        clean_string(SIMPLE_3D_LIST_TEST_XML)
+    )]
+);
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 pub struct NoteGroup2 {
@@ -245,22 +221,10 @@ fn multi_level_group_2d_struct_using_group_result() -> Note2 {
     }
 }
 
-#[test]
-fn multi_level_group_struct_2d_using_group_serialize() {
-    let actual =
-        quick_xml_serialize_test(multi_level_group_2d_struct_using_group_result()).unwrap();
-
-    let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
-
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn multi_level_group_struct_2d_using_group_deserialize() {
-    let actual: Note2 =
-        quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
-
-    let expected = multi_level_group_2d_struct_using_group_result();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    multi_level_group_struct_2d_using_group,
+    [(
+        multi_level_group_2d_struct_using_group_result(),
+        clean_string(SIMPLE_2D_STRUCT_TEST_XML)
+    )]
+);

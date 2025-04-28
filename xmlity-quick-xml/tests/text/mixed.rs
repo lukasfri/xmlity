@@ -1,4 +1,3 @@
-//! Tests for content that is mixed, such as text and elements in the same children.
 use crate::define_test;
 
 use xmlity::types::utils::CData;

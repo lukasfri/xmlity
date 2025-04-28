@@ -1,5 +1,6 @@
 use pretty_assertions::assert_eq;
 
+use crate::define_test;
 use crate::utils::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
 
 use rstest::rstest;
@@ -20,13 +21,6 @@ const SIMPLE_2D_STRUCT_TEST_XML_WRONG_ORDER: &str = r###"
 <note to="Tove" from="Jani">
   <body>Don't forget me this weekend!</body>
   <heading>Reminder</heading>
-</note>
-"###;
-
-const SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML: &str = r###"
-<note to="Tove" from="Jani">
-  <heading>Reminder</heading>
-  <body>Don't forget me this weekend!</body>
 </note>
 "###;
 
@@ -66,24 +60,13 @@ fn simple_2d_struct_result() -> Note {
     }
 }
 
-#[test]
-fn struct_2d_with_attributes_serialize() {
-    let actual = quick_xml_serialize_test(simple_2d_struct_result()).unwrap();
-
-    let expected = clean_string(SIMPLE_SERIALIZE_2D_STRUCT_TEST_XML);
-
-    assert_eq!(actual, expected);
-}
-
-#[test]
-fn struct_2d_with_attributes_deserialize() {
-    let actual: Note =
-        quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
-
-    let expected = simple_2d_struct_result();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    struct_2d_with_attributes,
+    [(
+        simple_2d_struct_result(),
+        clean_string(SIMPLE_2D_STRUCT_TEST_XML)
+    )]
+);
 
 #[test]
 fn struct_2d_with_attributes_deserialize_fail() {
@@ -193,27 +176,20 @@ fn hammer_struct_result() -> Hammer {
     }
 }
 
-#[test]
-fn struct_with_group_order_serialize() {
-    let hammer = hammer_struct_result();
-
-    let actual = quick_xml_serialize_test(hammer).unwrap();
-
-    let expected = clean_string(STRUCT_WITH_GROUP_ORDER_EXACT_ORDER);
-
-    assert_eq!(actual, expected);
-}
-
-#[rstest]
-#[case(STRUCT_WITH_GROUP_ORDER_EXACT_ORDER)]
-#[case(STRUCT_WITH_GROUP_ORDER_OK_REORDER)]
-fn struct_with_group_order_deserialize(#[case] xml: &str) {
-    let actual: Hammer = quick_xml_deserialize_test(clean_string(xml).as_str()).unwrap();
-
-    let expected = hammer_struct_result();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    struct_with_group_order,
+    [
+        (
+            hammer_struct_result(),
+            clean_string(STRUCT_WITH_GROUP_ORDER_EXACT_ORDER)
+        ),
+        (
+            hammer_struct_result(),
+            clean_string(STRUCT_WITH_GROUP_ORDER_EXACT_ORDER),
+            clean_string(STRUCT_WITH_GROUP_ORDER_OK_REORDER)
+        )
+    ]
+);
 
 #[rstest]
 #[case(STRUCT_WITH_GROUP_ORDER_TEST_XML_WRONG_ORDER1)]
