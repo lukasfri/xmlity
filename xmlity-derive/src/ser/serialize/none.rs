@@ -1,7 +1,10 @@
 use quote::quote;
 use syn::{parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Ident, Stmt};
 
-use crate::DeriveError;
+use crate::{
+    options::{XmlityFieldValueDeriveOpts, XmlityRootValueDeriveOpts},
+    DeriveError,
+};
 
 use super::SerializeBuilder;
 
@@ -45,15 +48,17 @@ impl SerializeBuilder for DeriveNoneStruct {
     }
 }
 
-pub struct DeriveNoneEnum {}
+pub struct DeriveEnum<'a> {
+    value_opts: Option<&'a XmlityRootValueDeriveOpts>,
+}
 
-impl DeriveNoneEnum {
-    pub fn new() -> Self {
-        Self {}
+impl<'a> DeriveEnum<'a> {
+    pub fn new(value_opts: Option<&'a XmlityRootValueDeriveOpts>) -> Self {
+        Self { value_opts }
     }
 }
 
-impl SerializeBuilder for DeriveNoneEnum {
+impl SerializeBuilder for DeriveEnum<'_> {
     fn serialize_fn_body(
         &self,
         ast: &syn::DeriveInput,
@@ -89,9 +94,28 @@ impl SerializeBuilder for DeriveNoneEnum {
                             ::xmlity::Serialize::serialize(&__v, #serializer_access)
                         },
                     }),
-                    syn::Fields::Unit => Err(DeriveError::custom(
-                        "Unsupported unit variant in non-value enum.",
-                    )),
+                    syn::Fields::Unit => {
+                        let variant_ident = &variant.ident;
+
+                        let variant_opts = XmlityFieldValueDeriveOpts::from_variant(variant)?;
+
+                        let value = variant_opts
+                            .as_ref()
+                            .and_then(|a| a.value.clone())
+                            .unwrap_or_else(|| {
+                                self.value_opts
+                                    .as_ref()
+                                    .map(|a| a.rename_all)
+                                    .unwrap_or_default()
+                                    .apply_to_variant(&variant_ident.to_string())
+                            });
+
+                        Ok(parse_quote! {
+                            #ident::#variant_ident => {
+                                ::xmlity::Serialize::serialize(&#value, #serializer_access)
+                            },
+                        })
+                    }
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;

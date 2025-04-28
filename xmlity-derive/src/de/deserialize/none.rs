@@ -1,26 +1,35 @@
+use std::borrow::Cow;
+
 use proc_macro2::Span;
 use syn::{
-    parse_quote, spanned::Spanned, DeriveInput, Expr, ExprIf, Field, Ident, ItemStruct, Lifetime,
+    parse_quote, spanned::Spanned, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime,
     LifetimeParam, Stmt, Variant,
 };
 
 use crate::{
     de::{
-        common::{DeserializeBuilder, SeqVisitLoop, VisitorBuilder, VisitorBuilderExt},
+        common::{
+            DeserializeBuilder, DeserializeBuilderExt, SeqVisitLoop, VisitorBuilder,
+            VisitorBuilderExt,
+        },
         constructor_expr, StructType,
     },
     options::{
         ElementOrder, XmlityFieldDeriveOpts, XmlityFieldGroupDeriveOpts,
-        XmlityFieldValueDeriveOpts, XmlityFieldValueGroupDeriveOpts,
+        XmlityFieldValueDeriveOpts, XmlityFieldValueGroupDeriveOpts, XmlityRootValueDeriveOpts,
     },
     DeriveError, DeriveResult, DeserializeField, FieldIdent,
 };
 
-pub struct SerializeNoneStructBuilder;
+use super::values::StringLiteralDeserializeBuilder;
 
-impl SerializeNoneStructBuilder {
-    pub fn new() -> Self {
-        Self {}
+pub struct SerializeNoneStructBuilder<'a> {
+    pub ast: &'a DeriveInput,
+}
+
+impl<'a> SerializeNoneStructBuilder<'a> {
+    pub fn new(ast: &'a DeriveInput) -> Self {
+        Self { ast }
     }
 
     pub fn field_decl(
@@ -119,14 +128,14 @@ impl SerializeNoneStructBuilder {
     }
 }
 
-impl VisitorBuilder for SerializeNoneStructBuilder {
+impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
     fn visit_seq_fn_body(
         &self,
-        ast: &syn::DeriveInput,
+
         visitor_lifetime: &Lifetime,
         seq_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let DeriveInput { data, .. } = ast;
+        let DeriveInput { data, .. } = &self.ast;
 
         let data_struct = match data {
             syn::Data::Struct(data_struct) => data_struct,
@@ -218,7 +227,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder {
         };
 
         let constructor = Self::constructor_expr(
-            &ast.ident,
+            &self.ast.ident,
             visitor_lifetime,
             element_fields.clone(),
             group_fields.clone(),
@@ -234,10 +243,10 @@ impl VisitorBuilder for SerializeNoneStructBuilder {
         }))
     }
 
-    fn visitor_definition(&self, ast: &syn::DeriveInput) -> Result<ItemStruct, DeriveError> {
+    fn visitor_definition(&self) -> Result<ItemStruct, DeriveError> {
         let DeriveInput {
             ident, generics, ..
-        } = ast;
+        } = &self.ast;
         let non_bound_generics = crate::non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
@@ -257,23 +266,30 @@ impl VisitorBuilder for SerializeNoneStructBuilder {
             }
         })
     }
+
+    fn visitor_ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn visitor_generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(&self.ast.generics)
+    }
 }
 
-impl DeserializeBuilder for SerializeNoneStructBuilder {
+impl DeserializeBuilder for SerializeNoneStructBuilder<'_> {
     fn deserialize_fn_body(
         &self,
-        ast: &syn::DeriveInput,
+
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let formatter_expecting = format!("struct {}", ast.ident);
+        let formatter_expecting = format!("struct {}", self.ast.ident);
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
-        let visitor_def = <Self as VisitorBuilder>::visitor_definition(self, ast)?;
+        let visitor_def = <Self as VisitorBuilder>::visitor_definition(self)?;
         let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(
             self,
-            ast,
             &visitor_ident,
             &formatter_expecting,
         )?;
@@ -289,58 +305,105 @@ impl DeserializeBuilder for SerializeNoneStructBuilder {
             })
         })
     }
-}
 
-pub struct EnumNoneVisitorBuilder {}
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
 
-impl EnumNoneVisitorBuilder {
-    pub fn new() -> Self {
-        Self {}
+    fn generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(&self.ast.generics)
     }
 }
 
-impl VisitorBuilder for EnumNoneVisitorBuilder {
+pub struct EnumVisitorBuilder<'a> {
+    ast: &'a DeriveInput,
+    value_opts: Option<&'a XmlityRootValueDeriveOpts>,
+}
+
+impl<'a> EnumVisitorBuilder<'a> {
+    pub fn new(ast: &'a DeriveInput) -> Self {
+        Self {
+            ast,
+            value_opts: None,
+        }
+    }
+
+    pub fn new_with_value_opts(
+        ast: &'a DeriveInput,
+        value_opts: &'a XmlityRootValueDeriveOpts,
+    ) -> Self {
+        Self {
+            ast,
+            value_opts: Some(value_opts),
+        }
+    }
+}
+
+impl VisitorBuilder for EnumVisitorBuilder<'_> {
     fn visit_seq_fn_body(
         &self,
-        DeriveInput { ident, data, .. }: &DeriveInput,
         _visitor_lifetime: &Lifetime,
         seq_access_ident: &Ident,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let DeriveInput { ident, data, .. } = &self.ast;
         let data_enum = match &data {
             syn::Data::Enum(data_enum) => data_enum,
             _ => panic!("Wrong options. Only enums can be used for xelement."),
         };
         let variants = data_enum.variants.iter().collect::<Vec<_>>();
 
-        let variants = variants.clone().into_iter().map::<Option<ExprIf>, _>(|Variant {
+        let variants = variants.clone().into_iter().map::<Result<Expr, DeriveError>, _>(|variant @ Variant {
             ident: variant_ident,
             fields: variant_fields,
             ..
         }| {
             match variant_fields {
                 syn::Fields::Named(_fields) => {
-                    None
+                    Err(DeriveError::Custom { message: "Deriving for named fields is not supported yet".to_string(), span: Span::call_site() })
                 }
-                syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => {
-                    None
+                syn::Fields::Unit  => {
+                    let variant_opts = XmlityFieldValueDeriveOpts::from_variant(variant)?;
+
+                    let value = variant_opts.as_ref().and_then(|a| a.value.clone()).unwrap_or_else(|| {
+                        self.value_opts
+                            .as_ref()
+                            .map(|a| a.rename_all)
+                            .unwrap_or_default()
+                            .apply_to_variant(&variant_ident.to_string())
+                    });
+
+                    let deserialize_test_ident = Ident::new("__DeserializeTest", Span::call_site());
+
+                    let literal_deserializer = StringLiteralDeserializeBuilder::new(deserialize_test_ident.clone(), &value);
+                    let definition = literal_deserializer.definition()?;
+                    let deserialize_trait_impl = literal_deserializer.deserialize_trait_impl()?;
+                    Ok(parse_quote! {
+                        {
+                            #definition
+                            #deserialize_trait_impl
+                            if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#deserialize_test_ident>(&mut #seq_access_ident) {
+                                return ::core::result::Result::Ok(#ident::#variant_ident);
+                            }
+                        }
+                    })
                 }
-                syn::Fields::Unnamed(fields) => {
+                syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1  => {
                     let Field {
                         ty: field_type,
                         ..
                     } = fields.unnamed.first().expect("This is guaranteed by the check above");
 
-                    Some(parse_quote! {
+                    Ok(parse_quote! {
                         if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#field_type>(&mut #seq_access_ident) {
                             return ::core::result::Result::Ok(#ident::#variant_ident(_v));
                         }
                     })
                 }
-                syn::Fields::Unit =>{
-                    None
-                },
+                syn::Fields::Unnamed(_) => {
+                    Err(DeriveError::Custom { message: "Cannot deserialize unnamed variants with more than one field".to_string(), span: Span::call_site() })
+                }
             }
-        }).collect::<Option<Vec<_>>>().unwrap_or_default();
+        }).collect::<Result<Vec<_>, _>>()?;
         let ident_string = ident.to_string();
 
         Ok(Some(parse_quote! {
@@ -350,10 +413,10 @@ impl VisitorBuilder for EnumNoneVisitorBuilder {
         }))
     }
 
-    fn visitor_definition(&self, ast: &syn::DeriveInput) -> Result<syn::ItemStruct, DeriveError> {
+    fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {
         let DeriveInput {
             ident, generics, ..
-        } = ast;
+        } = &self.ast;
         let non_bound_generics = crate::non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
@@ -373,23 +436,29 @@ impl VisitorBuilder for EnumNoneVisitorBuilder {
             }
         })
     }
+
+    fn visitor_ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn visitor_generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(&self.ast.generics)
+    }
 }
 
-impl DeserializeBuilder for EnumNoneVisitorBuilder {
+impl DeserializeBuilder for EnumVisitorBuilder<'_> {
     fn deserialize_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let formatter_expecting = format!("enum {}", ast.ident);
+        let formatter_expecting = format!("enum {}", self.ast.ident);
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
-        let visitor_def = <Self as VisitorBuilder>::visitor_definition(self, ast)?;
+        let visitor_def = <Self as VisitorBuilder>::visitor_definition(self)?;
         let visitor_trait_impl = <Self as VisitorBuilderExt>::visitor_trait_impl(
             self,
-            ast,
             &visitor_ident,
             &formatter_expecting,
         )?;
@@ -404,5 +473,13 @@ impl DeserializeBuilder for EnumNoneVisitorBuilder {
                 marker: ::core::marker::PhantomData,
             })
         })
+    }
+
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(&self.ast.generics)
     }
 }

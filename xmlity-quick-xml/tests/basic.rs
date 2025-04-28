@@ -54,7 +54,7 @@ const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
   <to>Tove</to>
   <from>Jani</from>
   <heading>Reminder</heading>
-  <body>Don&apos;t forget me this weekend!</body>
+  <body>Don't forget me this weekend!</body>
 </note>
 "###;
 
@@ -79,7 +79,7 @@ pub struct Note {
     pub body: Body,
 }
 
-fn simple_2d_struct_serialize_result() -> Note {
+fn simple_2d_struct_result() -> Note {
     Note {
         to: To("Tove".to_string()),
         from: From("Jani".to_string()),
@@ -88,18 +88,9 @@ fn simple_2d_struct_serialize_result() -> Note {
     }
 }
 
-fn simple_2d_struct_deserialize_result() -> Note {
-    Note {
-        to: To("Tove".to_string()),
-        from: From("Jani".to_string()),
-        heading: Heading("Reminder".to_string()),
-        body: Body("Don&apos;t forget me this weekend!".to_string()),
-    }
-}
-
 #[test]
 fn simple_2d_struct_serialize() {
-    let actual = quick_xml_serialize_test(simple_2d_struct_serialize_result()).unwrap();
+    let actual = quick_xml_serialize_test(simple_2d_struct_result()).unwrap();
 
     let expected = clean_string(SIMPLE_2D_STRUCT_TEST_XML);
 
@@ -111,7 +102,7 @@ fn simple_2d_struct_deserialize() {
     let actual: Note =
         quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML).as_str()).unwrap();
 
-    let expected = simple_2d_struct_deserialize_result();
+    let expected = simple_2d_struct_result();
 
     assert_eq!(actual, expected);
 }

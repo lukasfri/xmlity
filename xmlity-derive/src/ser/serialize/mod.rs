@@ -1,7 +1,5 @@
 mod none;
-pub use none::{DeriveNoneEnum, DeriveNoneStruct};
-mod value;
-pub use value::DeriveValueEnum;
+pub use none::{DeriveEnum, DeriveNoneStruct};
 mod element;
 pub use element::DeriveElementStruct;
 
@@ -99,14 +97,14 @@ impl DeriveMacro for DeriveSerialize {
             (syn::Data::Struct(_), DeriveSerializeOption::Value(_)) => Err(DeriveError::custom(
                 "`xvalue` is not compatible with structs.",
             )),
-            (syn::Data::Enum(_), DeriveSerializeOption::Value(opts)) => DeriveValueEnum::new(opts)
+            (syn::Data::Enum(_), DeriveSerializeOption::Value(opts)) => DeriveEnum::new(Some(opts))
                 .serialize_trait_impl(ast)
                 .map(|a| a.to_token_stream()),
             // None
             (syn::Data::Struct(_), DeriveSerializeOption::None) => DeriveNoneStruct::new()
                 .serialize_trait_impl(ast)
                 .map(|a| a.to_token_stream()),
-            (syn::Data::Enum(_), DeriveSerializeOption::None) => DeriveNoneEnum::new()
+            (syn::Data::Enum(_), DeriveSerializeOption::None) => DeriveEnum::new(None)
                 .serialize_trait_impl(ast)
                 .map(|a| a.to_token_stream()),
             (syn::Data::Union(_), _) => Err(DeriveError::custom(

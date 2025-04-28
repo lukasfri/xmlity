@@ -35,27 +35,15 @@ fn simple_1d_struct_deserialize() {
     assert_eq!(actual, expected);
 }
 
-const COMPLEX_XML_EXAMPLE_DESERIALIZE: &str = r###"
+const COMPLEX_XML_EXAMPLE: &str = r###"
 <note>
   <to>Tove</to>
   <from>Jani</from>
   <heading>Reminder</heading>
   <body attribute="value">Don't forget me this weekend!</body>
-  <testns:test xmlns:testns="http://testns.com">
+  <a0:test xmlns:a0="http://testns.com">
     Test
-  </testns:test>
-</note>
-"###;
-
-const COMPLEX_XML_EXAMPLE_SERIALIZE: &str = r###"
-<note>
-    <to>Tove</to>
-    <from>Jani</from>
-    <heading>Reminder</heading>
-    <body attribute="value">Don&apos;t forget me this weekend!</body>
-    <a0:test xmlns:a0="http://testns.com">
-        Test
-    </a0:test>
+  </a0:test>
 </note>
 "###;
 
@@ -99,12 +87,12 @@ fn complex_xml_value() -> XmlValue {
 fn complex_xml_value_serialize() {
     let actual = quick_xml_serialize_test(complex_xml_value()).unwrap();
 
-    assert_eq!(actual, clean_string(COMPLEX_XML_EXAMPLE_SERIALIZE));
+    assert_eq!(actual, clean_string(COMPLEX_XML_EXAMPLE));
 }
 
 #[test]
 fn complex_xml_value_deserialize() {
-    let input = clean_string(COMPLEX_XML_EXAMPLE_DESERIALIZE);
+    let input = clean_string(COMPLEX_XML_EXAMPLE);
     let actual: XmlValue = quick_xml_deserialize_test(input.as_str()).unwrap();
 
     let expected = complex_xml_value();
