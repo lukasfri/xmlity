@@ -1,4 +1,3 @@
-//! Tests for basic functionality. These tests are the most basic and do not include any attributes. They are simply used to test the default behavior of the library.
 use pretty_assertions::assert_eq;
 
 use crate::utils::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};

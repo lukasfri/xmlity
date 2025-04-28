@@ -44,16 +44,14 @@ pub fn clean_string(input: &str) -> String {
 
 #[macro_export]
 macro_rules! define_test {
-    ($name: ident, [$(($xml:expr, $value:expr)),*]) =>  {
-        $crate::define_test!($name, [$(($xml, $value)),*], []);
-    };
-    ($name: ident, [$(($xml:expr, $value:expr)),*], []) => {
+    // Main implementation of the macro
+    (@impl $name: ident, [$(,)*$(($value:expr, $serialize_xml:expr, $deserialize_xml:expr)),*]) => {
         mod $name {
             #[allow(unused_imports)]
             use super::*;
             #[rstest::rstest]
             $(
-                #[case($value, $xml)]
+                #[case($value, $serialize_xml)]
             )*
             fn serialize<T: xmlity::Serialize + std::fmt::Debug + PartialEq>(#[case] to: T, #[case] expected: &str) {
                 let actual = $crate::utils::quick_xml_serialize_test(to).unwrap();
@@ -63,7 +61,7 @@ macro_rules! define_test {
 
             #[rstest::rstest]
             $(
-                #[case($value, $xml)]
+                #[case($value, $deserialize_xml)]
             )*
             fn deserialize<T: xmlity::DeserializeOwned + std::fmt::Debug + PartialEq>(#[case] expected: T, #[case] xml: &str) {
                 let actual: T = $crate::utils::quick_xml_deserialize_test(xml).unwrap();
@@ -72,4 +70,22 @@ macro_rules! define_test {
             }
         }
     };
+    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $serialize_xml2:expr, $deserialize_xml2:expr)]) => {
+        $crate::define_test!(@impl $name, [$($existing)*, ($value2, $serialize_xml2, $deserialize_xml2)]);
+    };
+    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $xml:expr)]) => {
+        $crate::define_test!(@impl $name, [$($existing)*, ($value2, $xml, $xml)]);
+    };
+    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $serialize_xml2:expr, $deserialize_xml2:expr), $($tail:tt)*]) => {
+        $crate::define_test!(@internal $name, [$($existing)*, ($value2, $serialize_xml2, $deserialize_xml2)], [$($tail)*]);
+    };
+    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $xml:expr), $($tail:tt)*]) => {
+        $crate::define_test!(@internal $name, [$($existing)*, ($value2, $xml, $xml)], [$($tail)*]);
+    };
+    ($name: ident, [$($tail:tt)*]) => {
+        $crate::define_test!(@internal $name, [], [$($tail)*]);
+    };
+    // ($name: ident, []) => {
+    //     $crate::define_test!($name, [], []);
+    // };
 }

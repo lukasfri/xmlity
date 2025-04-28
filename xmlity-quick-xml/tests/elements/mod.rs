@@ -1,5 +1,6 @@
 pub mod attribute;
 pub mod basic;
+pub mod default;
 pub mod extendable;
 pub mod generics;
 pub mod mixed;

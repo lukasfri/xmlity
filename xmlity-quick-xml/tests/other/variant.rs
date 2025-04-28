@@ -11,10 +11,10 @@ pub enum CDataOrText {
 define_test!(
     cdata_or_text_enum,
     [
-        ("Text", CDataOrText::String("Text".to_owned())),
+        (CDataOrText::String("Text".to_owned()), "Text"),
         (
-            "<![CDATA[CData]]>",
-            CDataOrText::CData(CData("CData".to_owned()))
+            CDataOrText::CData(CData("CData".to_owned())),
+            "<![CDATA[CData]]>"
         )
     ]
 );
@@ -36,7 +36,7 @@ fn mixed_cdata_list() -> VariantList {
 
 define_test!(
     mixed_cdata_list_struct,
-    [("<list>Text1<![CDATA[Text2]]></list>", mixed_cdata_list())]
+    [(mixed_cdata_list(), "<list>Text1<![CDATA[Text2]]></list>")]
 );
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -65,7 +65,7 @@ fn mixed_cdata_separated_1() -> MixedCDataSeparated {
 define_test!(
     mixed_cdata_separated,
     [(
-        "<mixed>Text1<![CDATA[Text2]]><elem>Text3</elem>Text4</mixed>",
-        mixed_cdata_separated_1()
+        mixed_cdata_separated_1(),
+        "<mixed>Text1<![CDATA[Text2]]><elem>Text3</elem>Text4</mixed>"
     )]
 );

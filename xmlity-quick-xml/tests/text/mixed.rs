@@ -14,11 +14,11 @@ pub struct MixedCData {
 define_test!(
     mixed_cdata_struct,
     [(
-        "Text<![CDATA[More]]>Text2",
         MixedCData {
             text1: "Text".to_string(),
             cdata: CData("More".to_string()),
             text2: "Text2".to_string(),
-        }
+        },
+        "Text<![CDATA[More]]>Text2"
     )]
 );

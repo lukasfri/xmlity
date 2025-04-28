@@ -1,42 +1,37 @@
-use pretty_assertions::assert_eq;
-
-use crate::utils::{clean_string, quick_xml_deserialize_test, quick_xml_serialize_test};
+use crate::define_test;
 
 use xmlity::{Deserialize, Serialize};
 
-const EXTENDABLE_STRUCT_TEST_XML: &str = r###"Asdreboot<![CDATA[More]]>Text"###;
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "a")]
+pub struct A(#[xvalue(extendable = true)] String);
 
-const EXTENDABLE_STRUCT_TEST_XML_SER: &str = r###"AsdrebootMoreText"###;
+impl Extend<Self> for A {
+    fn extend<T: IntoIterator<Item = A>>(&mut self, iter: T) {
+        self.0.extend(iter.into_iter().map(|a| a.0));
+    }
+}
+
+fn extendable_struct() -> ExtendableA {
+    ExtendableA(A("AsdrebootMoreText".to_string()))
+}
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct To(#[xvalue(extendable = true)] String);
+pub struct ExtendableA(#[xvalue(extendable = true)] A);
 
-fn extendable_struct() -> To {
-    To("AsdrebootMoreText".to_string())
-}
-
-#[test]
-fn extendable_struct_serialize() {
-    let actual = quick_xml_serialize_test(extendable_struct()).unwrap();
-
-    assert_eq!(actual, clean_string(EXTENDABLE_STRUCT_TEST_XML_SER));
-}
-
-#[test]
-fn extendable_struct_deserialize() {
-    {
-        let mut reader = quick_xml::NsReader::from_reader(EXTENDABLE_STRUCT_TEST_XML.as_bytes());
-        while let Ok(event) = reader.read_event() {
-            if matches!(event, quick_xml::events::Event::Eof) {
-                break;
-            }
-            println!("{:?}", event);
-        }
-    }
-    let actual: To =
-        quick_xml_deserialize_test(clean_string(EXTENDABLE_STRUCT_TEST_XML).as_str()).unwrap();
-
-    let expected = extendable_struct();
-
-    assert_eq!(actual, expected);
-}
+define_test!(
+    extendable_struct,
+    [
+        (
+            extendable_struct(),
+            "<a>AsdrebootMoreText</a>",
+            "<a>Asdreboot<![CDATA[More]]></a><a>Text</a>"
+        ),
+        (extendable_struct(), "<a>AsdrebootMoreText</a>"),
+        (
+            extendable_struct(),
+            "<a>AsdrebootMoreText</a>",
+            "<a>Asd</a><a>reboot</a><a>More</a><a>Text</a>"
+        )
+    ]
+);

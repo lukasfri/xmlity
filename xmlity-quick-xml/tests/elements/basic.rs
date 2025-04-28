@@ -1,4 +1,3 @@
-//! Tests for basic functionality. These tests are the most basic and do not include any attributes. They are simply used to test the default behavior of the library.
 use crate::define_test;
 
 use xmlity::{Deserialize, Serialize};
@@ -7,7 +6,7 @@ use xmlity::{Deserialize, Serialize};
 #[xelement(name = "b")]
 pub struct B(String);
 
-define_test!(element_with_text, [("<b>A</b>", B("A".to_string()))]);
+define_test!(element_with_text, [(B("A".to_string()), "<b>A</b>")]);
 
 #[rstest::rstest]
 #[case("<b></b>")]
@@ -27,10 +26,10 @@ pub struct C {
 define_test!(
     element_with_single_child,
     [(
-        "<c><b>A</b></c>",
         C {
             c: B("A".to_string())
-        }
+        },
+        "<c><b>A</b></c>"
     )]
 );
 
@@ -44,13 +43,13 @@ pub struct D {
 define_test!(
     element_with_multiple_children,
     [(
-        "<d><b>A</b><c><b>B</b></c></d>",
         D {
             b: B("A".to_string()),
             c: C {
                 c: B("B".to_string())
             }
-        }
+        },
+        "<d><b>A</b><c><b>B</b></c></d>"
     )]
 );
 
@@ -63,7 +62,6 @@ pub struct E {
 define_test!(
     element_with_vector_of_children,
     [(
-        r#"<e><d><b>A</b><c><b>B</b></c></d><d><b>C</b><c><b>D</b></c></d></e>"#,
         E {
             d: vec![
                 D {
@@ -79,6 +77,7 @@ define_test!(
                     }
                 }
             ]
-        }
+        },
+        r#"<e><d><b>A</b><c><b>B</b></c></d><d><b>C</b><c><b>D</b></c></d></e>"#
     )]
 );
