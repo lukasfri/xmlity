@@ -5,8 +5,7 @@ use std::borrow::Cow;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    parse_quote, Data, DataStruct, DeriveInput, Expr, Ident, Lifetime,
-    LifetimeParam, Stmt, Type,
+    parse_quote, Data, DataStruct, DeriveInput, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type,
 };
 
 use crate::{
@@ -23,7 +22,7 @@ use crate::{
             },
             roots::RootElementOpts,
         },
-        ElementOrder,  WithExpandedNameExt,
+        ElementOrder, WithExpandedNameExt,
     },
     DeriveError, DeriveResult, DeserializeField, ExpandedName, FieldIdent,
 };
@@ -208,7 +207,6 @@ impl StructDeserializeElementBuilder<'_> {
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
             |DeserializeField {
-                 
                  field_ident,
                  ..
              }| {

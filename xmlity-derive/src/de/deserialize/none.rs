@@ -2,8 +2,8 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use syn::{
-    parse_quote, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime,
-    LifetimeParam, Stmt, Type, Variant,
+    parse_quote, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime, LifetimeParam, Stmt, Type,
+    Variant,
 };
 
 use crate::{
@@ -98,7 +98,6 @@ impl<'a> SerializeNoneStructBuilder<'a> {
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
             |DeserializeField {
-                 
                  field_ident,
                  ..
              }| {
