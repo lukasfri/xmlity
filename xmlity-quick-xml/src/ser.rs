@@ -502,14 +502,10 @@ impl<W: Write> ser::SerializeChildren for SerializeElementChildren<'_, W> {
     type Error = Error;
 
     fn serialize_child<V: Serialize>(&mut self, value: &V) -> Result<Self::Ok, Self::Error> {
-        if let Some(bytes_start) = self.bytes_start.take() {
-            self.serializer
-                .writer
-                .write_event(Event::Start(bytes_start.as_quick_xml()))
-                .map_err(Error::Io)?;
-        }
-
-        value.serialize(self.serializer.deref_mut())
+        value.serialize(SerializerWithPossibleBytesStart {
+            serializer: self.serializer,
+            possible_bytes_start: Some(&mut self.bytes_start),
+        })
     }
 }
 
@@ -538,16 +534,20 @@ impl<W: Write> ser::SerializeElementChildren for SerializeElementChildren<'_, W>
     }
 }
 
-pub struct SerializeSeq<'e, W: Write> {
+pub struct SerializeSeq<'e, 'b, W: Write> {
     serializer: &'e mut Serializer<W>,
+    possible_bytes_start: Option<&'b mut Option<OwnedBytesStart>>,
 }
 
-impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, W> {
+impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, '_, W> {
     type Ok = ();
     type Error = Error;
 
     fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error> {
-        v.serialize(self.serializer.deref_mut())
+        v.serialize(SerializerWithPossibleBytesStart {
+            serializer: self.serializer,
+            possible_bytes_start: self.possible_bytes_start.as_deref_mut(),
+        })
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -559,7 +559,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
     type Ok = ();
     type Error = Error;
     type SerializeElement = SerializeElement<'s, W>;
-    type SerializeSeq = SerializeSeq<'s, W>;
+    type SerializeSeq = SerializeSeq<'s, 'static, W>;
 
     fn serialize_cdata<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
         self.writer
@@ -587,7 +587,10 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
     }
 
     fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
-        Ok(SerializeSeq { serializer: self })
+        Ok(SerializeSeq {
+            serializer: self,
+            possible_bytes_start: None,
+        })
     }
 
     fn serialize_decl<S: AsRef<str>>(
@@ -627,6 +630,85 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
                 str::from_utf8(text.as_ref()).unwrap(),
             )))
             .map_err(Error::Io)
+    }
+
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+}
+
+pub struct SerializerWithPossibleBytesStart<'a, 'b, W: Write> {
+    serializer: &'a mut Serializer<W>,
+    possible_bytes_start: Option<&'b mut Option<OwnedBytesStart>>,
+}
+
+impl<W: Write> SerializerWithPossibleBytesStart<'_, '_, W> {
+    pub fn try_start(&mut self) -> Result<(), Error> {
+        if let Some(bytes_start) = self.possible_bytes_start.take().and_then(Option::take) {
+            self.serializer
+                .writer
+                .write_event(Event::Start(bytes_start.as_quick_xml()))
+                .map_err(Error::Io)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'s, 'b, W: Write> xmlity::Serializer for SerializerWithPossibleBytesStart<'s, 'b, W> {
+    type Ok = ();
+    type Error = Error;
+    type SerializeElement = SerializeElement<'s, W>;
+    type SerializeSeq = SerializeSeq<'s, 'b, W>;
+
+    fn serialize_cdata<S: AsRef<str>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
+        self.serializer.serialize_cdata(text)
+    }
+
+    fn serialize_text<S: AsRef<str>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
+        self.serializer.serialize_text(text)
+    }
+
+    fn serialize_element<'a>(
+        mut self,
+        name: &'a ExpandedName<'a>,
+    ) -> Result<Self::SerializeElement, Self::Error> {
+        self.try_start()?;
+        self.serializer.serialize_element(name)
+    }
+
+    fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
+        Ok(SerializeSeq {
+            serializer: self.serializer,
+            possible_bytes_start: self.possible_bytes_start,
+        })
+    }
+
+    fn serialize_decl<S: AsRef<str>>(
+        mut self,
+        version: S,
+        encoding: Option<S>,
+        standalone: Option<S>,
+    ) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
+        self.serializer
+            .serialize_decl(version, encoding, standalone)
+    }
+
+    fn serialize_pi<S: AsRef<[u8]>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
+        self.serializer.serialize_pi(text)
+    }
+
+    fn serialize_comment<S: AsRef<[u8]>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
+        self.serializer.serialize_comment(text)
+    }
+
+    fn serialize_doctype<S: AsRef<[u8]>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
+        self.serializer.serialize_doctype(text)
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
