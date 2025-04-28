@@ -250,3 +250,12 @@ fn simple_3d_struct_deserialize() {
 
     assert_eq!(actual, expected);
 }
+
+#[test]
+fn simple_3d_struct_serialize_empty() {
+    let actual = quick_xml_serialize_test(BreakfastMenu { food: Vec::new() }).unwrap();
+
+    let expected = "<breakfast_menu/>";
+
+    assert_eq!(actual, expected);
+}
