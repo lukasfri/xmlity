@@ -12,90 +12,134 @@ pub trait VisitorBuilder {
     fn visit_text_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
-        value_ident: &Ident,
+        access_ident: &Ident,
+        access_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
-        let _ = value_ident;
+        let _ = access_ident;
+        let _ = access_type;
+        let _ = error_type;
         Ok(None)
     }
 
     fn visit_cdata_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
-        value_ident: &Ident,
+        access_ident: &Ident,
+        access_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
-        let _ = value_ident;
+        let _ = access_ident;
+        let _ = access_type;
+        let _ = error_type;
         Ok(None)
     }
 
     fn visit_element_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
-        element_access_ident: &Ident,
+        access_ident: &Ident,
+        access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
-        let _ = element_access_ident;
+        let _ = access_ident;
+        let _ = access_type;
         Ok(None)
     }
 
     fn visit_attribute_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
-        attribute_access_ident: &Ident,
+        access_ident: &Ident,
+        access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
-        let _ = attribute_access_ident;
+        let _ = access_ident;
+        let _ = access_type;
         Ok(None)
     }
 
     fn visit_seq_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
-        seq_access_ident: &Ident,
+        access_ident: &Ident,
+        access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
-        let _ = seq_access_ident;
+        let _ = access_ident;
+        let _ = access_type;
         Ok(None)
     }
 
     fn visit_pi_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
+        access_ident: &Ident,
+        access_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
+        let _ = access_ident;
+        let _ = access_type;
+        let _ = error_type;
         Ok(None)
     }
 
     fn visit_decl_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
+        version_ident: &Ident,
+        encoding_ident: &Ident,
+        standalone_ident: &Ident,
+        access_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
+        let _ = version_ident;
+        let _ = encoding_ident;
+        let _ = standalone_ident;
+        let _ = access_type;
+        let _ = error_type;
         Ok(None)
     }
 
     fn visit_comment_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
+        access_ident: &Ident,
+        access_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
+        let _ = access_ident;
+        let _ = access_type;
+        let _ = error_type;
         Ok(None)
     }
 
     fn visit_doctype_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
+        access_ident: &Ident,
+        access_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
+        let _ = access_ident;
+        let _ = access_type;
+        let _ = error_type;
         Ok(None)
     }
 
     fn visit_none_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let _ = visitor_lifetime;
+        let _ = error_type;
         Ok(None)
     }
 
@@ -156,19 +200,22 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         &self,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
-        let value_ident = Ident::new("__value", Span::mixed_site());
+        let access_ident = Ident::new("__value", Span::mixed_site());
+        let access_type: Type = parse_quote!(__XmlityAccess);
+        let error_type: Type = parse_quote!(__XmlityError);
 
-        let body = self.visit_text_fn_body(visitor_lifetime, &value_ident)?;
+        let body =
+            self.visit_text_fn_body(visitor_lifetime, &access_ident, &access_type, &error_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_text<E, V>(self, #value_ident: V) -> ::core::result::Result<Self::Value, E>
+            fn visit_text<#error_type, #access_type>(self, #access_ident: #access_type) -> ::core::result::Result<Self::Value, #error_type>
             where
-                E: ::xmlity::de::Error,
-                V: ::xmlity::de::XmlText,
+                #error_type: ::xmlity::de::Error,
+                #access_type: ::xmlity::de::XmlText,
             {
                 #(#body)*
             }
@@ -179,19 +226,22 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         &self,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
-        let value_ident = Ident::new("__value", Span::mixed_site());
+        let access_ident = Ident::new("__value", Span::mixed_site());
+        let access_type: Type = parse_quote!(__XmlityAccess);
+        let error_type: Type = parse_quote!(__XmlityError);
 
-        let body = self.visit_cdata_fn_body(visitor_lifetime, &value_ident)?;
+        let body =
+            self.visit_cdata_fn_body(visitor_lifetime, &access_ident, &access_type, &error_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_cdata<E, V>(self, #value_ident: V) -> ::core::result::Result<Self::Value, E>
+            fn visit_cdata<#error_type, #access_type>(self, #access_ident: #access_type) -> ::core::result::Result<Self::Value, #error_type>
             where
-                E: ::xmlity::de::Error,
-                V: ::xmlity::de::XmlCData,
+                #error_type: ::xmlity::de::Error,
+                #access_type: ::xmlity::de::XmlCData,
             {
                 #(#body)*
             }
@@ -203,17 +253,19 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let element_access_ident = Ident::new("__element_access", Span::mixed_site());
+        let access_type: Type = parse_quote!(__ElementAccess);
 
-        let body = self.visit_element_fn_body(visitor_lifetime, &element_access_ident)?;
+        let body =
+            self.visit_element_fn_body(visitor_lifetime, &element_access_ident, &access_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_element<A>(self, mut #element_access_ident: A) -> ::core::result::Result<Self::Value, <A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>
+            fn visit_element<#access_type>(self, mut #element_access_ident: #access_type) -> ::core::result::Result<Self::Value, <#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>
             where
-                A: xmlity::de::ElementAccess<#visitor_lifetime>,
+            #access_type: xmlity::de::ElementAccess<#visitor_lifetime>,
             {
                 #(#body)*
             }
@@ -225,17 +277,19 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let attribute_access_ident = Ident::new("__attribute_access", Span::mixed_site());
+        let access_type: Type = parse_quote!(__AttributeAccess);
 
-        let body = self.visit_attribute_fn_body(visitor_lifetime, &attribute_access_ident)?;
+        let body =
+            self.visit_attribute_fn_body(visitor_lifetime, &attribute_access_ident, &access_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_attribute<A>(self, #attribute_access_ident: A) -> ::core::result::Result<Self::Value, <A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>
+            fn visit_attribute<#access_type>(self, #attribute_access_ident: #access_type) -> ::core::result::Result<Self::Value, <#access_type as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>
             where
-                A: ::xmlity::de::AttributeAccess<#visitor_lifetime>,
+                #access_type: ::xmlity::de::AttributeAccess<#visitor_lifetime>,
             {
                 #(#body)*
             }
@@ -244,17 +298,18 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_seq_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError> {
         let seq_access_ident = Ident::new("__seq_access", Span::mixed_site());
+        let access_type: Type = parse_quote!(__SeqAccess);
 
-        let body = self.visit_seq_fn_body(visitor_lifetime, &seq_access_ident)?;
+        let body = self.visit_seq_fn_body(visitor_lifetime, &seq_access_ident, &access_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_seq<S>(self, mut #seq_access_ident: S) -> ::core::result::Result<Self::Value, <S as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error>
+            fn visit_seq<#access_type>(self, mut #seq_access_ident: #access_type) -> ::core::result::Result<Self::Value, <#access_type as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error>
             where
-                S: ::xmlity::de::SeqAccess<#visitor_lifetime>,
+                #access_type: ::xmlity::de::SeqAccess<#visitor_lifetime>,
             {
                 #(#body)*
             }
@@ -263,17 +318,20 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_pi_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
+        let access_type: Type = parse_quote!(__PiAccess);
+        let error_type: Type = parse_quote!(__XmlityError);
 
-        let body = self.visit_pi_fn_body(visitor_lifetime)?;
+        let body =
+            self.visit_pi_fn_body(visitor_lifetime, &value_ident, &access_type, &error_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_pi<E, V: AsRef<[u8]>>(self, #value_ident: V) -> Result<Self::Value, E>
+            fn visit_pi<#error_type, #access_type: AsRef<[u8]>>(self, #value_ident: #access_type) -> Result<Self::Value, #error_type>
             where
-                E: Error,
+                #error_type: ::xmlity::de::Error,
             {
                 #(#body)*
             }
@@ -287,22 +345,31 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         let version_ident = Ident::new("__version", Span::mixed_site());
         let encoding_ident = Ident::new("__encoding", Span::mixed_site());
         let standalone_ident = Ident::new("__standalone", Span::mixed_site());
+        let access_type: Type = parse_quote!(__DeclAccess);
+        let error_type: Type = parse_quote!(__XmlityError);
 
-        let body = self.visit_decl_fn_body(visitor_lifetime)?;
+        let body = self.visit_decl_fn_body(
+            visitor_lifetime,
+            &version_ident,
+            &encoding_ident,
+            &standalone_ident,
+            &access_type,
+            &error_type,
+        )?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_decl<E, V: AsRef<[u8]>>(
+            fn visit_decl<#error_type, #access_type: AsRef<[u8]>>(
                 self,
-                #version_ident: V,
-                #encoding_ident: Option<V>,
-                #standalone_ident: Option<V>,
-            ) -> Result<Self::Value, E>
+                #version_ident: #access_type,
+                #encoding_ident: Option<#access_type>,
+                #standalone_ident: Option<#access_type>,
+            ) -> Result<Self::Value, #error_type>
             where
-                E: Error,
+                #error_type: ::xmlity::de::Error,
             {
                 #(#body)*
             }
@@ -314,17 +381,20 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
+        let error_type: Type = parse_quote!(__XmlityError);
+        let access_type: Type = parse_quote!(__XmlityAccess);
 
-        let body = self.visit_comment_fn_body(visitor_lifetime)?;
+        let body =
+            self.visit_comment_fn_body(visitor_lifetime, &value_ident, &access_type, &error_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_comment<E, V: AsRef<[u8]>>(self, #value_ident: V) -> Result<Self::Value, E>
+            fn visit_comment<#error_type, #access_type: AsRef<[u8]>>(self, #value_ident: #access_type) -> Result<Self::Value, #error_type>
             where
-                E: Error,
+                #error_type: ::xmlity::de::Error,
             {
                 #(#body)*
             }
@@ -336,17 +406,20 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
+        let access_type: Type = parse_quote!(__XmlityAccess);
+        let error_type: Type = parse_quote!(__XmlityError);
 
-        let body = self.visit_doctype_fn_body(visitor_lifetime)?;
+        let body =
+            self.visit_doctype_fn_body(visitor_lifetime, &value_ident, &access_type, &error_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_doctype<E, V: AsRef<[u8]>>(self, #value_ident: V) -> Result<Self::Value, E>
+            fn visit_doctype<#error_type, #access_type: AsRef<[u8]>>(self, #value_ident: #access_type) -> Result<Self::Value, #error_type>
             where
-                E: Error,
+                #error_type: ::xmlity::de::Error,
             {
                 #(#body)*
             }
@@ -357,16 +430,18 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         &self,
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
-        let body = self.visit_none_fn_body(visitor_lifetime)?;
+        let error_type: Type = parse_quote!(__XmlityError);
+
+        let body = self.visit_none_fn_body(visitor_lifetime, &error_type)?;
 
         let Some(body) = body else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn visit_none<E>(self) -> Result<Self::Value, E>
+            fn visit_none<#error_type>(self) -> Result<Self::Value, #error_type>
             where
-                E: Error,
+                #error_type: ::xmlity::de::Error,
             {
                 #(#body)*
             }
