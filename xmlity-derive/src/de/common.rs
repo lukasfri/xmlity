@@ -253,7 +253,7 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let element_access_ident = Ident::new("__element_access", Span::mixed_site());
-        let access_type: Type = parse_quote!(__ElementAccess);
+        let access_type: Type = parse_quote!(___XmlityElementAccess);
 
         let body =
             self.visit_element_fn_body(visitor_lifetime, &element_access_ident, &access_type)?;
@@ -277,7 +277,7 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let attribute_access_ident = Ident::new("__attribute_access", Span::mixed_site());
-        let access_type: Type = parse_quote!(__AttributeAccess);
+        let access_type: Type = parse_quote!(___XmlityAttributeAccess);
 
         let body =
             self.visit_attribute_fn_body(visitor_lifetime, &attribute_access_ident, &access_type)?;
@@ -298,7 +298,7 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_seq_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError> {
         let seq_access_ident = Ident::new("__seq_access", Span::mixed_site());
-        let access_type: Type = parse_quote!(__SeqAccess);
+        let access_type: Type = parse_quote!(__XmlitySeqAccess);
 
         let body = self.visit_seq_fn_body(visitor_lifetime, &seq_access_ident, &access_type)?;
 
@@ -318,7 +318,7 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
 
     fn visit_pi_fn(&self, visitor_lifetime: &Lifetime) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
-        let access_type: Type = parse_quote!(__PiAccess);
+        let access_type: Type = parse_quote!(__XmlityAccess);
         let error_type: Type = parse_quote!(__XmlityError);
 
         let body =
@@ -345,7 +345,7 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         let version_ident = Ident::new("__version", Span::mixed_site());
         let encoding_ident = Ident::new("__encoding", Span::mixed_site());
         let standalone_ident = Ident::new("__standalone", Span::mixed_site());
-        let access_type: Type = parse_quote!(__DeclAccess);
+        let access_type: Type = parse_quote!(__XmlityAccess);
         let error_type: Type = parse_quote!(__XmlityError);
 
         let body = self.visit_decl_fn_body(
@@ -381,8 +381,8 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
         visitor_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let value_ident = Ident::new("__value", Span::mixed_site());
-        let error_type: Type = parse_quote!(__XmlityError);
         let access_type: Type = parse_quote!(__XmlityAccess);
+        let error_type: Type = parse_quote!(__XmlityError);
 
         let body =
             self.visit_comment_fn_body(visitor_lifetime, &value_ident, &access_type, &error_type)?;
