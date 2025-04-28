@@ -22,7 +22,7 @@ use crate::{
         },
         ElementOrder,
     },
-    DeriveError, DeriveResult, DeserializeField, FieldIdent,
+    DeriveError, DeriveResult, FieldIdent, FieldWithOpts,
 };
 
 use super::values::StringLiteralDeserializeBuilder;
@@ -37,13 +37,11 @@ impl<'a> SerializeNoneStructBuilder<'a> {
     }
 
     pub fn field_decl(
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, structs::fields::ChildOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, structs::fields::GroupOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::ChildOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::GroupOpts>>,
     ) -> Vec<Stmt> {
         let getter_declarations = element_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
+                |FieldWithOpts {
                      field_ident,
                      field_type,
                      ..
@@ -54,7 +52,7 @@ impl<'a> SerializeNoneStructBuilder<'a> {
                     }
                 },
             ).chain(group_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
+                |FieldWithOpts {
                      field_ident,
                      field_type,
                      ..
@@ -75,15 +73,13 @@ impl<'a> SerializeNoneStructBuilder<'a> {
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
         access_type: &Type,
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, structs::fields::ChildOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, structs::fields::GroupOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::ChildOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::GroupOpts>>,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors =
             element_fields.into_iter()
-            .map::<(_, Expr), _>(|DeserializeField {  field_ident, options, .. }| {
+            .map::<(_, Expr), _>(|FieldWithOpts {  field_ident, options, .. }| {
                 let builder_field_ident = field_ident.to_named_ident();
                 let expression = if options.should_unwrap_default() {
                     parse_quote! {
@@ -97,7 +93,7 @@ impl<'a> SerializeNoneStructBuilder<'a> {
                 (field_ident, expression)
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
-            |DeserializeField {
+            |FieldWithOpts {
                  field_ident,
                  ..
              }| {
@@ -118,7 +114,7 @@ impl<'a> SerializeNoneStructBuilder<'a> {
 
     pub fn seq_access(
         access_ident: &Ident,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone,
+        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
     ) -> DeriveResult<Vec<Stmt>> {
@@ -167,7 +163,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                 .map(|f| {
                     let field_ident = f.ident.clone().expect("Named struct");
 
-                    DeriveResult::Ok(DeserializeField {
+                    DeriveResult::Ok(FieldWithOpts {
                         field_ident: FieldIdent::Named(field_ident),
                         options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),
@@ -179,7 +175,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                 .iter()
                 .enumerate()
                 .map(|(i, f)| {
-                    DeriveResult::Ok(DeserializeField {
+                    DeriveResult::Ok(FieldWithOpts {
                         field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                         options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),

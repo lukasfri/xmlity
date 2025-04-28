@@ -561,12 +561,12 @@ use syn::spanned::Spanned;
 use crate::{
     de::{all_elements_done_expr, builder_element_field_visitor, element_done_expr},
     options::ElementOrder,
-    DeserializeField, FieldIdent,
+    FieldIdent, FieldWithOpts,
 };
 
 pub struct SeqVisitLoop<
     'a,
-    F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone,
+    F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
 > {
     seq_access_ident: &'a Ident,
     allow_unknown_children: bool,
@@ -574,7 +574,7 @@ pub struct SeqVisitLoop<
     fields: F,
 }
 
-impl<'a, F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone>
+impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone>
     SeqVisitLoop<'a, F>
 {
     pub fn new(

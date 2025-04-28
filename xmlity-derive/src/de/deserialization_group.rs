@@ -15,7 +15,7 @@ use crate::{
         },
         GroupOrder,
     },
-    DeriveError, DeriveMacro, DeriveResult, DeserializeField, FieldIdent,
+    DeriveError, DeriveMacro, DeriveResult, FieldIdent, FieldWithOpts,
 };
 
 use super::{all_attributes_done_expr, all_elements_done_expr, constructor_expr, StructType};
@@ -441,7 +441,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
             .into_iter()
             .map(
-                |DeserializeField {
+                |FieldWithOpts {
                      field_ident,
                      field_type,
                      ..
@@ -453,7 +453,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                 },
             )
             .chain(crate::de::element_fields(ast)?.into_iter().map(
-                |DeserializeField {
+                |FieldWithOpts {
                      field_ident,
                      field_type,
                      ..
@@ -465,7 +465,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                 },
             ));
         let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
-            |DeserializeField {
+            |FieldWithOpts {
                 field_ident,
                  field_type,
                  ..
@@ -516,14 +516,14 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
     ) -> Result<Vec<Stmt>, DeriveError> {
         let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
             .into_iter()
-            .map(|DeserializeField { field_ident, .. }| {
+            .map(|FieldWithOpts { field_ident, .. }| {
                 let expression = quote! {
                     ::core::option::Option::None
                 };
                 (field_ident, expression)
             })
             .chain(crate::de::element_fields(ast)?.into_iter().map(
-                |DeserializeField { field_ident, .. }| {
+                |FieldWithOpts { field_ident, .. }| {
                     let expression = quote! {
                         ::core::option::Option::None
                     };
@@ -531,7 +531,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                 },
             ));
         let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
-            |DeserializeField {
+            |FieldWithOpts {
                  field_ident,
                  field_type,
                  ..
@@ -571,17 +571,17 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
 
 fn finish_constructor_expr<T: quote::ToTokens>(
     ident: T,
-    element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>>,
-    attribute_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>>,
-    group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>>,
+    element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
+    attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
+    group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
     constructor_type: &StructType,
 ) -> proc_macro2::TokenStream {
     let local_value_expressions_constructors = attribute_fields.into_iter()
-        .map(|a: DeserializeField<FieldIdent, AttributeOpts>| (
+        .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
             a.field_ident,
             a.options.should_unwrap_default()
         ))
-        .chain(element_fields.into_iter().map(|a: DeserializeField<FieldIdent, ChildOpts>| (
+        .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
             a.field_ident,
             a.options.should_unwrap_default()
         )))
@@ -600,7 +600,7 @@ fn finish_constructor_expr<T: quote::ToTokens>(
     let group_value_expressions_constructors =
         group_fields
             .into_iter()
-            .map(|DeserializeField { field_ident, .. }| {
+            .map(|FieldWithOpts { field_ident, .. }| {
                 let expression = quote! {
                     ::xmlity::de::DeserializationGroupBuilder::finish::<E>(self.#field_ident)?
                 };

@@ -49,7 +49,7 @@ mod options;
 use options::{LocalName, XmlNamespace};
 mod ser;
 mod utils;
-use options::{DeserializeField, SerializeField};
+use options::FieldWithOpts;
 
 enum DeriveError {
     Darling(darling::Error),

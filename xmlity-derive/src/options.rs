@@ -5,7 +5,7 @@ use darling::{FromAttributes, FromMeta};
 use quote::ToTokens;
 use syn::{DeriveInput, Expr};
 
-use crate::{DeriveError, ExpandedName, FieldIdent};
+use crate::{DeriveError, ExpandedName};
 
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
@@ -741,16 +741,16 @@ pub mod enums {
 }
 
 #[derive(Clone)]
-pub struct DeserializeField<I, Opts> {
+pub struct FieldWithOpts<I, Opts> {
     // If the field is indexed, this is none.
     pub field_ident: I,
     pub field_type: syn::Type,
     pub options: Opts,
 }
 
-impl<A, T> DeserializeField<A, T> {
-    pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> DeserializeField<A, U> {
-        DeserializeField {
+impl<A, T> FieldWithOpts<A, T> {
+    pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> FieldWithOpts<A, U> {
+        FieldWithOpts {
             field_ident: self.field_ident,
             field_type: self.field_type,
             options: f(self.options),
@@ -760,46 +760,19 @@ impl<A, T> DeserializeField<A, T> {
     pub fn map_options_opt<U, F: FnOnce(T) -> Option<U>>(
         self,
         f: F,
-    ) -> Option<DeserializeField<A, U>> {
-        f(self.options).map(|options| DeserializeField {
+    ) -> Option<FieldWithOpts<A, U>> {
+        f(self.options).map(|options| FieldWithOpts {
             field_ident: self.field_ident,
             field_type: self.field_type,
             options,
         })
     }
 
-    pub fn map_ident<U, F: FnOnce(A) -> U>(self, f: F) -> DeserializeField<U, T> {
-        DeserializeField {
+    pub fn map_ident<U, F: FnOnce(A) -> U>(self, f: F) -> FieldWithOpts<U, T> {
+        FieldWithOpts {
             field_ident: f(self.field_ident),
             field_type: self.field_type,
             options: (self.options),
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct SerializeField<OptionType> {
-    // If the field is indexed, this is none.
-    pub field_ident: FieldIdent,
-    pub field_type: syn::Type,
-    pub options: OptionType,
-}
-
-#[allow(dead_code)]
-impl<T> SerializeField<T> {
-    pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> SerializeField<U> {
-        SerializeField {
-            field_ident: self.field_ident,
-            field_type: self.field_type,
-            options: f(self.options),
-        }
-    }
-
-    pub fn map_options_opt<U, F: FnOnce(T) -> Option<U>>(self, f: F) -> Option<SerializeField<U>> {
-        f(self.options).map(|options| SerializeField {
-            field_ident: self.field_ident,
-            field_type: self.field_type,
-            options,
-        })
     }
 }

@@ -17,7 +17,7 @@ use crate::{
         WithExpandedNameExt,
     },
     utils::{self},
-    DeriveError, DeriveResult, DeserializeField, FieldIdent,
+    DeriveError, DeriveResult, FieldWithOpts, FieldIdent,
 };
 
 mod common;
@@ -30,7 +30,7 @@ enum StructType {
 }
 
 #[derive(Clone)]
-enum StructTypeWithFields<N, U> {
+pub enum StructTypeWithFields<N, U> {
     Named(N),
     Unnamed(U),
     Unit,
@@ -165,11 +165,11 @@ fn struct_definition_expr<I: ToTokens>(
 fn attribute_field_deserialize_impl(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeField {
+    FieldWithOpts {
         field_ident,
         field_type,
         ..
-    }: DeserializeField<FieldIdent, AttributeOpts>,
+    }: FieldWithOpts<FieldIdent, AttributeOpts>,
     if_next_attribute_none: &[Stmt],
     finished_attribute: &[Stmt],
     after_attempt: &[Stmt],
@@ -206,7 +206,7 @@ fn attribute_field_deserialize_impl(
 fn group_field_contribute_attributes(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeField { field_ident, .. }: DeserializeField<FieldIdent, GroupOpts>,
+    FieldWithOpts { field_ident, .. }: FieldWithOpts<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
@@ -244,7 +244,7 @@ fn group_field_contribute_attributes(
 
 #[allow(clippy::too_many_arguments)]
 fn builder_attribute_field_visitor<
-    F: IntoIterator<Item = DeserializeField<FieldIdent, FieldAttributeGroupOpts>>,
+    F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>,
 >(
     access_ident: &Ident,
     builder_field_ident_prefix: proc_macro2::TokenStream,
@@ -306,14 +306,14 @@ fn builder_attribute_field_visitor<
 fn element_field_deserialize_impl(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeField {
+    FieldWithOpts {
         field_ident,
         field_type,
         options:
             options @ ChildOpts::Value(ValueOpts { extendable, .. })
             | options @ ChildOpts::Element(ElementOpts { extendable, .. }),
         ..
-    }: DeserializeField<FieldIdent, ChildOpts>,
+    }: FieldWithOpts<FieldIdent, ChildOpts>,
     if_next_element_none: &[Stmt],
     finished_element: &[Stmt],
     after_attempt: &[Stmt],
@@ -444,7 +444,7 @@ fn pop_or_ignore_error(
 fn group_field_contribute_elements(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeField { field_ident, .. }: DeserializeField<FieldIdent, GroupOpts>,
+    FieldWithOpts { field_ident, .. }: FieldWithOpts<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
@@ -483,7 +483,7 @@ fn group_field_contribute_elements(
 
 #[allow(clippy::too_many_arguments)]
 fn builder_element_field_visitor<
-    F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>>,
+    F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
 >(
     access_ident: &Ident,
     builder_field_ident_prefix: proc_macro2::TokenStream,
@@ -544,11 +544,11 @@ fn builder_element_field_visitor<
 }
 
 fn attribute_done_expr(
-    DeserializeField {
+    FieldWithOpts {
         field_ident,
         options,
         ..
-    }: DeserializeField<FieldIdent, FieldAttributeGroupOpts>,
+    }: FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
     let builder_field_ident = field_ident.to_named_ident();
@@ -563,7 +563,7 @@ fn attribute_done_expr(
 }
 
 fn all_attributes_done_expr(
-    fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldAttributeGroupOpts>>,
+    fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>,
 
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
@@ -583,11 +583,11 @@ fn all_attributes_done_expr(
 }
 
 fn element_done_expr(
-    DeserializeField {
+    FieldWithOpts {
         field_ident,
         options,
         ..
-    }: DeserializeField<FieldIdent, FieldValueGroupOpts>,
+    }: FieldWithOpts<FieldIdent, FieldValueGroupOpts>,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
     let builder_field_ident = field_ident.to_named_ident();
@@ -602,7 +602,7 @@ fn element_done_expr(
 }
 
 fn all_elements_done_expr(
-    fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>>,
+    fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
     builder_field_ident_prefix: impl ToTokens,
 ) -> Expr {
     let conditions = fields
@@ -622,7 +622,7 @@ fn all_elements_done_expr(
 
 pub fn fields(
     ast: &syn::DeriveInput,
-) -> Result<impl IntoIterator<Item = DeserializeField<FieldIdent, FieldOpts>>, DeriveError> {
+) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldOpts>>, DeriveError> {
     let data_struct = match ast.data {
         syn::Data::Struct(ref data_struct) => data_struct,
         _ => unreachable!(),
@@ -635,7 +635,7 @@ pub fn fields(
             .map(|f| {
                 let field_ident = f.ident.clone().expect("Named struct");
 
-                DeriveResult::Ok(DeserializeField {
+                DeriveResult::Ok(FieldWithOpts {
                     field_ident: FieldIdent::Named(field_ident),
                     options: FieldOpts::from_field(f)?,
                     field_type: f.ty.clone(),
@@ -647,7 +647,7 @@ pub fn fields(
             .iter()
             .enumerate()
             .map(|(i, f)| {
-                DeriveResult::Ok(DeserializeField {
+                DeriveResult::Ok(FieldWithOpts {
                     field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     options: FieldOpts::from_field(f)?,
                     field_type: f.ty.clone(),
@@ -660,7 +660,7 @@ pub fn fields(
 
 fn element_fields(
     ast: &syn::DeriveInput,
-) -> Result<impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>> + use<'_>, DeriveError>
+) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>> + use<'_>, DeriveError>
 {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
         field.map_options_opt(|opt| match opt {
@@ -673,7 +673,7 @@ fn element_fields(
 fn attribute_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>> + use<'_>,
+    impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
@@ -686,7 +686,7 @@ fn attribute_fields(
 
 fn group_fields(
     ast: &syn::DeriveInput,
-) -> Result<impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>> + use<'_>, DeriveError>
+) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>> + use<'_>, DeriveError>
 {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
         field.clone().map_options_opt(|opt| match opt {
@@ -699,7 +699,7 @@ fn group_fields(
 fn attribute_group_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeField<FieldIdent, FieldAttributeGroupOpts>> + use<'_>,
+    impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
@@ -714,7 +714,7 @@ fn attribute_group_fields(
 fn element_group_fields(
     ast: &syn::DeriveInput,
 ) -> Result<
-    impl IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + use<'_>,
+    impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + use<'_>,
     DeriveError,
 > {
     Ok(fields(ast)?.into_iter().filter_map(|field| {

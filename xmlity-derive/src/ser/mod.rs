@@ -6,16 +6,17 @@ pub use serialize::DeriveSerialize;
 pub use serialize_attribute::DeriveSerializeAttribute;
 
 use crate::{
-    options::structs::fields::{
-        ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
+    options::{
+        structs::fields::{ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts},
+        FieldWithOpts,
     },
-    DeriveError, FieldIdent, SerializeField,
+    DeriveError, FieldIdent,
 };
 use quote::{quote, ToTokens};
 
 fn attribute_group_field_serializer(
     access_ident: impl ToTokens,
-    fields: impl IntoIterator<Item = SerializeField<FieldAttributeGroupOpts>>,
+    fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>,
 ) -> proc_macro2::TokenStream {
     let fields = fields
       .into_iter()
@@ -39,7 +40,7 @@ fn attribute_group_field_serializer(
 
 fn element_group_field_serializer(
     access_ident: impl ToTokens,
-    fields: impl IntoIterator<Item = SerializeField<FieldValueGroupOpts>>,
+    fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
 ) -> proc_macro2::TokenStream {
     let fields = fields
     .into_iter()
@@ -63,7 +64,7 @@ fn element_group_field_serializer(
 
 fn seq_field_serializer(
     access_ident: impl ToTokens,
-    fields: impl IntoIterator<Item = SerializeField<ChildOpts>>,
+    fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
 ) -> proc_macro2::TokenStream {
     let fields = fields.into_iter().map(|var_field| {
         let field_ident = &var_field.field_ident;
@@ -78,7 +79,9 @@ fn seq_field_serializer(
     }
 }
 
-fn fields(ast: &syn::DeriveInput) -> Result<Vec<SerializeField<FieldOpts>>, DeriveError> {
+fn fields(
+    ast: &syn::DeriveInput,
+) -> Result<Vec<FieldWithOpts<FieldIdent, FieldOpts>>, DeriveError> {
     let syn::Data::Struct(syn::DataStruct { fields, .. }) = &ast.data else {
         unreachable!()
     };
@@ -88,7 +91,7 @@ fn fields(ast: &syn::DeriveInput) -> Result<Vec<SerializeField<FieldOpts>>, Deri
             .named
             .iter()
             .map(|f| {
-                Ok(SerializeField {
+                Ok(FieldWithOpts {
                     field_ident: FieldIdent::Named(f.ident.clone().expect("Named struct")),
                     options: FieldOpts::from_field(f)?,
                     field_type: f.ty.clone(),
@@ -100,20 +103,20 @@ fn fields(ast: &syn::DeriveInput) -> Result<Vec<SerializeField<FieldOpts>>, Deri
             .iter()
             .enumerate()
             .map(|(i, f)| {
-                Ok(SerializeField {
+                Ok(FieldWithOpts {
                     field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     options: FieldOpts::from_field(f)?,
                     field_type: f.ty.clone(),
                 })
             })
             .collect::<Result<Vec<_>, _>>(),
-        syn::Fields::Unit => unreachable!(),
+        syn::Fields::Unit => Ok(vec![]),
     }
 }
 
 fn attribute_group_fields(
     ast: &syn::DeriveInput,
-) -> Result<Vec<SerializeField<FieldAttributeGroupOpts>>, DeriveError> {
+) -> Result<Vec<FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>, DeriveError> {
     Ok(fields(ast)?
         .into_iter()
         .filter_map(|field| {
@@ -128,7 +131,7 @@ fn attribute_group_fields(
 
 fn element_group_fields(
     ast: &syn::DeriveInput,
-) -> Result<Vec<SerializeField<FieldValueGroupOpts>>, DeriveError> {
+) -> Result<Vec<FieldWithOpts<FieldIdent, FieldValueGroupOpts>>, DeriveError> {
     Ok(fields(ast)?
         .into_iter()
         .filter_map(|field| {
@@ -141,7 +144,9 @@ fn element_group_fields(
         .collect())
 }
 
-fn element_fields(ast: &syn::DeriveInput) -> Result<Vec<SerializeField<ChildOpts>>, DeriveError> {
+fn element_fields(
+    ast: &syn::DeriveInput,
+) -> Result<Vec<FieldWithOpts<FieldIdent, ChildOpts>>, DeriveError> {
     Ok(fields(ast)?
         .into_iter()
         .filter_map(|field| {

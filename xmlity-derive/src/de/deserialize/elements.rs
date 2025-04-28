@@ -24,7 +24,7 @@ use crate::{
         },
         ElementOrder, WithExpandedNameExt,
     },
-    DeriveError, DeriveResult, DeserializeField, ExpandedName, FieldIdent,
+    DeriveError, DeriveResult, ExpandedName, FieldIdent, FieldWithOpts,
 };
 
 pub struct RootStructElementVisitorBuilder<'a> {
@@ -62,8 +62,8 @@ impl<'a> RootStructElementVisitorBuilder<'a> {
         };
 
         let struct_type: StructTypeWithFields<
-            Vec<DeserializeField<syn::Ident, FieldOpts>>,
-            Vec<DeserializeField<syn::Index, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
         > = match fields {
             syn::Fields::Named(fields) => StructTypeWithFields::Named(
                 fields
@@ -72,7 +72,7 @@ impl<'a> RootStructElementVisitorBuilder<'a> {
                     .map(|f| {
                         let field_ident = f.ident.clone().expect("Named struct");
 
-                        DeriveResult::Ok(DeserializeField {
+                        DeriveResult::Ok(FieldWithOpts {
                             field_ident,
                             options: FieldOpts::from_field(f)?,
                             field_type: f.ty.clone(),
@@ -86,7 +86,7 @@ impl<'a> RootStructElementVisitorBuilder<'a> {
                     .iter()
                     .enumerate()
                     .map(|(i, f)| {
-                        DeriveResult::Ok(DeserializeField {
+                        DeriveResult::Ok(FieldWithOpts {
                             field_ident: syn::Index::from(i),
                             options: FieldOpts::from_field(f)?,
                             field_type: f.ty.clone(),
@@ -115,8 +115,8 @@ pub struct StructDeserializeElementBuilder<'a> {
     pub generics: &'a syn::Generics,
     pub required_expanded_name: Option<ExpandedName<'static>>,
     pub struct_type: StructTypeWithFields<
-        Vec<DeserializeField<syn::Ident, FieldOpts>>,
-        Vec<DeserializeField<syn::Index, FieldOpts>>,
+        Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+        Vec<FieldWithOpts<syn::Index, FieldOpts>>,
     >,
     pub allow_unknown_attributes: bool,
     pub allow_unknown_children: bool,
@@ -126,14 +126,14 @@ pub struct StructDeserializeElementBuilder<'a> {
 
 impl StructDeserializeElementBuilder<'_> {
     pub fn field_decl(
-        element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>>,
-        attribute_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>>,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
+        attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
     ) -> Vec<Stmt> {
         let getter_declarations = attribute_fields
             .into_iter()
             .map::<Stmt, _>(
-                |DeserializeField {
+                |FieldWithOpts {
                     field_ident,
                      field_type,
                      ..
@@ -145,7 +145,7 @@ impl StructDeserializeElementBuilder<'_> {
                 },
             )
             .chain(element_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
+                |FieldWithOpts {
                     field_ident,
                      field_type,
                      ..
@@ -156,7 +156,7 @@ impl StructDeserializeElementBuilder<'_> {
                     }
                 },
             )).chain(group_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
+                |FieldWithOpts {
                     field_ident,
                      field_type,
                      ..
@@ -177,17 +177,17 @@ impl StructDeserializeElementBuilder<'_> {
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
         access_type: &syn::Type,
-        element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>>,
-        attribute_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>>,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
+        attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors = attribute_fields.into_iter()
-            .map(|a: DeserializeField<FieldIdent, AttributeOpts>| (
+            .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
                 a.field_ident,
                 a.options.should_unwrap_default()
             ))
-            .chain(element_fields.into_iter().map(|a: DeserializeField<FieldIdent, ChildOpts>| (
+            .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
                 a.field_ident,
                 a.options.should_unwrap_default()
             )))
@@ -206,7 +206,7 @@ impl StructDeserializeElementBuilder<'_> {
                 (field_ident, expression)
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
-            |DeserializeField {
+            |FieldWithOpts {
                  field_ident,
                  ..
              }| {
@@ -228,7 +228,7 @@ impl StructDeserializeElementBuilder<'_> {
     pub fn attribute_access(
         access_ident: &Ident,
         span: proc_macro2::Span,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldAttributeGroupOpts>> + Clone,
+        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>> + Clone,
         allow_unknown_attributes: bool,
         order: ElementOrder,
     ) -> Vec<Stmt> {
@@ -312,7 +312,7 @@ impl StructDeserializeElementBuilder<'_> {
 
     pub fn element_access(
         element_access_ident: &Ident,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone,
+        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
     ) -> DeriveResult<Vec<Stmt>> {
@@ -339,8 +339,8 @@ impl StructDeserializeElementBuilder<'_> {
         access_type: &Type,
         visitor_lifetime: &syn::Lifetime,
         struct_type: StructTypeWithFields<
-            Vec<DeserializeField<syn::Ident, FieldOpts>>,
-            Vec<DeserializeField<syn::Index, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
         >,
         children_order: ElementOrder,
         allow_unknown_children: bool,
@@ -456,8 +456,8 @@ impl StructDeserializeElementBuilder<'_> {
         access_type: &Type,
         visitor_lifetime: &syn::Lifetime,
         struct_type: StructTypeWithFields<
-            Vec<DeserializeField<syn::Ident, FieldOpts>>,
-            Vec<DeserializeField<syn::Index, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
         >,
         children_order: ElementOrder,
         allow_unknown_children: bool,
