@@ -3,6 +3,7 @@ use std::{borrow::Cow, ops::Deref};
 use proc_macro2::Span;
 use syn::{
     parse_quote, Generics, Ident, ImplItemFn, ItemImpl, ItemStruct, Lifetime, LifetimeParam, Stmt,
+    Type,
 };
 
 use crate::{options::XmlityFieldValueGroupDeriveOpts, DeriveError};
@@ -442,11 +443,12 @@ pub trait DeserializeBuilderExt: DeserializeBuilder {
 impl<T: DeserializeBuilder> DeserializeBuilderExt for T {
     fn deserialize_fn(&self, deserialize_lifetime: &Lifetime) -> Result<ImplItemFn, DeriveError> {
         let deserializer_ident = Ident::new("__deserializer", Span::mixed_site());
+        let deserializer_type: Type = parse_quote! { __Deserializer };
         let body = self.deserialize_fn_body(&deserializer_ident, deserialize_lifetime)?;
         Ok(parse_quote! {
-                fn deserialize<D>(#deserializer_ident: D) -> Result<Self, <D as ::xmlity::Deserializer<#deserialize_lifetime>>::Error>
+                fn deserialize<#deserializer_type>(#deserializer_ident: #deserializer_type) -> Result<Self, <#deserializer_type as ::xmlity::Deserializer<#deserialize_lifetime>>::Error>
                 where
-                    D: ::xmlity::Deserializer<#deserialize_lifetime>,
+                    #deserializer_type: ::xmlity::Deserializer<#deserialize_lifetime>,
                 {
                     #(#body)*
                 }
