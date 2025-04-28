@@ -7,7 +7,7 @@ pub use serialize_attribute::DeriveSerializeAttribute;
 
 use crate::{
     options::structs::fields::{
-        FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts, ChildOpts,
+        ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
     },
     DeriveError, FieldIdent, SerializeField,
 };

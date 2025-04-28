@@ -1,9 +1,11 @@
 mod attributes;
 mod elements;
+mod simplified_element_wrapper;
+pub use simplified_element_wrapper::SingleChildDeserializeElementBuilder;
 mod none;
 mod values;
 use attributes::StructAttributeVisitorBuilder;
-use elements::StructElementVisitorBuilder;
+use elements::RootStructElementVisitorBuilder;
 use none::{EnumVisitorBuilder, SerializeNoneStructBuilder};
 use quote::ToTokens;
 
@@ -30,7 +32,8 @@ impl DeriveMacro for DeriveDeserialize {
                             .map(|a| a.to_token_stream())
                     }
                     structs::roots::DeserializeRootOpts::Element(opts) => {
-                        StructElementVisitorBuilder::new(&opts, ast)
+                        RootStructElementVisitorBuilder::new(&opts, ast)
+                            .to_builder()?
                             .deserialize_trait_impl()
                             .map(|a| a.to_token_stream())
                     }

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use syn::{
-    parse_quote, spanned::Spanned, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime,
+    parse_quote, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime,
     LifetimeParam, Stmt, Type, Variant,
 };
 
@@ -44,20 +44,22 @@ impl<'a> SerializeNoneStructBuilder<'a> {
     ) -> Vec<Stmt> {
         let getter_declarations = element_fields.into_iter().map::<Stmt, _>(
                 |DeserializeField {
-                     builder_field_ident,
+                     field_ident,
                      field_type,
                      ..
                  }| {
+                    let builder_field_ident = field_ident.to_named_ident();
                     parse_quote! {
                         let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
                     }
                 },
             ).chain(group_fields.into_iter().map::<Stmt, _>(
                 |DeserializeField {
-                     builder_field_ident,
+                     field_ident,
                      field_type,
                      ..
                  }| {
+                    let builder_field_ident = field_ident.to_named_ident();
                     parse_quote! {
                         let mut #builder_field_ident = <#field_type as ::xmlity::de::DeserializationGroup>::builder();
                     }
@@ -81,7 +83,8 @@ impl<'a> SerializeNoneStructBuilder<'a> {
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors =
             element_fields.into_iter()
-            .map::<(_, Expr), _>(|DeserializeField { builder_field_ident, field_ident, options, .. }| {
+            .map::<(_, Expr), _>(|DeserializeField {  field_ident, options, .. }| {
+                let builder_field_ident = field_ident.to_named_ident();
                 let expression = if options.should_unwrap_default() {
                     parse_quote! {
                         ::core::option::Option::unwrap_or_default(#builder_field_ident)
@@ -95,10 +98,11 @@ impl<'a> SerializeNoneStructBuilder<'a> {
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
             |DeserializeField {
-                 builder_field_ident,
+                 
                  field_ident,
                  ..
              }| {
+                let builder_field_ident = field_ident.to_named_ident();
                 let expression = parse_quote! {
                     ::xmlity::de::DeserializationGroupBuilder::finish::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
                 };
@@ -118,17 +122,17 @@ impl<'a> SerializeNoneStructBuilder<'a> {
         fields: impl IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
-    ) -> Vec<Stmt> {
+    ) -> DeriveResult<Vec<Stmt>> {
         let visit = SeqVisitLoop::new(access_ident, allow_unknown_children, order, fields);
 
         let field_storage = visit.field_storage();
-        let access_loop = visit.access_loop();
+        let access_loop = visit.access_loop()?;
 
-        parse_quote! {
+        Ok(parse_quote! {
             #field_storage
 
             #(#access_loop)*
-        }
+        })
     }
 }
 
@@ -165,7 +169,6 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                     let field_ident = f.ident.clone().expect("Named struct");
 
                     DeriveResult::Ok(DeserializeField {
-                        builder_field_ident: FieldIdent::Named(field_ident.clone()),
                         field_ident: FieldIdent::Named(field_ident),
                         options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),
@@ -178,10 +181,6 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                 .enumerate()
                 .map(|(i, f)| {
                     DeriveResult::Ok(DeserializeField {
-                        builder_field_ident: FieldIdent::Named(Ident::new(
-                            &format!("__{}", i),
-                            f.span(),
-                        )),
                         field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                         options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),
@@ -221,7 +220,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                 element_group_fields,
                 false,
                 ElementOrder::Loose,
-            )
+            )?
         } else {
             Vec::new()
         };

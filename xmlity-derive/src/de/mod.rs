@@ -1,15 +1,20 @@
 mod deserialization_group;
 mod deserialize;
+use common::DeserializeBuilderExt;
 pub use deserialization_group::DeriveDeserializationGroup;
 pub use deserialize::DeriveDeserialize;
+use deserialize::SingleChildDeserializeElementBuilder;
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{parse_quote, Expr, ExprWhile, Ident, Stmt, Type, Visibility};
+use syn::{parse_quote, Expr, ExprWhile, Generics, Ident, ItemStruct, Stmt, Type, Visibility};
 
 use crate::{
-    options::structs::fields::{
-        AttributeOpts, ChildOpts, ElementOpts, FieldAttributeGroupOpts, FieldOpts,
-        FieldValueGroupOpts, GroupOpts, ValueOpts,
+    options::{
+        structs::fields::{
+            AttributeOpts, ChildOpts, ElementOpts, FieldAttributeGroupOpts, FieldOpts,
+            FieldValueGroupOpts, GroupOpts, ValueOpts,
+        },
+        WithExpandedNameExt,
     },
     utils::{self},
     DeriveError, DeriveResult, DeserializeField, FieldIdent,
@@ -21,6 +26,14 @@ mod common;
 enum StructType {
     Named,
     Unnamed,
+    Unit,
+}
+
+#[derive(Clone)]
+enum StructTypeWithFields<N, U> {
+    Named(N),
+    Unnamed(U),
+    Unit,
 }
 
 fn named_constructor_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
@@ -58,7 +71,7 @@ fn constructor_expr<I: ToTokens, T: ToTokens>(
     fields: impl IntoIterator<Item = (FieldIdent, T)>,
     constructor_type: &StructType,
 ) -> proc_macro2::TokenStream {
-    let fields = fields.into_iter();
+    let mut fields = fields.into_iter();
     match constructor_type {
         StructType::Unnamed => {
             unnamed_constructor_expr(ident, fields.map(|(_, value_expression)| value_expression))
@@ -70,6 +83,10 @@ fn constructor_expr<I: ToTokens, T: ToTokens>(
                 FieldIdent::Indexed(_) => None,
             }),
         ),
+        StructType::Unit => {
+            assert!(fields.next().is_none(), "unit structs cannot have fields");
+            quote! { #ident }
+        }
     }
 }
 
@@ -107,6 +124,16 @@ fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
     }
 }
 
+fn unit_struct_definition_expr<I: ToTokens>(
+    ident: I,
+    generics: Option<&syn::Generics>,
+    visibility: &Visibility,
+) -> proc_macro2::TokenStream {
+    quote! {
+        #visibility struct #ident #generics;
+    }
+}
+
 fn struct_definition_expr<I: ToTokens>(
     ident: I,
     generics: Option<&syn::Generics>,
@@ -131,6 +158,7 @@ fn struct_definition_expr<I: ToTokens>(
             }),
             visibility,
         ),
+        StructType::Unit => unit_struct_definition_expr(ident, generics, visibility),
     }
 }
 
@@ -138,7 +166,7 @@ fn attribute_field_deserialize_impl(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
     DeserializeField {
-        builder_field_ident,
+        field_ident,
         field_type,
         ..
     }: DeserializeField<FieldIdent, AttributeOpts>,
@@ -149,30 +177,28 @@ fn attribute_field_deserialize_impl(
 ) -> Vec<Stmt> {
     let temporary_value_ident = Ident::new("__v", Span::call_site());
 
-    if pop_error {
-        parse_quote! {
-            if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
-                let #temporary_value_ident = ::xmlity::de::AttributesAccess::next_attribute::<#field_type>(&mut #access_ident)?;
-                let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
-                    #(#if_next_attribute_none)*
-                };
-                #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
-                #(#finished_attribute)*
+    let builder_field_ident = field_ident.to_named_ident();
 
-            }
-        }
-    } else {
-        parse_quote! {
-            if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
-                if let ::core::result::Result::Ok(#temporary_value_ident) = ::xmlity::de::AttributesAccess::next_attribute::<#field_type>(&mut #access_ident) {
-                    let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
-                        #(#if_next_attribute_none)*
-                    };
-                    #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
-                    #(#finished_attribute)*
-                }
-                #(#after_attempt)*
-            }
+    let inner = quote! {
+        let ::core::option::Option::Some(#temporary_value_ident) = #temporary_value_ident else {
+            #(#if_next_attribute_none)*
+        };
+        #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
+        #(#finished_attribute)*
+    };
+
+    let deserialize_expr: Expr = parse_quote!(
+        ::xmlity::de::AttributesAccess::next_attribute::<#field_type>(&mut #access_ident)
+    );
+
+    let inner = pop_or_ignore_error(&temporary_value_ident, &deserialize_expr, pop_error, inner);
+
+    let after_attempt = if !pop_error { after_attempt } else { &[] };
+
+    parse_quote! {
+        if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
+            #inner
+            #(#after_attempt)*
         }
     }
 }
@@ -180,36 +206,38 @@ fn attribute_field_deserialize_impl(
 fn group_field_contribute_attributes(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeField {
-        builder_field_ident,
-        ..
-    }: DeserializeField<FieldIdent, GroupOpts>,
+    DeserializeField { field_ident, .. }: DeserializeField<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
 ) -> Vec<Stmt> {
+    let builder_field_ident = field_ident.to_named_ident();
     let contributed_to_attributes_ident =
         Ident::new("__contributed_to_attributes", Span::call_site());
 
-    if pop_error {
-        parse_quote! {
-            if !::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident) {
-                let #contributed_to_attributes_ident = ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?)?;
-                if #contributed_to_attributes_ident {
-                    #(#if_contributed_to_groups)*
-                }
-            }
+    let deserialize_expr: Expr = parse_quote!(
+        ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?)
+    );
+
+    let inner = quote! {
+        if #contributed_to_attributes_ident {
+            #(#if_contributed_to_groups)*
         }
-    } else {
-        parse_quote! {
-            if !::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident) {
-                if let ::core::result::Result::Ok(#contributed_to_attributes_ident) = ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?) {
-                    if #contributed_to_attributes_ident {
-                        #(#if_contributed_to_groups)*
-                    }
-                }
-                #(#after_attempt)*
-            }
+    };
+
+    let inner = pop_or_ignore_error(
+        &contributed_to_attributes_ident,
+        &deserialize_expr,
+        pop_error,
+        inner,
+    );
+
+    let after_attempt = if !pop_error { after_attempt } else { &[] };
+
+    parse_quote! {
+        if !::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident) {
+            #inner
+            #(#after_attempt)*
         }
     }
 }
@@ -275,155 +303,182 @@ fn builder_attribute_field_visitor<
         .collect::<Vec<_>>()
 }
 
-fn element_field_deserialize_impl_pop_error(
-    access_ident: &Ident,
-    builder_field_ident_prefix: impl ToTokens,
-    DeserializeField {
-        builder_field_ident,
-        field_type,
-        options:
-            ChildOpts::Value(ValueOpts { extendable, .. })
-            | ChildOpts::Element(ElementOpts { extendable, .. }),
-        ..
-    }: DeserializeField<FieldIdent, ChildOpts>,
-    if_next_element_none: &[Stmt],
-    finished_element: &[Stmt],
-) -> Vec<Stmt> {
-    let temporary_value_ident = Ident::new("__v", Span::call_site());
-
-    let extendable_loop: Option<ExprWhile> = if extendable {
-        let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
-        Some(parse_quote! {
-            while let Some(#loop_temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident)? {
-                ::core::iter::Extend::extend(&mut #temporary_value_ident, [#loop_temporary_value_ident]);
-            }
-        })
-    } else {
-        None
-    };
-
-    parse_quote! {
-        if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
-            let #temporary_value_ident = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident)?;
-            let ::core::option::Option::Some(mut #temporary_value_ident) = #temporary_value_ident else {
-                #(#if_next_element_none)*
-            };
-            #extendable_loop
-            #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
-
-            #(#finished_element)*
-        }
-    }
-}
-
-fn element_field_deserialize_impl_ignore_error(
-    access_ident: &Ident,
-    builder_field_ident_prefix: impl ToTokens,
-    DeserializeField {
-        builder_field_ident,
-        field_type,
-        options:
-            ChildOpts::Value(ValueOpts { extendable, .. })
-            | ChildOpts::Element(ElementOpts { extendable, .. }),
-        ..
-    }: DeserializeField<FieldIdent, ChildOpts>,
-    if_next_element_none: &[Stmt],
-    finished_element: &[Stmt],
-    after_attempt: &[Stmt],
-) -> Vec<Stmt> {
-    let temporary_value_ident = Ident::new("__v", Span::call_site());
-    let extendable_loop: Option<ExprWhile> = if extendable {
-        let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
-
-        Some(parse_quote! {
-            while let Ok(Some(#loop_temporary_value_ident)) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident) {
-                ::core::iter::Extend::extend(&mut #temporary_value_ident, [#loop_temporary_value_ident]);
-            }
-        })
-    } else {
-        None
-    };
-
-    parse_quote! {
-        if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
-            if let ::core::result::Result::Ok(#temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#field_type>(&mut #access_ident) {
-                let ::core::option::Option::Some(mut #temporary_value_ident) = #temporary_value_ident else {
-                    #(#if_next_element_none)*
-                };
-                #extendable_loop
-                #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
-
-                #(#finished_element)*
-            }
-            #(#after_attempt)*
-        }
-    }
-}
-
 fn element_field_deserialize_impl(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    deserialize_builder_field: DeserializeField<FieldIdent, ChildOpts>,
+    DeserializeField {
+        field_ident,
+        field_type,
+        options:
+            options @ ChildOpts::Value(ValueOpts { extendable, .. })
+            | options @ ChildOpts::Element(ElementOpts { extendable, .. }),
+        ..
+    }: DeserializeField<FieldIdent, ChildOpts>,
     if_next_element_none: &[Stmt],
     finished_element: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
-) -> Vec<Stmt> {
-    if pop_error {
-        element_field_deserialize_impl_pop_error(
-            access_ident,
-            builder_field_ident_prefix,
-            deserialize_builder_field,
-            if_next_element_none,
-            finished_element,
-        )
+) -> DeriveResult<Vec<Stmt>> {
+    let builder_field_ident = field_ident.to_named_ident();
+    let temporary_value_ident = Ident::new("__v", Span::call_site());
+    let wrapper_ident = Ident::new("__W", Span::call_site());
+    let empty_generics: Generics = parse_quote!();
+
+    let wrapper_data = match &options {
+        ChildOpts::Element(opts) => {
+            let wrapper_def: ItemStruct = parse_quote! {
+                struct #wrapper_ident {
+                    __value: #field_type,
+                }
+            };
+            let builder = SingleChildDeserializeElementBuilder {
+                ident: &wrapper_ident,
+                generics: &empty_generics,
+                required_expanded_name: Some(
+                    opts.expanded_name(field_ident.to_named_ident().to_string().as_str())
+                        .into_owned(),
+                ),
+                item_type: &field_type,
+                extendable,
+            };
+
+            let deserialize_unwrapper = |ident: &Ident| {
+                quote! {
+                    let mut #ident = #ident.__value;
+                }
+            };
+
+            Some((wrapper_def, builder, deserialize_unwrapper))
+        }
+        _ => None,
+    };
+
+    let deserialize_type = wrapper_data
+        .as_ref()
+        .map(|(_, a, _)| a.ident)
+        .map(|a| parse_quote!(#a))
+        .unwrap_or(field_type.clone());
+
+    let deserialize_wrapper_def: Vec<Stmt> = match wrapper_data.as_ref() {
+        Some((a, b, _)) => {
+            let b = b.deserialize_trait_impl()?;
+            parse_quote!(
+                #a
+                #b
+            )
+        }
+        None => Vec::new(),
+    };
+
+    let deserialize_unwrapper = wrapper_data.as_ref().map(|(_, _, a)| a);
+
+    let extendable_loop: Option<ExprWhile> = if extendable {
+        let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
+        let value_transformer = deserialize_unwrapper
+            .copied()
+            .map(|a| (a)(&loop_temporary_value_ident));
+        Some(parse_quote! {
+            while let Some(#loop_temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(&mut #access_ident)? {
+                #value_transformer
+                ::core::iter::Extend::extend(&mut #temporary_value_ident, [#loop_temporary_value_ident]);
+            }
+        })
     } else {
-        element_field_deserialize_impl_ignore_error(
-            access_ident,
-            builder_field_ident_prefix,
-            deserialize_builder_field,
-            if_next_element_none,
-            finished_element,
-            after_attempt,
-        )
+        None
+    };
+
+    let deserialize_expr: Expr = parse_quote!(
+        ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(&mut #access_ident)
+    );
+
+    let value_transformer = deserialize_unwrapper.map(|a| (a)(&temporary_value_ident));
+
+    let inner = quote!(
+        let ::core::option::Option::Some(mut #temporary_value_ident) = #temporary_value_ident else {
+            #(#if_next_element_none)*
+        };
+        #value_transformer
+        #extendable_loop
+        #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
+
+        #(#finished_element)*
+    );
+
+    let inner = pop_or_ignore_error(&temporary_value_ident, &deserialize_expr, pop_error, inner);
+
+    let after_attempt = if !pop_error { after_attempt } else { &[] };
+
+    Ok(parse_quote! {
+        if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
+            #(#deserialize_wrapper_def)*
+
+            #inner
+
+            #(#after_attempt)*
+        }
+    })
+}
+
+fn pop_or_ignore_error(
+    access_ident: &Ident,
+    expr: &Expr,
+    pop_error: bool,
+    inner: impl ToTokens,
+) -> proc_macro2::TokenStream {
+    if pop_error {
+        quote! {
+            if let ::core::result::Result::Ok(mut #access_ident) = #expr {
+                #inner
+            }
+        }
+    } else {
+        quote! {
+            {
+                let mut #access_ident = #expr?;
+                #inner
+            }
+        }
     }
 }
 
 fn group_field_contribute_elements(
     access_ident: &Ident,
     builder_field_ident_prefix: impl ToTokens,
-    DeserializeField {
-        builder_field_ident,
-        ..
-    }: DeserializeField<FieldIdent, GroupOpts>,
+    DeserializeField { field_ident, .. }: DeserializeField<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
-) -> Vec<Stmt> {
+) -> DeriveResult<Vec<Stmt>> {
+    let builder_field_ident = field_ident.to_named_ident();
     let contributed_to_elements_ident = Ident::new("__contributed_to_elements", Span::call_site());
 
-    if pop_error {
-        parse_quote! {
-            if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
-                let #contributed_to_elements_ident = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)?;
-                if #contributed_to_elements_ident {
-                    #(#if_contributed_to_groups)*
-                }
+    let deserialize_expr: Expr = parse_quote!(
+        ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)
+    );
 
-            }
+    let inner = quote! {
+        if #contributed_to_elements_ident {
+            #(#if_contributed_to_groups)*
         }
-    } else {
-        parse_quote! {
-            if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
-                if let ::core::result::Result::Ok(#contributed_to_elements_ident) = ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?) {
-                    if #contributed_to_elements_ident {
-                        #(#if_contributed_to_groups)*
-                    }
-                }
-                #(#after_attempt)*
-            }
+    };
+
+    let inner = pop_or_ignore_error(
+        &contributed_to_elements_ident,
+        &deserialize_expr,
+        pop_error,
+        inner,
+    );
+
+    let after_attempt = if !pop_error { after_attempt } else { &[] };
+
+    Ok(parse_quote! {
+        if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
+
+           #inner
+            #(#after_attempt)*
+
         }
-    }
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -438,7 +493,7 @@ fn builder_element_field_visitor<
     if_contributed_to_groups: Vec<Stmt>,
     after_attempt: Vec<Stmt>,
     pop_error: bool,
-) -> Vec<Stmt> {
+) -> DeriveResult<Vec<Stmt>> {
     fields
         .into_iter()
         .zip(utils::repeat_clone((
@@ -448,7 +503,7 @@ fn builder_element_field_visitor<
             if_contributed_to_groups,
             after_attempt,
         )))
-        .flat_map(
+        .map(
             move |(
                 var_field,
                 (
@@ -484,18 +539,19 @@ fn builder_element_field_visitor<
                 ),
             },
         )
-        .collect::<Vec<_>>()
+        .collect::<Result<Vec<_>, _>>()
+        .map(|stmts| stmts.into_iter().flatten().collect())
 }
 
 fn attribute_done_expr(
-    field: DeserializeField<FieldIdent, FieldAttributeGroupOpts>,
-    builder_field_ident_prefix: impl ToTokens,
-) -> Expr {
-    let DeserializeField {
-        builder_field_ident,
+    DeserializeField {
+        field_ident,
         options,
         ..
-    } = field;
+    }: DeserializeField<FieldIdent, FieldAttributeGroupOpts>,
+    builder_field_ident_prefix: impl ToTokens,
+) -> Expr {
+    let builder_field_ident = field_ident.to_named_ident();
     match options {
         FieldAttributeGroupOpts::Attribute(_) => parse_quote! {
             ::core::option::Option::is_some(&#builder_field_ident_prefix #builder_field_ident)
@@ -527,14 +583,14 @@ fn all_attributes_done_expr(
 }
 
 fn element_done_expr(
-    field: DeserializeField<FieldIdent, FieldValueGroupOpts>,
-    builder_field_ident_prefix: impl ToTokens,
-) -> Expr {
-    let DeserializeField {
-        builder_field_ident,
+    DeserializeField {
+        field_ident,
         options,
         ..
-    } = field;
+    }: DeserializeField<FieldIdent, FieldValueGroupOpts>,
+    builder_field_ident_prefix: impl ToTokens,
+) -> Expr {
+    let builder_field_ident = field_ident.to_named_ident();
     match options {
         FieldValueGroupOpts::Value(_) => parse_quote! {
             ::core::option::Option::is_some(&#builder_field_ident_prefix #builder_field_ident)
@@ -580,7 +636,6 @@ pub fn fields(
                 let field_ident = f.ident.clone().expect("Named struct");
 
                 DeriveResult::Ok(DeserializeField {
-                    builder_field_ident: FieldIdent::Named(field_ident.clone()),
                     field_ident: FieldIdent::Named(field_ident),
                     options: FieldOpts::from_field(f)?,
                     field_type: f.ty.clone(),
@@ -593,7 +648,6 @@ pub fn fields(
             .enumerate()
             .map(|(i, f)| {
                 DeriveResult::Ok(DeserializeField {
-                    builder_field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     field_ident: FieldIdent::Indexed(syn::Index::from(i)),
                     options: FieldOpts::from_field(f)?,
                     field_type: f.ty.clone(),

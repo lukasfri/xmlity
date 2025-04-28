@@ -6,7 +6,7 @@ use syn::{
     Type,
 };
 
-use crate::{options::structs::fields::FieldValueGroupOpts, DeriveError};
+use crate::{options::structs::fields::FieldValueGroupOpts, DeriveError, DeriveResult};
 
 pub trait VisitorBuilder {
     fn visit_text_fn_body(
@@ -595,7 +595,7 @@ impl<'a, F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts
         quote! {}
     }
 
-    pub fn access_loop(&self) -> Vec<Stmt> {
+    pub fn access_loop(&self) -> DeriveResult<Vec<Stmt>> {
         let Self {
             seq_access_ident: access_ident,
             allow_unknown_children,
@@ -617,7 +617,7 @@ impl<'a, F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts
             parse_quote! {continue;},
             parse_quote! {},
             pop_error,
-        );
+        )?;
 
         match order {
             ElementOrder::Loose => field_visits.into_iter().zip(fields.clone()).map(|(field_visit, field)| {
@@ -642,12 +642,12 @@ impl<'a, F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #field_visit
                         #(#skip_unknown)*
                     }
-                }
+                })
             }).collect(),
             ElementOrder::None => {
                 let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
@@ -670,12 +670,12 @@ impl<'a, F: IntoIterator<Item = DeserializeField<FieldIdent, FieldValueGroupOpts
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #(#field_visits)*
                         #(#skip_unknown)*
                     }
-                }
+                })
             },
         }
     }

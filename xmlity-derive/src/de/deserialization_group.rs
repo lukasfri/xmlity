@@ -15,7 +15,7 @@ use crate::{
         },
         GroupOrder,
     },
-    DeriveError, DeriveMacro, DeserializeField, FieldIdent,
+    DeriveError, DeriveMacro, DeriveResult, DeserializeField, FieldIdent,
 };
 
 use super::{all_attributes_done_expr, all_elements_done_expr, constructor_expr, StructType};
@@ -380,7 +380,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         ast: &syn::DeriveInput,
         elements_access_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
-    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+    ) -> DeriveResult<Option<Vec<Stmt>>> {
         let element_visit = super::builder_element_field_visitor(
             elements_access_ident,
             quote! {self.},
@@ -397,7 +397,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                 GroupOrder::Strict => true,
                 GroupOrder::Loose | GroupOrder::None => false,
             },
-        );
+        )?;
 
         Ok(Some(parse_quote! {
             #(#element_visit)*
@@ -442,31 +442,31 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
             .into_iter()
             .map(
                 |DeserializeField {
-                     builder_field_ident,
+                     field_ident,
                      field_type,
                      ..
                  }| {
                     let expression = parse_quote! {
                         ::core::option::Option<#field_type>
                     };
-                    (builder_field_ident, expression)
+                    (field_ident, expression)
                 },
             )
             .chain(crate::de::element_fields(ast)?.into_iter().map(
                 |DeserializeField {
-                     builder_field_ident,
+                     field_ident,
                      field_type,
                      ..
                  }| {
                     let expression = parse_quote! {
                         ::core::option::Option<#field_type>
                     };
-                    (builder_field_ident, expression)
+                    (field_ident, expression)
                 },
             ));
         let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
             |DeserializeField {
-                 builder_field_ident,
+                field_ident,
                  field_type,
                  ..
              }| {
@@ -474,7 +474,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                     <#field_type as ::xmlity::de::DeserializationGroup<#deserialize_lifetime>>::Builder
                 };
 
-                (builder_field_ident, expression)
+                (field_ident, expression)
             },
         );
 
@@ -486,6 +486,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                         FieldIdent::Named(Ident::new("__marker", Span::call_site()))
                     }
                     StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
+                    StructType::Unit => unreachable!(),
                 },
                 parse_quote! {
                     ::core::marker::PhantomData<&#deserialize_lifetime ()>
@@ -551,6 +552,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                         FieldIdent::Named(Ident::new("__marker", Span::call_site()))
                     }
                     StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
+                    StructType::Unit => unreachable!(),
                 },
                 quote! {
                     ::core::marker::PhantomData
@@ -576,40 +578,35 @@ fn finish_constructor_expr<T: quote::ToTokens>(
 ) -> proc_macro2::TokenStream {
     let local_value_expressions_constructors = attribute_fields.into_iter()
         .map(|a: DeserializeField<FieldIdent, AttributeOpts>| (
-            a.builder_field_ident,
             a.field_ident,
             a.options.should_unwrap_default()
         ))
         .chain(element_fields.into_iter().map(|a: DeserializeField<FieldIdent, ChildOpts>| (
-            a.builder_field_ident,
             a.field_ident,
             a.options.should_unwrap_default()
         )))
-      .map(|( builder_field_ident, field_ident, should_unwrap_default )| {
+      .map(|( field_ident, should_unwrap_default )| {
           let expression = if should_unwrap_default {
               quote! {
-                  ::core::option::Option::unwrap_or_default(self.#builder_field_ident)
+                  ::core::option::Option::unwrap_or_default(self.#field_ident)
               }
           } else {
               quote! {
-                  ::core::option::Option::ok_or(self.#builder_field_ident, ::xmlity::de::Error::missing_field(stringify!(#field_ident)))?
+                  ::core::option::Option::ok_or(self.#field_ident, ::xmlity::de::Error::missing_field(stringify!(#field_ident)))?
               }
           };
           (field_ident, expression)
       });
-    let group_value_expressions_constructors = group_fields.into_iter().map(
-        |DeserializeField {
-             builder_field_ident,
-             field_ident,
-             ..
-         }| {
-            let expression = quote! {
-                ::xmlity::de::DeserializationGroupBuilder::finish::<E>(self.#builder_field_ident)?
-            };
+    let group_value_expressions_constructors =
+        group_fields
+            .into_iter()
+            .map(|DeserializeField { field_ident, .. }| {
+                let expression = quote! {
+                    ::xmlity::de::DeserializationGroupBuilder::finish::<E>(self.#field_ident)?
+                };
 
-            (field_ident, expression)
-        },
-    );
+                (field_ident, expression)
+            });
 
     let value_expressions_constructors =
         local_value_expressions_constructors.chain(group_value_expressions_constructors);

@@ -122,6 +122,10 @@ impl<'a> LocalName<'a> {
     pub fn as_ref<'b: 'a>(&'b self) -> LocalName<'b> {
         Self(Cow::Borrowed(&self.0))
     }
+
+    pub fn into_owned(self) -> LocalName<'static> {
+        LocalName(Cow::Owned(self.0.to_string()))
+    }
 }
 
 impl FromMeta for LocalName<'_> {
@@ -144,6 +148,10 @@ pub struct XmlNamespace<'a>(pub Cow<'a, str>);
 impl<'a> XmlNamespace<'a> {
     pub fn as_ref<'b: 'a>(&'b self) -> XmlNamespace<'b> {
         Self(Cow::Borrowed(&self.0))
+    }
+
+    pub fn into_owned(self) -> XmlNamespace<'static> {
+        XmlNamespace(Cow::Owned(self.0.to_string()))
     }
 }
 
@@ -399,9 +407,25 @@ pub mod structs {
             #[darling(default)]
             pub extendable: bool,
             #[darling(default)]
-            pub name: Option<String>,
+            pub name: Option<LocalName<'static>>,
             #[darling(default)]
-            pub namespace: Option<String>,
+            pub namespace: Option<XmlNamespace<'static>>,
+            #[darling(default)]
+            pub namespace_expr: Option<Expr>,
+        }
+
+        impl WithExpandedName for ElementOpts {
+            fn name(&self) -> Option<LocalName<'_>> {
+                self.name.clone()
+            }
+
+            fn namespace(&self) -> Option<XmlNamespace<'_>> {
+                self.namespace.clone()
+            }
+
+            fn namespace_expr(&self) -> Option<Expr> {
+                self.namespace_expr.clone()
+            }
         }
 
         #[derive(FromAttributes, Clone, Default)]
@@ -717,18 +741,16 @@ pub mod enums {
 }
 
 #[derive(Clone)]
-pub struct DeserializeField<BuilderFieldIdent, OptionType> {
-    pub builder_field_ident: BuilderFieldIdent,
+pub struct DeserializeField<I, Opts> {
     // If the field is indexed, this is none.
-    pub field_ident: FieldIdent,
+    pub field_ident: I,
     pub field_type: syn::Type,
-    pub options: OptionType,
+    pub options: Opts,
 }
 
 impl<A, T> DeserializeField<A, T> {
     pub fn map_options<U, F: FnOnce(T) -> U>(self, f: F) -> DeserializeField<A, U> {
         DeserializeField {
-            builder_field_ident: self.builder_field_ident,
             field_ident: self.field_ident,
             field_type: self.field_type,
             options: f(self.options),
@@ -740,11 +762,18 @@ impl<A, T> DeserializeField<A, T> {
         f: F,
     ) -> Option<DeserializeField<A, U>> {
         f(self.options).map(|options| DeserializeField {
-            builder_field_ident: self.builder_field_ident,
             field_ident: self.field_ident,
             field_type: self.field_type,
             options,
         })
+    }
+
+    pub fn map_ident<U, F: FnOnce(A) -> U>(self, f: F) -> DeserializeField<U, T> {
+        DeserializeField {
+            field_ident: f(self.field_ident),
+            field_type: self.field_type,
+            options: (self.options),
+        }
     }
 }
 
