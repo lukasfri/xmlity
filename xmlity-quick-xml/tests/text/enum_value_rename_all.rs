@@ -2,8 +2,7 @@ use std::any::type_name;
 
 use pretty_assertions::assert_eq;
 
-mod common;
-use common::{quick_xml_deserialize_test, quick_xml_serialize_test};
+use crate::utils::{quick_xml_deserialize_test, quick_xml_serialize_test};
 
 use rstest::rstest;
 use xmlity::{Deserialize, DeserializeOwned, Serialize};

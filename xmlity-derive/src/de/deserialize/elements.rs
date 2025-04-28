@@ -2,7 +2,9 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, spanned::Spanned, DeriveInput, Expr, Ident, Lifetime, LifetimeParam, Stmt};
+use syn::{
+    parse_quote, spanned::Spanned, DeriveInput, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type,
+};
 
 use crate::{
     de::{
@@ -81,6 +83,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
     pub fn constructor_expr(
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
+        access_type: &syn::Type,
         element_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, ChildOpts>>,
         attribute_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, AttributeOpts>>,
         group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, GroupOpts>>,
@@ -116,7 +119,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                  ..
              }| {
                 let expression = parse_quote! {
-                    ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
+                    ::xmlity::de::DeserializationGroupBuilder::finish::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
                 };
 
                 (field_ident, expression)
@@ -240,6 +243,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
     fn struct_fields_visitor_end<T>(
         struct_ident: &Ident,
         element_access_ident: &Ident,
+        access_type: &Type,
         visitor_lifetime: &syn::Lifetime,
         fields: T,
         constructor_type: StructType,
@@ -321,6 +325,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         let constructor = Self::constructor_expr(
             struct_ident,
             visitor_lifetime,
+            access_type,
             element_fields.clone(),
             attribute_fields.clone(),
             group_fields.clone(),
@@ -342,6 +347,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
     fn visit_element_data_fn_impl(
         ident: &Ident,
         element_access_ident: &Ident,
+        access_type: &Type,
         visitor_lifetime: &syn::Lifetime,
         fields: &syn::Fields,
         children_order: ElementOrder,
@@ -392,6 +398,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
         Ok(Self::struct_fields_visitor_end(
             ident,
             element_access_ident,
+            access_type,
             visitor_lifetime,
             fields,
             constructor_type,
@@ -414,6 +421,7 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
         &self,
         visitor_lifetime: &Lifetime,
         element_access_ident: &Ident,
+        access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput { ident, data, .. } = &self.ast;
         let RootElementOpts {
@@ -440,7 +448,7 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
 
         let xml_name_identification = expanded_name.as_ref().map::<Stmt, _>(|qname| {
           parse_quote! {
-              ::xmlity::de::ElementAccessExt::ensure_name::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
+              ::xmlity::de::ElementAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
           }
       });
 
@@ -449,6 +457,7 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
                 Self::visit_element_data_fn_impl(
                     ident,
                     element_access_ident,
+                    access_type,
                     visitor_lifetime,
                     fields,
                     *children_order,

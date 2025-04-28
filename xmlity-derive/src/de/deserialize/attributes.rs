@@ -1,7 +1,7 @@
 use std::{borrow::Cow, ops::Deref};
 
 use proc_macro2::Span;
-use syn::{parse_quote, Data, DeriveInput, Ident, Lifetime, LifetimeParam, Stmt};
+use syn::{parse_quote, Data, DeriveInput, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
     de::common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
@@ -25,6 +25,7 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
         &self,
         visitor_lifetime: &Lifetime,
         attribute_access_ident: &Ident,
+        access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput { ident, data, .. } = &self.ast;
 
@@ -44,7 +45,7 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
 
         let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
               parse_quote! {
-                  ::xmlity::de::AttributeAccessExt::ensure_name::<<A as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
+                  ::xmlity::de::AttributeAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
               }
           });
 

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use proc_macro2::Span;
-use syn::{parse_quote, Ident, Lifetime, Stmt};
+use syn::{parse_quote, Ident, Lifetime, Stmt, Type};
 
 use crate::{
     de::common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
@@ -45,7 +45,9 @@ impl VisitorBuilder for StringLiteralDeserializeBuilder<'_> {
     fn visit_text_fn_body(
         &self,
         _visitor_lifetime: &Lifetime,
-        value_ident: &Ident,
+        access_ident: &Ident,
+        _access_type: &Type,
+        _error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let str_ident = Ident::new("__value_str", Span::mixed_site());
 
@@ -56,7 +58,7 @@ impl VisitorBuilder for StringLiteralDeserializeBuilder<'_> {
         };
 
         Ok(Some(parse_quote! {
-            let #str_ident = ::xmlity::de::XmlText::as_str(&#value_ident);
+            let #str_ident = ::xmlity::de::XmlText::as_str(&#access_ident);
             #(#str_body)*
         }))
     }
@@ -64,7 +66,9 @@ impl VisitorBuilder for StringLiteralDeserializeBuilder<'_> {
     fn visit_cdata_fn_body(
         &self,
         _visitor_lifetime: &Lifetime,
-        value_ident: &Ident,
+        access_ident: &Ident,
+        _access_type: &Type,
+        _error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let str_ident = Ident::new("__value_str", Span::mixed_site());
 
@@ -75,7 +79,7 @@ impl VisitorBuilder for StringLiteralDeserializeBuilder<'_> {
         };
 
         Ok(Some(parse_quote! {
-            let #str_ident = ::xmlity::de::XmlCData::as_str(&#value_ident);
+            let #str_ident = ::xmlity::de::XmlCData::as_str(&#access_ident);
             #(#str_body)*
         }))
     }

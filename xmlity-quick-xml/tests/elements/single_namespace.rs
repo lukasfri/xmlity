@@ -1,16 +1,13 @@
-//! Tests for namespace-aware structs.
 use std::str::FromStr;
 
 use pretty_assertions::assert_eq;
 
-mod common;
-use common::{clean_string, quick_xml_deserialize_test};
+use crate::utils::{
+    clean_string, quick_xml_deserialize_test, quick_xml_serialize_test_with_default,
+};
 use rstest::rstest;
 use xmlity::{types::string::Trim, ExpandedName, XmlNamespace};
 use xmlity::{Deserialize, Serialize};
-
-const NAMESPACE: XmlNamespace =
-    XmlNamespace::new_dangerous("http://my.namespace.example.com/this/is/a/namespace");
 
 const SIMPLE_DEFAULT_NS_1D_STRUCT_TEST_XML: &str = r###"
   <to xmlns="http://my.namespace.example.com/this/is/a/namespace">Tove</to>
@@ -31,7 +28,7 @@ const SIMPLE_WRONG_NS_1D_STRUCT_TEST_XML: &str = r###"
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(
     name = "to",
-    namespace_expr = NAMESPACE
+    namespace = "http://my.namespace.example.com/this/is/a/namespace"
 )]
 pub struct To(String);
 
@@ -49,8 +46,6 @@ fn simple_ns_1d_struct_serialize(
     #[case] test_xml: &str,
     #[case] default_namespace: Option<&'static str>,
 ) {
-    use common::quick_xml_serialize_test_with_default;
-
     let actual = quick_xml_serialize_test_with_default(
         simple_ns_1d_struct(),
         default_namespace.map(XmlNamespace::new).map(Result::unwrap),
@@ -198,35 +193,35 @@ const SIMPLE_3D_NS_LIST_TEST_XML: &str = r###"
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(
     name = "name",
-    namespace_expr = NAMESPACE
+    namespace = "http://my.namespace.example.com/this/is/a/namespace"
 )]
 pub struct Name(pub String);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(
     name = "price",
-    namespace_expr = NAMESPACE
+    namespace = "http://my.namespace.example.com/this/is/a/namespace"
 )]
 pub struct Price(pub String);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(
     name = "description",
-    namespace_expr = NAMESPACE
+    namespace = "http://my.namespace.example.com/this/is/a/namespace"
 )]
 pub struct Description(pub Trim<String>);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(
     name = "calories",
-    namespace_expr = NAMESPACE
+    namespace = "http://my.namespace.example.com/this/is/a/namespace"
 )]
 pub struct Calories(pub u16);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(
     name = "food",
-    namespace_expr = NAMESPACE
+    namespace = "http://my.namespace.example.com/this/is/a/namespace"
 )]
 struct Food {
     name: Name,
@@ -238,7 +233,7 @@ struct Food {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(
     name = "breakfast_menu",
-    namespace_expr = NAMESPACE
+    namespace = "http://my.namespace.example.com/this/is/a/namespace"
 )]
 struct BreakfastMenu {
     food: Vec<Food>,
@@ -300,8 +295,6 @@ fn simple_3d_list_test_value() -> BreakfastMenu {
 )]
 #[case::no_default_ns(SIMPLE_3D_NS_LIST_TEST_XML, None)]
 fn simple_3d_struct_serialize(#[case] xml: &str, #[case] default_ns: Option<&'static str>) {
-    use common::quick_xml_serialize_test_with_default;
-
     let actual = quick_xml_serialize_test_with_default(
         simple_3d_list_test_value(),
         default_ns.map(XmlNamespace::new).map(Result::unwrap),

@@ -21,6 +21,7 @@ impl SerializeBuilder for DeriveElementStruct<'_> {
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
+        _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let RootElementOpts {
             preferred_prefix,

@@ -15,6 +15,7 @@ trait SerializeBuilder {
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
+        serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
@@ -26,11 +27,12 @@ trait SerializeBuilderExt: SerializeBuilder {
 impl<T: SerializeBuilder> SerializeBuilderExt for T {
     fn serialize_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
         let serializer_access_ident = Ident::new("__serializer", ast.span());
-        let body = self.serialize_fn_body(ast, &serializer_access_ident)?;
+        let serializer_type: syn::Type = parse_quote!(__XmlitySerializer);
+        let body = self.serialize_fn_body(ast, &serializer_access_ident, &serializer_type)?;
         Ok(parse_quote!(
-            fn serialize<S>(&self, mut #serializer_access_ident: S) -> Result<<S as ::xmlity::Serializer>::Ok, <S as ::xmlity::Serializer>::Error>
+            fn serialize<#serializer_type>(&self, mut #serializer_access_ident: #serializer_type) -> Result<<#serializer_type as ::xmlity::Serializer>::Ok, <#serializer_type as ::xmlity::Serializer>::Error>
             where
-                S: ::xmlity::Serializer,
+                #serializer_type: ::xmlity::Serializer,
             {
                 #(#body)*
             }

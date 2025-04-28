@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use proc_macro2::Span;
 use syn::{
     parse_quote, spanned::Spanned, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime,
-    LifetimeParam, Stmt, Variant,
+    LifetimeParam, Stmt, Type, Variant,
 };
 
 use crate::{
@@ -72,6 +72,7 @@ impl<'a> SerializeNoneStructBuilder<'a> {
     pub fn constructor_expr(
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
+        access_type: &Type,
         element_fields: impl IntoIterator<
             Item = DeserializeField<FieldIdent, structs::fields::ChildOpts>,
         >,
@@ -99,7 +100,7 @@ impl<'a> SerializeNoneStructBuilder<'a> {
                  ..
              }| {
                 let expression = parse_quote! {
-                    ::xmlity::de::DeserializationGroupBuilder::finish::<<A as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
+                    ::xmlity::de::DeserializationGroupBuilder::finish::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
                 };
 
                 (field_ident, expression)
@@ -134,9 +135,9 @@ impl<'a> SerializeNoneStructBuilder<'a> {
 impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
     fn visit_seq_fn_body(
         &self,
-
         visitor_lifetime: &Lifetime,
-        seq_access_ident: &Ident,
+        access_ident: &Ident,
+        access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput { data, .. } = &self.ast;
 
@@ -216,7 +217,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
 
         let children_loop = if element_group_fields.clone().next().is_some() {
             Self::seq_access(
-                seq_access_ident,
+                access_ident,
                 element_group_fields,
                 false,
                 ElementOrder::Loose,
@@ -228,6 +229,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
         let constructor = Self::constructor_expr(
             &self.ast.ident,
             visitor_lifetime,
+            access_type,
             element_fields.clone(),
             group_fields.clone(),
             constructor_type,
@@ -341,7 +343,8 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
     fn visit_seq_fn_body(
         &self,
         _visitor_lifetime: &Lifetime,
-        seq_access_ident: &Ident,
+        access_ident: &Ident,
+        _access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput { ident, data, .. } = &self.ast;
         let data_enum = match &data {
@@ -382,7 +385,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                         {
                             #definition
                             #deserialize_trait_impl
-                            if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#deserialize_test_ident>(&mut #seq_access_ident) {
+                            if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#deserialize_test_ident>(&mut #access_ident) {
                                 return ::core::result::Result::Ok(#ident::#variant_ident);
                             }
                         }
@@ -395,7 +398,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                     } = fields.unnamed.first().expect("This is guaranteed by the check above");
 
                     Ok(parse_quote! {
-                        if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#field_type>(&mut #seq_access_ident) {
+                        if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#field_type>(&mut #access_ident) {
                             return ::core::result::Result::Ok(#ident::#variant_ident(_v));
                         }
                     })
