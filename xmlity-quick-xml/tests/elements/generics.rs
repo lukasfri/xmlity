@@ -62,6 +62,6 @@ define_test!(
                 c: A("A".to_string()),
             },
         },
-        r#"<d c="A"/>"#
+        r#"<d a="A"/>"#
     )]
 );
