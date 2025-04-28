@@ -25,14 +25,15 @@ trait SerializationGroupBuilderExt: SerializationGroupBuilder {
 
 impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
     fn serialize_attributes_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
-        let element_access_ident = Ident::new("__element", proc_macro2::Span::call_site());
-        let body = self.serialize_attributes_fn_body(ast, &element_access_ident)?;
+        let serialize_attributes_ident = Ident::new("__element", proc_macro2::Span::call_site());
+        let serialize_attributes_type: syn::Type = parse_quote!(__XmlitySerializeAttributes);
+        let body = self.serialize_attributes_fn_body(ast, &serialize_attributes_ident)?;
 
         Ok(parse_quote!(
-            fn serialize_attributes<S: xmlity::ser::SerializeAttributes>(
+            fn serialize_attributes<#serialize_attributes_type: xmlity::ser::SerializeAttributes>(
                 &self,
-                mut #element_access_ident: S,
-            ) -> Result<(), <S as xmlity::ser::SerializeAttributes>::Error> {
+                mut #serialize_attributes_ident: #serialize_attributes_type,
+            ) -> Result<(), <#serialize_attributes_type as xmlity::ser::SerializeAttributes>::Error> {
                #(#body)*
             }
         ))
@@ -40,13 +41,14 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
 
     fn serialize_children_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
         let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
+        let children_access_type: syn::Type = parse_quote!(__XmlitySerializeChildren);
         let body = self.serialize_children_fn_body(ast, &children_access_ident)?;
 
         Ok(parse_quote!(
-            fn serialize_children<S: xmlity::ser::SerializeChildren>(
+            fn serialize_children<#children_access_type: xmlity::ser::SerializeChildren>(
                 &self,
-                mut #children_access_ident: S,
-            ) -> Result<(), <S as xmlity::ser::SerializeChildren>::Error> {
+                mut #children_access_ident: #children_access_type,
+            ) -> Result<(), <#children_access_type as xmlity::ser::SerializeChildren>::Error> {
                 #(#body)*
             }
         ))

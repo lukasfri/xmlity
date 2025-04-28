@@ -13,6 +13,7 @@ trait SerializeAttributeBuilder {
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
+        serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError>;
 }
 
@@ -27,11 +28,13 @@ trait SerializeAttributeBuilderExt: SerializeAttributeBuilder {
 impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
     fn serialize_attribute_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
         let serializer_access_ident = Ident::new("__serializer", ast.span());
-        let body = self.serialize_attribute_fn_body(ast, &serializer_access_ident)?;
+        let serializer_type: syn::Type = parse_quote!(__XmlityAttributeSerializer);
+        let body =
+            self.serialize_attribute_fn_body(ast, &serializer_access_ident, &serializer_type)?;
         Ok(parse_quote!(
-            fn serialize_attribute<S>(&self, mut #serializer_access_ident: S) -> Result<<S as ::xmlity::AttributeSerializer>::Ok, <S as ::xmlity::AttributeSerializer>::Error>
+            fn serialize_attribute<#serializer_type>(&self, mut #serializer_access_ident: #serializer_type) -> Result<<#serializer_type as ::xmlity::AttributeSerializer>::Ok, <#serializer_type as ::xmlity::AttributeSerializer>::Error>
             where
-                S: ::xmlity::AttributeSerializer,
+                #serializer_type: ::xmlity::AttributeSerializer,
             {
                 #(#body)*
             }
@@ -71,6 +74,7 @@ impl SerializeAttributeBuilder for SerializeAttributeStructUnnamedSingleFieldBui
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
+        _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
 
@@ -125,6 +129,7 @@ impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
+        _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
         let syn::Data::Enum(syn::DataEnum { variants, .. }) = data else {
