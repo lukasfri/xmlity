@@ -21,6 +21,7 @@ impl SerializeBuilder for DeriveNoneStruct {
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
+        _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let seq_access_ident = Ident::new("__seq_access", proc_macro2::Span::call_site());
 
@@ -63,6 +64,7 @@ impl SerializeBuilder for DeriveEnum<'_> {
         &self,
         ast: &syn::DeriveInput,
         serializer_access: &Ident,
+        _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let DeriveInput { ident, data, .. } = ast;
 
