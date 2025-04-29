@@ -39,7 +39,7 @@ impl SerializeBuilder for DeriveNoneStruct<'_> {
             syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
                 let value_fields = crate::ser::seq_field_serializer(
                     quote! {#seq_access_ident},
-                    crate::ser::element_fields(self.ast)?,
+                    crate::ser::element_fields(crate::ser::fields(self.ast)?)?,
                 );
 
                 Ok(parse_quote! {

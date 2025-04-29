@@ -115,9 +115,9 @@ fn fields(
 }
 
 fn attribute_group_fields(
-    ast: &syn::DeriveInput,
+    fields: Vec<FieldWithOpts<FieldIdent, FieldOpts>>,
 ) -> Result<Vec<FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>, DeriveError> {
-    Ok(fields(ast)?
+    Ok(fields
         .into_iter()
         .filter_map(|field| {
             field.map_options_opt(|opt| match opt {
@@ -130,9 +130,9 @@ fn attribute_group_fields(
 }
 
 fn element_group_fields(
-    ast: &syn::DeriveInput,
+    fields: Vec<FieldWithOpts<FieldIdent, FieldOpts>>,
 ) -> Result<Vec<FieldWithOpts<FieldIdent, FieldValueGroupOpts>>, DeriveError> {
-    Ok(fields(ast)?
+    Ok(fields
         .into_iter()
         .filter_map(|field| {
             field.map_options_opt(|opt| match opt {
@@ -145,9 +145,9 @@ fn element_group_fields(
 }
 
 fn element_fields(
-    ast: &syn::DeriveInput,
+    fields: Vec<FieldWithOpts<FieldIdent, FieldOpts>>,
 ) -> Result<Vec<FieldWithOpts<FieldIdent, ChildOpts>>, DeriveError> {
-    Ok(fields(ast)?
+    Ok(fields
         .into_iter()
         .filter_map(|field| {
             field.map_options_opt(|opt| match opt {

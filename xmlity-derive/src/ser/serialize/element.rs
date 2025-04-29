@@ -7,7 +7,7 @@ use crate::de::StructTypeWithFields;
 use crate::options::structs::fields::FieldOpts;
 use crate::options::{structs::roots::RootElementOpts, WithExpandedNameExt};
 use crate::options::{FieldWithOpts, Prefix};
-use crate::{DeriveError, DeriveResult, ExpandedName};
+use crate::{DeriveError, DeriveResult, ExpandedName, FieldIdent};
 
 use super::SerializeBuilder;
 
@@ -71,8 +71,8 @@ impl<'a> DeriveElementStruct<'a> {
                 .expanded_name(&self.ast.ident.to_string())
                 .into_owned(),
             struct_type,
-            preferred_prefix: todo!(),
-            enforce_prefix: todo!(),
+            preferred_prefix: self.opts.preferred_prefix.clone(),
+            enforce_prefix: self.opts.enforce_prefix,
         })
     }
 }
@@ -100,26 +100,29 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
             expanded_name,
             preferred_prefix,
             enforce_prefix,
-            ident,
-            generics,
             struct_type,
+            ..
         } = self;
 
         let element_access_ident = Ident::new("__element", proc_macro2::Span::call_site());
         let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
         let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
 
-        // let Data::Struct(DataStruct { fields, .. }) = &ast.data else {
-        //     unreachable!()
-        // };
-
-        let (attribute_fields, element_fields) = match struct_type {
-            StructTypeWithFields::Named(_) | StructTypeWithFields::Unnamed(_) => (
-                crate::ser::attribute_group_fields(todo!())?,
-                crate::ser::element_group_fields(todo!())?,
-            ),
-            StructTypeWithFields::Unit => (vec![], vec![]),
+        let fields = match struct_type {
+            StructTypeWithFields::Named(fields) => fields
+                .iter()
+                .cloned()
+                .map(|a| a.map_ident(FieldIdent::Named))
+                .collect::<Vec<_>>(),
+            StructTypeWithFields::Unnamed(fields) => fields
+                .iter()
+                .cloned()
+                .map(|a| a.map_ident(FieldIdent::Indexed))
+                .collect::<Vec<_>>(),
+            StructTypeWithFields::Unit => vec![],
         };
+        let attribute_fields = crate::ser::attribute_group_fields(fields.clone())?;
+        let element_fields = crate::ser::element_group_fields(fields)?;
 
         let attribute_fields = crate::ser::attribute_group_field_serializer(
             quote! {#element_access_ident},
