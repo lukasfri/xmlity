@@ -17,7 +17,7 @@ use crate::{
         WithExpandedNameExt,
     },
     utils::{self},
-    DeriveError, DeriveResult, FieldWithOpts, FieldIdent,
+    DeriveError, DeriveResult, FieldIdent, FieldWithOpts,
 };
 
 mod common;
@@ -427,14 +427,14 @@ fn pop_or_ignore_error(
 ) -> proc_macro2::TokenStream {
     if pop_error {
         quote! {
-            if let ::core::result::Result::Ok(mut #access_ident) = #expr {
+            {
+                let mut #access_ident = #expr?;
                 #inner
             }
         }
     } else {
         quote! {
-            {
-                let mut #access_ident = #expr?;
+            if let ::core::result::Result::Ok(mut #access_ident) = #expr {
                 #inner
             }
         }
@@ -660,8 +660,7 @@ pub fn fields(
 
 fn element_fields(
     ast: &syn::DeriveInput,
-) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>> + use<'_>, DeriveError>
-{
+) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>> + use<'_>, DeriveError> {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
         field.map_options_opt(|opt| match opt {
             FieldOpts::Value(opts) => Some(opts),
@@ -672,10 +671,8 @@ fn element_fields(
 
 fn attribute_fields(
     ast: &syn::DeriveInput,
-) -> Result<
-    impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>> + use<'_>,
-    DeriveError,
-> {
+) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>> + use<'_>, DeriveError>
+{
     Ok(fields(ast)?.into_iter().filter_map(|field| {
         field.map_options_opt(|opt| match opt {
             FieldOpts::Attribute(opts) => Some(opts),
@@ -686,8 +683,7 @@ fn attribute_fields(
 
 fn group_fields(
     ast: &syn::DeriveInput,
-) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>> + use<'_>, DeriveError>
-{
+) -> Result<impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>> + use<'_>, DeriveError> {
     Ok(fields(ast)?.into_iter().filter_map(|field| {
         field.clone().map_options_opt(|opt| match opt {
             FieldOpts::Group(opts) => Some(opts),
