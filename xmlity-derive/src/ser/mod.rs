@@ -11,9 +11,13 @@ use syn::{parse_quote, Ident};
 
 use crate::{
     options::{
-        structs::fields::{AttributeDeclaredOpts, AttributeDeferredOpts, AttributeOpts, ChildOpts, ElementOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts},
+        structs::fields::{
+            AttributeDeclaredOpts, AttributeDeferredOpts, AttributeOpts, ChildOpts, ElementOpts,
+            FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
+        },
         FieldWithOpts, WithExpandedNameExt,
-    }, DeriveError, DeriveResult, FieldIdent
+    },
+    DeriveError, DeriveResult, FieldIdent,
 };
 use quote::{quote, ToTokens};
 
@@ -42,14 +46,12 @@ fn attribute_group_field_serializer(
                 let definition = wrapper.struct_definition();
                 let trait_impl = wrapper.serialize_attribute_trait_impl()?;
                 let serialize_expr = wrapper.value_expression(&parse_quote!(&self.#field_ident));
-                
-                Ok(quote! {
-                    {
-                        #definition
-                        #trait_impl
-                        ::xmlity::ser::SerializeAttributes::serialize_attribute(&mut #access_ident, &#serialize_expr)?;
-                    }
-                })
+
+                Ok(quote! {{
+                    #definition
+                    #trait_impl
+                    ::xmlity::ser::SerializeAttributes::serialize_attribute(&mut #access_ident, &#serialize_expr)?;
+                }})
             },
             FieldAttributeGroupOpts::Attribute(AttributeOpts::Deferred(AttributeDeferredOpts {
                 ..
@@ -92,7 +94,7 @@ fn element_group_field_serializer(
                 let definition = wrapper.struct_definition();
                 let trait_impl = wrapper.serialize_trait_impl()?;
                 let serialize_expr = wrapper.value_expression(&parse_quote!(&self.#field_ident));
-                
+
                 Ok(quote! {
                     {
                         #definition
@@ -139,7 +141,7 @@ fn seq_field_serializer(
                 let definition = wrapper.struct_definition();
                 let trait_impl = wrapper.serialize_trait_impl()?;
                 let serialize_expr = wrapper.value_expression(&parse_quote!(&self.#field_ident));
-                
+
                 DeriveResult::Ok(quote! {
                     {
                         #definition
