@@ -2,8 +2,8 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use syn::{
-    parse_quote, spanned::Spanned, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime,
-    LifetimeParam, Stmt, Type, Variant,
+    parse_quote, DeriveInput, Expr, Field, Ident, ItemStruct, Lifetime, LifetimeParam, Stmt, Type,
+    Variant,
 };
 
 use crate::{
@@ -15,10 +15,14 @@ use crate::{
         constructor_expr, StructType,
     },
     options::{
-        ElementOrder, XmlityFieldDeriveOpts, XmlityFieldGroupDeriveOpts,
-        XmlityFieldValueDeriveOpts, XmlityFieldValueGroupDeriveOpts, XmlityRootValueDeriveOpts,
+        enums::{self, variants::ValueOpts},
+        structs::{
+            self,
+            fields::{FieldOpts, FieldValueGroupOpts},
+        },
+        ElementOrder,
     },
-    DeriveError, DeriveResult, DeserializeField, FieldIdent,
+    DeriveError, DeriveResult, FieldIdent, FieldWithOpts,
 };
 
 use super::values::StringLiteralDeserializeBuilder;
@@ -33,27 +37,27 @@ impl<'a> SerializeNoneStructBuilder<'a> {
     }
 
     pub fn field_decl(
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::ChildOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::GroupOpts>>,
     ) -> Vec<Stmt> {
         let getter_declarations = element_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
-                     builder_field_ident,
+                |FieldWithOpts {
+                     field_ident,
                      field_type,
                      ..
                  }| {
+                    let builder_field_ident = field_ident.to_named_ident();
                     parse_quote! {
                         let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
                     }
                 },
             ).chain(group_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
-                     builder_field_ident,
+                |FieldWithOpts {
+                     field_ident,
                      field_type,
                      ..
                  }| {
+                    let builder_field_ident = field_ident.to_named_ident();
                     parse_quote! {
                         let mut #builder_field_ident = <#field_type as ::xmlity::de::DeserializationGroup>::builder();
                     }
@@ -69,16 +73,15 @@ impl<'a> SerializeNoneStructBuilder<'a> {
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
         access_type: &Type,
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::ChildOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, structs::fields::GroupOpts>>,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors =
-            element_fields.into_iter().map(|a| a.map_options(XmlityFieldValueGroupDeriveOpts::Value))
-            .map::<(_, Expr), _>(|DeserializeField { builder_field_ident, field_ident, options, .. }| {
-                let expression = if matches!(options, XmlityFieldValueGroupDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) ) {
+            element_fields.into_iter()
+            .map::<(_, Expr), _>(|FieldWithOpts {  field_ident, options, .. }| {
+                let builder_field_ident = field_ident.to_named_ident();
+                let expression = if options.should_unwrap_default() {
                     parse_quote! {
                         ::core::option::Option::unwrap_or_default(#builder_field_ident)
                     }
@@ -90,11 +93,11 @@ impl<'a> SerializeNoneStructBuilder<'a> {
                 (field_ident, expression)
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
-            |DeserializeField {
-                 builder_field_ident,
+            |FieldWithOpts {
                  field_ident,
                  ..
              }| {
+                let builder_field_ident = field_ident.to_named_ident();
                 let expression = parse_quote! {
                     ::xmlity::de::DeserializationGroupBuilder::finish::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
                 };
@@ -111,21 +114,20 @@ impl<'a> SerializeNoneStructBuilder<'a> {
 
     pub fn seq_access(
         access_ident: &Ident,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
-            + Clone,
+        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
-    ) -> Vec<Stmt> {
+    ) -> DeriveResult<Vec<Stmt>> {
         let visit = SeqVisitLoop::new(access_ident, allow_unknown_children, order, fields);
 
         let field_storage = visit.field_storage();
-        let access_loop = visit.access_loop();
+        let access_loop = visit.access_loop()?;
 
-        parse_quote! {
+        Ok(parse_quote! {
             #field_storage
 
             #(#access_loop)*
-        }
+        })
     }
 }
 
@@ -161,10 +163,9 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                 .map(|f| {
                     let field_ident = f.ident.clone().expect("Named struct");
 
-                    DeriveResult::Ok(DeserializeField {
-                        builder_field_ident: FieldIdent::Named(field_ident.clone()),
+                    DeriveResult::Ok(FieldWithOpts {
                         field_ident: FieldIdent::Named(field_ident),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
+                        options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),
                     })
                 })
@@ -174,13 +175,9 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                 .iter()
                 .enumerate()
                 .map(|(i, f)| {
-                    DeriveResult::Ok(DeserializeField {
-                        builder_field_ident: FieldIdent::Named(Ident::new(
-                            &format!("__{}", i),
-                            f.span(),
-                        )),
+                    DeriveResult::Ok(FieldWithOpts {
                         field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
+                        options: FieldOpts::from_field(f)?,
                         field_type: f.ty.clone(),
                     })
                 })
@@ -190,14 +187,14 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
 
         let element_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Value(opts) => Some(opts),
+                FieldOpts::Value(opts) => Some(opts),
                 _ => None,
             })
         });
 
         let group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Group(opts) => Some(opts),
+                FieldOpts::Group(opts) => Some(opts),
                 _ => None,
             })
         });
@@ -206,13 +203,9 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
 
         let element_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Value(opts) => {
-                    Some(XmlityFieldValueGroupDeriveOpts::Value(opts))
-                }
-                XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldValueGroupDeriveOpts::Group(opts))
-                }
-                XmlityFieldDeriveOpts::Attribute(_) => None,
+                FieldOpts::Value(opts) => Some(FieldValueGroupOpts::Value(opts)),
+                FieldOpts::Group(opts) => Some(FieldValueGroupOpts::Group(opts)),
+                FieldOpts::Attribute(_) => None,
             })
         });
 
@@ -222,7 +215,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
                 element_group_fields,
                 false,
                 ElementOrder::Loose,
-            )
+            )?
         } else {
             Vec::new()
         };
@@ -281,7 +274,6 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
 impl DeserializeBuilder for SerializeNoneStructBuilder<'_> {
     fn deserialize_fn_body(
         &self,
-
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
@@ -319,7 +311,7 @@ impl DeserializeBuilder for SerializeNoneStructBuilder<'_> {
 
 pub struct EnumVisitorBuilder<'a> {
     ast: &'a DeriveInput,
-    value_opts: Option<&'a XmlityRootValueDeriveOpts>,
+    value_opts: Option<&'a enums::roots::RootValueOpts>,
 }
 
 impl<'a> EnumVisitorBuilder<'a> {
@@ -332,7 +324,7 @@ impl<'a> EnumVisitorBuilder<'a> {
 
     pub fn new_with_value_opts(
         ast: &'a DeriveInput,
-        value_opts: &'a XmlityRootValueDeriveOpts,
+        value_opts: &'a enums::roots::RootValueOpts,
     ) -> Self {
         Self {
             ast,
@@ -365,9 +357,12 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                     Err(DeriveError::Custom { message: "Deriving for named fields is not supported yet".to_string(), span: Span::call_site() })
                 }
                 syn::Fields::Unit  => {
-                    let variant_opts = XmlityFieldValueDeriveOpts::from_variant(variant)?;
+                    let opts = enums::variants::VariantOpts::from_variant(variant)?;
 
-                    let value = variant_opts.as_ref().and_then(|a| a.value.clone()).unwrap_or_else(|| {
+                    let value = opts.as_ref().and_then(|a| match a {
+                        enums::variants::VariantOpts::Value(ValueOpts {value: Some(value), ..}) => Some(value.clone()),
+                        _ => None,
+                    }).unwrap_or_else(|| {
                         self.value_opts
                             .as_ref()
                             .map(|a| a.rename_all)

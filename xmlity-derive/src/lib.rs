@@ -36,17 +36,20 @@
 #[doc = include_str!("../README.md")]
 struct _ReadMeDocTests;
 
+use std::borrow::Cow;
+
 use de::{DeriveDeserializationGroup, DeriveDeserialize};
+use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use ser::{DeriveSerializationGroup, DeriveSerialize, DeriveSerializeAttribute};
-use syn::{parse_macro_input, DeriveInput, Expr};
+use syn::{parse_macro_input, DeriveInput, Expr, Ident};
 
 mod de;
 mod options;
 use options::{LocalName, XmlNamespace};
 mod ser;
 mod utils;
-use options::{DeserializeField, SerializeField};
+use options::FieldWithOpts;
 
 enum DeriveError {
     Darling(darling::Error),
@@ -822,6 +825,18 @@ enum FieldIdent {
     Indexed(syn::Index),
 }
 
+impl FieldIdent {
+    pub fn to_named_ident(&self) -> Cow<'_, syn::Ident> {
+        match self {
+            FieldIdent::Named(ident) => Cow::Borrowed(ident),
+            FieldIdent::Indexed(index) => Cow::Owned(Ident::new(
+                format!("__{}", index.index).as_str(),
+                Span::call_site(),
+            )),
+        }
+    }
+}
+
 impl quote::ToTokens for FieldIdent {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
@@ -830,9 +845,20 @@ impl quote::ToTokens for FieldIdent {
         }
     }
 }
+
+#[derive(Debug, Clone)]
 enum XmlNamespaceRef<'a> {
     Static(XmlNamespace<'a>),
     Dynamic(syn::Expr),
+}
+
+impl XmlNamespaceRef<'_> {
+    fn into_owned(self) -> XmlNamespaceRef<'static> {
+        match self {
+            XmlNamespaceRef::Static(namespace) => XmlNamespaceRef::Static(namespace.into_owned()),
+            XmlNamespaceRef::Dynamic(expr) => XmlNamespaceRef::Dynamic(expr.to_owned()),
+        }
+    }
 }
 
 impl ToTokens for XmlNamespaceRef<'_> {
@@ -844,6 +870,7 @@ impl ToTokens for XmlNamespaceRef<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
 struct ExpandedName<'a> {
     name: LocalName<'a>,
     namespace: Option<XmlNamespaceRef<'a>>,
@@ -860,6 +887,13 @@ impl<'a> ExpandedName<'a> {
         Self {
             name,
             namespace: namespace.map(XmlNamespaceRef::Dynamic),
+        }
+    }
+
+    fn into_owned(self) -> ExpandedName<'static> {
+        ExpandedName {
+            name: self.name.into_owned(),
+            namespace: self.namespace.map(|namespace| namespace.into_owned()),
         }
     }
 

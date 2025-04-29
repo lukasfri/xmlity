@@ -1,31 +1,37 @@
+use std::borrow::Cow;
+
 use quote::quote;
-use syn::{parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Ident, Stmt};
+use syn::{parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Generics, Ident, Stmt};
 
 use crate::{
-    options::{XmlityFieldValueDeriveOpts, XmlityRootValueDeriveOpts},
+    options::enums::{
+        roots::RootValueOpts,
+        variants::{ValueOpts, VariantOpts},
+    },
     DeriveError,
 };
 
 use super::SerializeBuilder;
 
-pub struct DeriveNoneStruct {}
+pub struct DeriveNoneStruct<'a> {
+    ast: &'a DeriveInput,
+}
 
-impl DeriveNoneStruct {
-    pub fn new() -> Self {
-        Self {}
+impl<'a> DeriveNoneStruct<'a> {
+    pub fn new(ast: &'a DeriveInput) -> Self {
+        Self { ast }
     }
 }
 
-impl SerializeBuilder for DeriveNoneStruct {
+impl SerializeBuilder for DeriveNoneStruct<'_> {
     fn serialize_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         serializer_access: &Ident,
         _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let seq_access_ident = Ident::new("__seq_access", proc_macro2::Span::call_site());
 
-        let Data::Struct(DataStruct { fields, .. }) = &ast.data else {
+        let Data::Struct(DataStruct { fields, .. }) = &self.ast.data else {
             unreachable!()
         };
 
@@ -33,8 +39,8 @@ impl SerializeBuilder for DeriveNoneStruct {
             syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
                 let value_fields = crate::ser::seq_field_serializer(
                     quote! {#seq_access_ident},
-                    crate::ser::element_fields(ast)?,
-                );
+                    crate::ser::element_fields(crate::ser::fields(self.ast)?)?,
+                )?;
 
                 Ok(parse_quote! {
                     let mut #seq_access_ident = ::xmlity::Serializer::serialize_seq(#serializer_access)?;
@@ -47,26 +53,34 @@ impl SerializeBuilder for DeriveNoneStruct {
             }),
         }
     }
+
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn generics(&self) -> Cow<'_, Generics> {
+        Cow::Borrowed(&self.ast.generics)
+    }
 }
 
 pub struct DeriveEnum<'a> {
-    value_opts: Option<&'a XmlityRootValueDeriveOpts>,
+    ast: &'a syn::DeriveInput,
+    value_opts: Option<&'a RootValueOpts>,
 }
 
 impl<'a> DeriveEnum<'a> {
-    pub fn new(value_opts: Option<&'a XmlityRootValueDeriveOpts>) -> Self {
-        Self { value_opts }
+    pub fn new(ast: &'a syn::DeriveInput, value_opts: Option<&'a RootValueOpts>) -> Self {
+        Self { ast, value_opts }
     }
 }
 
 impl SerializeBuilder for DeriveEnum<'_> {
     fn serialize_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         serializer_access: &Ident,
         _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let DeriveInput { ident, data, .. } = ast;
+        let DeriveInput { ident, data, .. } = self.ast;
 
         let Data::Enum(DataEnum { variants, .. }) = &data else {
             unreachable!()
@@ -99,11 +113,16 @@ impl SerializeBuilder for DeriveEnum<'_> {
                     syn::Fields::Unit => {
                         let variant_ident = &variant.ident;
 
-                        let variant_opts = XmlityFieldValueDeriveOpts::from_variant(variant)?;
+                        let variant_opts = VariantOpts::from_variant(variant)?;
 
                         let value = variant_opts
                             .as_ref()
-                            .and_then(|a| a.value.clone())
+                            .and_then(|a| match a {
+                                VariantOpts::Value(ValueOpts {
+                                    value: Some(value), ..
+                                }) => Some(value.clone()),
+                                _ => None,
+                            })
                             .unwrap_or_else(|| {
                                 self.value_opts
                                     .as_ref()
@@ -127,5 +146,13 @@ impl SerializeBuilder for DeriveEnum<'_> {
                 #(#variants)*
             }
         })
+    }
+
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn generics(&self) -> Cow<'_, Generics> {
+        Cow::Borrowed(&self.ast.generics)
     }
 }

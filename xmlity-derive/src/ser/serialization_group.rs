@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt};
 
-use crate::{options::XmlityRootGroupDeriveOpts, DeriveError, DeriveMacro};
+use crate::{options::structs::roots::RootGroupOpts, DeriveError, DeriveMacro};
 
 trait SerializationGroupBuilder {
     fn serialize_attributes_fn_body(
@@ -75,11 +75,11 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
 
 #[allow(unused)]
 pub struct DeriveSerializationGroupStruct<'a> {
-    opts: &'a XmlityRootGroupDeriveOpts,
+    opts: &'a RootGroupOpts,
 }
 
 impl<'a> DeriveSerializationGroupStruct<'a> {
-    fn new(opts: &'a XmlityRootGroupDeriveOpts) -> Self {
+    fn new(opts: &'a RootGroupOpts) -> Self {
         Self { opts }
     }
 }
@@ -92,8 +92,8 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
     ) -> Result<Vec<Stmt>, DeriveError> {
         let serialize_attributes_implementation = super::attribute_group_field_serializer(
             quote! {&mut #element_access_ident},
-            crate::ser::attribute_group_fields(ast)?,
-        );
+            crate::ser::attribute_group_fields(crate::ser::fields(ast)?)?,
+        )?;
 
         Ok(parse_quote! {
             #serialize_attributes_implementation
@@ -108,8 +108,8 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
     ) -> Result<Vec<Stmt>, DeriveError> {
         let serialize_children_implementation = super::element_group_field_serializer(
             quote! {&mut #children_access_ident},
-            crate::ser::element_group_fields(ast)?,
-        );
+            crate::ser::element_group_fields(crate::ser::fields(ast)?)?,
+        )?;
 
         Ok(parse_quote! {
             #serialize_children_implementation
@@ -119,12 +119,12 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
 }
 
 enum SerializationGroupOption {
-    Group(XmlityRootGroupDeriveOpts),
+    Group(RootGroupOpts),
 }
 
 impl SerializationGroupOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let group_opts = XmlityRootGroupDeriveOpts::parse(ast)?.unwrap_or_default();
+        let group_opts = RootGroupOpts::parse(ast)?.unwrap_or_default();
 
         Ok(SerializationGroupOption::Group(group_opts))
     }

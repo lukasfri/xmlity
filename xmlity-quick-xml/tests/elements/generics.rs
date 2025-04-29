@@ -12,7 +12,7 @@ pub struct A(String);
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "b")]
 pub struct B<T: SerializeAttribute + DeserializeOwned> {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub a: T,
 }
 
@@ -43,7 +43,7 @@ define_test!(
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 pub struct C<T: SerializeAttribute + DeserializeOwned> {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub c: T,
 }
 

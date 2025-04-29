@@ -9,7 +9,7 @@ pub struct B(String);
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "C")]
 pub struct C {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub b: B,
 }
 
@@ -30,9 +30,9 @@ pub struct D(String);
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "E")]
 pub struct E {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub b: B,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub d: D,
 }
 
@@ -50,7 +50,7 @@ define_test!(
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "F")]
 pub struct F {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub b: B,
     pub c: Vec<C>,
     pub e: E,

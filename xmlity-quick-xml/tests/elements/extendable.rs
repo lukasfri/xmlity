@@ -35,3 +35,31 @@ define_test!(
         )
     ]
 );
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "b")]
+pub struct B(#[xvalue(extendable = "iterator")] Vec<String>);
+
+fn extendable_vec1() -> B {
+    B(vec![
+        "Asdreboot".to_string(),
+        "More".to_string(),
+        "Text".to_string(),
+    ])
+}
+
+fn extendable_vec2() -> B {
+    B(vec!["Asd".to_string()])
+}
+
+define_test!(
+    extendable_vec,
+    [
+        (
+            extendable_vec1(),
+            "<b>AsdrebootMoreText</b>",
+            "<b>Asdreboot<![CDATA[More]]>Text</b>"
+        ),
+        (extendable_vec2(), "<b>Asd</b>")
+    ]
+);

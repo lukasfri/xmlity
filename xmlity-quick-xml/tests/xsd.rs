@@ -55,7 +55,7 @@ pub struct Base(String);
     allow_unknown_attributes
 )]
 pub struct Extension {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     base: Base,
     entries: Vec<ExtensionEntry>,
 }
@@ -92,15 +92,15 @@ pub struct Ref(String);
     allow_unknown_attributes
 )]
 pub struct Attribute {
-    #[xattribute(default)]
+    #[xattribute(default, deferred = true)]
     name: Option<Name>,
-    #[xattribute(default)]
+    #[xattribute(default, deferred)]
     attr_type: Option<Type>,
-    #[xattribute(default)]
+    #[xattribute(default, deferred)]
     attr_use: Option<Use>,
-    #[xattribute(default)]
+    #[xattribute(default, deferred)]
     attr_default: Option<Default>,
-    #[xattribute(default)]
+    #[xattribute(default, deferred)]
     attr_ref: Option<Ref>,
 }
 
@@ -112,9 +112,9 @@ pub struct Attribute {
     allow_unknown_attributes
 )]
 pub struct Element {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     name: Name,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     id: Id,
     annotation: Annotation,
     complex_type: ComplexType,

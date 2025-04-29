@@ -1,36 +1,38 @@
-use quote::ToTokens;
-use syn::spanned::Spanned;
-use syn::{parse_quote, Arm, ImplItemFn, ItemImpl, Stmt};
+use std::borrow::Cow;
+
+use proc_macro2::Span;
+use quote::{quote, ToTokens};
+use syn::{parse_quote, Arm, Data, Expr, ImplItemFn, ItemImpl, Lifetime, Stmt};
 use syn::{DeriveInput, Ident};
 
-use crate::options::{WithExpandedNameExt, XmlityRootAttributeDeriveOpts};
+use crate::de::StructTypeWithFields;
+use crate::options::structs::roots::RootAttributeOpts;
+use crate::options::{FieldWithOpts, Prefix, WithExpandedNameExt};
 
-use crate::DeriveError;
-use crate::DeriveMacro;
+use crate::{DeriveError, ExpandedName};
+use crate::{DeriveMacro, DeriveResult};
 
-trait SerializeAttributeBuilder {
+pub trait SerializeAttributeBuilder {
     fn serialize_attribute_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         serializer_access: &Ident,
         serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError>;
+
+    fn ident(&self) -> Cow<'_, Ident>;
+    fn generics(&self) -> Cow<'_, syn::Generics>;
 }
 
-trait SerializeAttributeBuilderExt: SerializeAttributeBuilder {
-    fn serialize_attribute_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError>;
-    fn serialize_attribute_trait_impl(
-        &self,
-        ast: &syn::DeriveInput,
-    ) -> Result<ItemImpl, DeriveError>;
+pub trait SerializeAttributeBuilderExt: SerializeAttributeBuilder {
+    fn serialize_attribute_fn(&self) -> Result<ImplItemFn, DeriveError>;
+    fn serialize_attribute_trait_impl(&self) -> Result<ItemImpl, DeriveError>;
 }
 
 impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
-    fn serialize_attribute_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
-        let serializer_access_ident = Ident::new("__serializer", ast.span());
+    fn serialize_attribute_fn(&self) -> Result<ImplItemFn, DeriveError> {
+        let serializer_access_ident = Ident::new("__serializer", Span::call_site());
         let serializer_type: syn::Type = parse_quote!(__XmlityAttributeSerializer);
-        let body =
-            self.serialize_attribute_fn_body(ast, &serializer_access_ident, &serializer_type)?;
+        let body = self.serialize_attribute_fn_body(&serializer_access_ident, &serializer_type)?;
         Ok(parse_quote!(
             fn serialize_attribute<#serializer_type>(&self, mut #serializer_access_ident: #serializer_type) -> Result<<#serializer_type as ::xmlity::AttributeSerializer>::Ok, <#serializer_type as ::xmlity::AttributeSerializer>::Error>
             where
@@ -41,15 +43,12 @@ impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
         ))
     }
 
-    fn serialize_attribute_trait_impl(
-        &self,
-        ast @ DeriveInput {
-            ident, generics, ..
-        }: &syn::DeriveInput,
-    ) -> Result<ItemImpl, DeriveError> {
-        let serialize_attribute_fn = self.serialize_attribute_fn(ast)?;
+    fn serialize_attribute_trait_impl(&self) -> Result<ItemImpl, DeriveError> {
+        let serialize_attribute_fn = self.serialize_attribute_fn()?;
+        let ident = self.ident();
+        let generics = self.generics();
 
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let non_bound_generics = crate::non_bound_generics(&generics);
 
         Ok(parse_quote! {
             impl #generics ::xmlity::SerializeAttribute for #ident #non_bound_generics {
@@ -60,37 +59,202 @@ impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
 }
 
 pub struct SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
-    opts: &'a XmlityRootAttributeDeriveOpts,
+    ast: &'a syn::DeriveInput,
+    opts: &'a RootAttributeOpts,
 }
 
 impl<'a> SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
-    pub fn new(opts: &'a XmlityRootAttributeDeriveOpts) -> Self {
-        Self { opts }
+    pub fn new(ast: &'a syn::DeriveInput, opts: &'a RootAttributeOpts) -> Self {
+        Self { ast, opts }
+    }
+
+    pub fn to_builder(&self) -> DeriveResult<StructSerializeAttributeBuilder> {
+        let DeriveInput {
+            ident, generics, ..
+        } = &self.ast;
+        let RootAttributeOpts {
+            enforce_prefix,
+            preferred_prefix,
+            ..
+        } = self.opts;
+
+        let expanded_name = self
+            .opts
+            .expanded_name(ident.to_string().as_str())
+            .into_owned();
+        let Data::Struct(data_struct) = &self.ast.data else {
+            unreachable!()
+        };
+
+        let struct_type = match &data_struct.fields {
+            syn::Fields::Named(fields_named) if fields_named.named.len() != 1 => {
+                return Err(DeriveError::custom(format!(
+                    "Expected a single field for attribute deserialization, found {}",
+                    fields_named.named.len()
+                )))
+            }
+            syn::Fields::Named(fields_named) => {
+                let field = &fields_named.named[0];
+                let field_ident = field.ident.as_ref().unwrap().clone();
+                let field_type = field.ty.clone();
+                StructTypeWithFields::Named(FieldWithOpts {
+                    field_ident,
+                    field_type,
+                    options: (),
+                })
+            }
+            syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() != 1 => {
+                return Err(DeriveError::custom(format!(
+                    "Expected a single field for attribute deserialization, found {}",
+                    fields_unnamed.unnamed.len()
+                )))
+            }
+            syn::Fields::Unnamed(fields_unnamed) => {
+                let field = &fields_unnamed.unnamed[0];
+                let field_type = field.ty.clone();
+                StructTypeWithFields::Unnamed(FieldWithOpts {
+                    field_ident: syn::Index::from(0),
+                    field_type,
+                    options: (),
+                })
+            }
+            syn::Fields::Unit => StructTypeWithFields::Unit,
+        };
+
+        Ok(StructSerializeAttributeBuilder {
+            ident,
+            generics,
+            expanded_name,
+            struct_type,
+            preferred_prefix: preferred_prefix.clone(),
+            enforce_prefix: *enforce_prefix,
+        })
     }
 }
 
-impl SerializeAttributeBuilder for SerializeAttributeStructUnnamedSingleFieldBuilder<'_> {
+pub struct SimpleSerializeAttributeBuilder<'a> {
+    pub ident: &'a syn::Ident,
+    pub generics: &'a syn::Generics,
+    pub item_type: &'a syn::Type,
+    pub expanded_name: ExpandedName<'static>,
+    pub preferred_prefix: Option<Prefix<'static>>,
+    pub enforce_prefix: bool,
+}
+
+impl SimpleSerializeAttributeBuilder<'_> {
+    fn value_access_ident(&self) -> Ident {
+        Ident::new("__value", Span::call_site())
+    }
+
+    fn value_lifetime(&self) -> Lifetime {
+        Lifetime::new("'__value", Span::call_site())
+    }
+
+    pub fn struct_definition(&self) -> syn::ItemStruct {
+        let Self {
+            ident, item_type, ..
+        } = self;
+
+        let value_access_ident = self.value_access_ident();
+        let generics = self.generics();
+        let lifetime = self.value_lifetime();
+
+        parse_quote! {
+            struct #ident #generics {
+                #value_access_ident: &#lifetime #item_type,
+            }
+        }
+    }
+
+    pub fn value_expression(&self, value_expr: &Expr) -> syn::Expr {
+        let Self { ident, .. } = self;
+        let value_access_ident = self.value_access_ident();
+        parse_quote! {
+            #ident {
+                #value_access_ident: #value_expr,
+            }
+        }
+    }
+}
+
+impl SerializeAttributeBuilder for SimpleSerializeAttributeBuilder<'_> {
     fn serialize_attribute_fn_body(
         &self,
-        ast: &syn::DeriveInput,
+        serializer_access: &Ident,
+        serializer_type: &syn::Type,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let builder = StructSerializeAttributeBuilder {
+            ident: self.ident,
+            generics: self.generics,
+
+            struct_type: StructTypeWithFields::Named(FieldWithOpts {
+                field_ident: self.value_access_ident(),
+                field_type: self.item_type.clone(),
+                options: (),
+            }),
+            expanded_name: self.expanded_name.clone(),
+            preferred_prefix: self.preferred_prefix.clone(),
+            enforce_prefix: self.enforce_prefix,
+        };
+
+        builder.serialize_attribute_fn_body(serializer_access, serializer_type)
+    }
+
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(self.ident)
+    }
+
+    fn generics(&self) -> Cow<'_, syn::Generics> {
+        let lifetime = self.value_lifetime();
+        let generics = parse_quote!(<#lifetime>);
+        Cow::Owned(generics)
+    }
+}
+
+#[allow(clippy::type_complexity)]
+pub struct StructSerializeAttributeBuilder<'a> {
+    pub ident: &'a syn::Ident,
+    pub generics: &'a syn::Generics,
+    pub expanded_name: ExpandedName<'static>,
+    pub preferred_prefix: Option<Prefix<'static>>,
+    pub enforce_prefix: bool,
+    pub struct_type:
+        StructTypeWithFields<FieldWithOpts<syn::Ident, ()>, FieldWithOpts<syn::Index, ()>>,
+}
+
+impl SerializeAttributeBuilder for StructSerializeAttributeBuilder<'_> {
+    fn serialize_attribute_fn_body(
+        &self,
         serializer_access: &Ident,
         _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let DeriveInput { ident, data, .. } = ast;
-
-        let XmlityRootAttributeDeriveOpts {
+        let Self {
             preferred_prefix,
             enforce_prefix,
+            expanded_name,
+            struct_type,
             ..
-        } = self.opts;
-        let ident_name = ident.to_string();
-        let expanded_name = self.opts.expanded_name(&ident_name);
-        let _unnamed_fields = match data {
-            syn::Data::Struct(syn::DataStruct {
-                fields: syn::Fields::Unnamed(fields),
-                ..
-            }) => fields,
-            _ => unreachable!(),
+        } = self;
+        let str_expr = match struct_type {
+            StructTypeWithFields::Named(FieldWithOpts { field_ident, .. }) => {
+                quote! {
+                    ::std::string::String::as_str(&
+                        ::std::string::ToString::to_string(&self.#field_ident)
+                    )
+                }
+            }
+            StructTypeWithFields::Unnamed(FieldWithOpts { field_ident, .. }) => {
+                quote! {
+                    ::std::string::String::as_str(&
+                        ::std::string::ToString::to_string(&self.#field_ident)
+                    )
+                }
+            }
+            StructTypeWithFields::Unit => {
+                quote! {
+                    ""
+                }
+            }
         };
 
         let access_ident = Ident::new("__sa", proc_macro2::Span::call_site());
@@ -111,27 +275,36 @@ impl SerializeAttributeBuilder for SerializeAttributeStructUnnamedSingleFieldBui
             )?;
             #preferred_prefix_setting
             #enforce_prefix_setting
-            ::xmlity::ser::SerializeAttributeAccess::end(#access_ident, &self.0.to_string())
+            ::xmlity::ser::SerializeAttributeAccess::end(#access_ident, #str_expr)
         })
     }
-}
 
-pub struct EnumSingleFieldAttributeSerializeBuilder {}
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(self.ident)
+    }
 
-impl EnumSingleFieldAttributeSerializeBuilder {
-    pub fn new() -> Self {
-        Self {}
+    fn generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(self.generics)
     }
 }
 
-impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
+pub struct EnumSingleFieldAttributeSerializeBuilder<'a> {
+    ast: &'a syn::DeriveInput,
+}
+
+impl<'a> EnumSingleFieldAttributeSerializeBuilder<'a> {
+    pub fn new(ast: &'a syn::DeriveInput) -> Self {
+        Self { ast }
+    }
+}
+
+impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder<'_> {
     fn serialize_attribute_fn_body(
         &self,
-        ast: &syn::DeriveInput,
         serializer_access: &Ident,
         _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let DeriveInput { ident, data, .. } = ast;
+        let DeriveInput { ident, data, .. } = self.ast;
         let syn::Data::Enum(syn::DataEnum { variants, .. }) = data else {
             unreachable!()
         };
@@ -170,15 +343,23 @@ impl SerializeAttributeBuilder for EnumSingleFieldAttributeSerializeBuilder {
             }
         ))
     }
+
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(&self.ast.ident)
+    }
+
+    fn generics(&self) -> Cow<'_, syn::Generics> {
+        Cow::Borrowed(&self.ast.generics)
+    }
 }
 
 enum SerializeAttributeOption {
-    Attribute(XmlityRootAttributeDeriveOpts),
+    Attribute(RootAttributeOpts),
 }
 
 impl SerializeAttributeOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let attribute_opts = XmlityRootAttributeDeriveOpts::parse(ast)?.ok_or_else(|| {
+        let attribute_opts = RootAttributeOpts::parse(ast)?.ok_or_else(|| {
             DeriveError::custom("SerializeAttribute requires the `xattribute` option.")
         })?;
 
@@ -198,8 +379,9 @@ impl DeriveMacro for DeriveSerializeAttribute {
                     DeriveError::custom("Structs with more than one field are not supported."),
                 ),
                 syn::Fields::Unnamed(_) => {
-                    SerializeAttributeStructUnnamedSingleFieldBuilder::new(&opts)
-                        .serialize_attribute_trait_impl(ast)
+                    SerializeAttributeStructUnnamedSingleFieldBuilder::new(ast, &opts)
+                        .to_builder()?
+                        .serialize_attribute_trait_impl()
                         .map(|x| x.to_token_stream())
                 }
                 syn::Fields::Named(_) => {
@@ -209,8 +391,8 @@ impl DeriveMacro for DeriveSerializeAttribute {
                     Err(DeriveError::custom("Unit structs are not supported yet."))
                 }
             },
-            syn::Data::Enum(_) => EnumSingleFieldAttributeSerializeBuilder::new()
-                .serialize_attribute_trait_impl(ast)
+            syn::Data::Enum(_) => EnumSingleFieldAttributeSerializeBuilder::new(ast)
+                .serialize_attribute_trait_impl()
                 .map(|x| x.to_token_stream()),
             syn::Data::Union(_) => Err(DeriveError::custom(
                 "Unions are not supported for serialization to attributes.",

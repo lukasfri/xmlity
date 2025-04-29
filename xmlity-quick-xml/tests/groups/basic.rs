@@ -28,11 +28,11 @@ pub struct Body(String);
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 pub struct NoteGroup {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub to: To,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub from: From,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub heading: Heading,
     pub body: Body,
 }
@@ -112,12 +112,12 @@ pub struct Calories(pub u16);
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "food")]
 struct Food {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     name: Name,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     price: Price,
     description: Description,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     calories: Calories,
 }
 
@@ -186,16 +186,16 @@ define_test!(
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 pub struct NoteGroup2 {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub heading: Heading,
     pub body: Body,
 }
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 pub struct NoteGroup1 {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub to: To,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub from: From,
     #[xgroup]
     pub group: NoteGroup2,

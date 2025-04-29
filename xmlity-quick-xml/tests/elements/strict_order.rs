@@ -43,9 +43,9 @@ pub struct Body(String);
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "note", attribute_order = "loose", children_order = "loose")]
 pub struct Note {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub to: To,
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub from: From,
     pub heading: Heading,
     pub body: Body,

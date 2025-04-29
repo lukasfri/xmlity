@@ -1,74 +1,167 @@
+#![allow(clippy::type_complexity)]
+
 use std::borrow::Cow;
 
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    parse_quote, spanned::Spanned, DeriveInput, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type,
+    parse_quote, Data, DataStruct, DeriveInput, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type,
 };
 
 use crate::{
     de::{
         all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
-        common::SeqVisitLoop,
-        common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-        constructor_expr, StructType,
+        common::{DeserializeBuilder, SeqVisitLoop, VisitorBuilder, VisitorBuilderExt},
+        constructor_expr, StructType, StructTypeWithFields,
     },
     options::{
-        ElementOrder, WithExpandedNameExt, XmlityFieldAttributeDeriveOpts,
-        XmlityFieldAttributeGroupDeriveOpts, XmlityFieldDeriveOpts, XmlityFieldGroupDeriveOpts,
-        XmlityFieldValueDeriveOpts, XmlityFieldValueGroupDeriveOpts, XmlityRootElementDeriveOpts,
+        structs::{
+            fields::{
+                AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
+                GroupOpts,
+            },
+            roots::RootElementOpts,
+        },
+        ElementOrder, WithExpandedNameExt,
     },
-    DeriveError, DeriveResult, DeserializeField, FieldIdent,
+    DeriveError, DeriveResult, ExpandedName, FieldIdent, FieldWithOpts,
 };
 
-pub struct StructElementVisitorBuilder<'a> {
+pub struct RootStructElementVisitorBuilder<'a> {
     ast: &'a syn::DeriveInput,
-    opts: &'a XmlityRootElementDeriveOpts,
+    opts: &'a RootElementOpts,
 }
 
-impl<'a> StructElementVisitorBuilder<'a> {
-    pub fn new(opts: &'a XmlityRootElementDeriveOpts, ast: &'a syn::DeriveInput) -> Self {
+impl<'a> RootStructElementVisitorBuilder<'a> {
+    pub fn new(opts: &'a RootElementOpts, ast: &'a syn::DeriveInput) -> Self {
         Self { ast, opts }
     }
 
+    pub fn to_builder(&self) -> Result<StructDeserializeElementBuilder, DeriveError> {
+        let DeriveInput { ident, .. } = &self.ast;
+        let RootElementOpts {
+            deserialize_any_name,
+            allow_unknown_attributes,
+            allow_unknown_children,
+            children_order,
+            attribute_order,
+            ..
+        } = self.opts;
+
+        let ident_name = ident.to_string();
+        let expanded_name = self.opts.expanded_name(&ident_name).into_owned();
+        let required_expanded_name = if *deserialize_any_name {
+            None
+        } else {
+            Some(expanded_name)
+        };
+
+        let fields = match &self.ast.data {
+            Data::Struct(DataStruct { fields, .. }) => fields,
+            _ => unreachable!(),
+        };
+
+        let struct_type: StructTypeWithFields<
+            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
+        > = match fields {
+            syn::Fields::Named(fields) => StructTypeWithFields::Named(
+                fields
+                    .named
+                    .iter()
+                    .map(|f| {
+                        let field_ident = f.ident.clone().expect("Named struct");
+
+                        DeriveResult::Ok(FieldWithOpts {
+                            field_ident,
+                            options: FieldOpts::from_field(f)?,
+                            field_type: f.ty.clone(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, DeriveError>>()?,
+            ),
+            syn::Fields::Unnamed(fields) => StructTypeWithFields::Unnamed(
+                fields
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        DeriveResult::Ok(FieldWithOpts {
+                            field_ident: syn::Index::from(i),
+                            options: FieldOpts::from_field(f)?,
+                            field_type: f.ty.clone(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, DeriveError>>()?,
+            ),
+            _ => StructTypeWithFields::Unit,
+        };
+
+        Ok(StructDeserializeElementBuilder {
+            ident,
+            generics: &self.ast.generics,
+            required_expanded_name,
+            struct_type,
+            allow_unknown_attributes: *allow_unknown_attributes,
+            allow_unknown_children: *allow_unknown_children,
+            children_order: *children_order,
+            attribute_order: *attribute_order,
+        })
+    }
+}
+
+pub struct StructDeserializeElementBuilder<'a> {
+    pub ident: &'a syn::Ident,
+    pub generics: &'a syn::Generics,
+    pub required_expanded_name: Option<ExpandedName<'static>>,
+    pub struct_type: StructTypeWithFields<
+        Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+        Vec<FieldWithOpts<syn::Index, FieldOpts>>,
+    >,
+    pub allow_unknown_attributes: bool,
+    pub allow_unknown_children: bool,
+    pub children_order: ElementOrder,
+    pub attribute_order: ElementOrder,
+}
+
+impl StructDeserializeElementBuilder<'_> {
     pub fn field_decl(
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
-        >,
-        attribute_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
+        attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
     ) -> Vec<Stmt> {
         let getter_declarations = attribute_fields
             .into_iter()
             .map::<Stmt, _>(
-                |DeserializeField {
-                     builder_field_ident,
+                |FieldWithOpts {
+                    field_ident,
                      field_type,
                      ..
                  }| {
+                    let builder_field_ident = field_ident.to_named_ident();
                     parse_quote! {
                         let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
                     }
                 },
             )
             .chain(element_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
-                     builder_field_ident,
+                |FieldWithOpts {
+                    field_ident,
                      field_type,
                      ..
                  }| {
+                    let builder_field_ident = field_ident.to_named_ident();
                     parse_quote! {
                         let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
                     }
                 },
             )).chain(group_fields.into_iter().map::<Stmt, _>(
-                |DeserializeField {
-                     builder_field_ident,
+                |FieldWithOpts {
+                    field_ident,
                      field_type,
                      ..
                  }| {
+                    let builder_field_ident = field_ident.to_named_ident();
                     parse_quote! {
                         let mut #builder_field_ident = <#field_type as ::xmlity::de::DeserializationGroup>::builder();
                     }
@@ -84,20 +177,24 @@ impl<'a> StructElementVisitorBuilder<'a> {
         ident: &Ident,
         visitor_lifetime: &syn::Lifetime,
         access_type: &syn::Type,
-        element_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldValueDeriveOpts>,
-        >,
-        attribute_fields: impl IntoIterator<
-            Item = DeserializeField<FieldIdent, XmlityFieldAttributeDeriveOpts>,
-        >,
-        group_fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldGroupDeriveOpts>>,
+        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
+        attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
+        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
         constructor_type: StructType,
     ) -> proc_macro2::TokenStream {
         let local_value_expressions_constructors = attribute_fields.into_iter()
-            .map(|a| a.map_options(XmlityFieldDeriveOpts::Attribute))
-            .chain(element_fields.into_iter().map(|a| a.map_options(XmlityFieldDeriveOpts::Value)))
-            .map::<(_, Expr), _>(|DeserializeField { builder_field_ident, field_ident, options, .. }| {
-                let expression = if matches!(options, XmlityFieldDeriveOpts::Value(XmlityFieldValueDeriveOpts {default: true, ..}) | XmlityFieldDeriveOpts::Attribute(XmlityFieldAttributeDeriveOpts {default: true, ..})) {
+            .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
+                a.field_ident,
+                a.options.should_unwrap_default()
+            ))
+            .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
+                a.field_ident,
+                a.options.should_unwrap_default()
+            )))
+            .map::<(_, Expr), _>(|(field_ident, default_unwrap)| {
+                let builder_field_ident = field_ident.to_named_ident();
+
+                let expression = if default_unwrap {
                     parse_quote! {
                         ::core::option::Option::unwrap_or_default(#builder_field_ident)
                     }
@@ -109,11 +206,11 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 (field_ident, expression)
             });
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
-            |DeserializeField {
-                 builder_field_ident,
+            |FieldWithOpts {
                  field_ident,
                  ..
              }| {
+                let builder_field_ident = field_ident.to_named_ident();
                 let expression = parse_quote! {
                     ::xmlity::de::DeserializationGroupBuilder::finish::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
                 };
@@ -131,11 +228,10 @@ impl<'a> StructElementVisitorBuilder<'a> {
     pub fn attribute_access(
         access_ident: &Ident,
         span: proc_macro2::Span,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldAttributeGroupDeriveOpts>>
-            + Clone,
+        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>> + Clone,
         allow_unknown_attributes: bool,
         order: ElementOrder,
-    ) -> Vec<Stmt> {
+    ) -> DeriveResult<Vec<Stmt>> {
         let field_visits = builder_attribute_field_visitor(
             access_ident,
             quote! {},
@@ -151,7 +247,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 ElementOrder::Loose => true,
                 ElementOrder::None => false,
             },
-        );
+        )?;
 
         match order {
             ElementOrder::Loose => field_visits.into_iter().zip(fields).map(|(field_visit, field)| {
@@ -176,12 +272,12 @@ impl<'a> StructElementVisitorBuilder<'a> {
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #field_visit
                         #(#skip_unknown)*
                     }
-                }
+                })
             }).collect(),
             ElementOrder::None => {
                 let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
@@ -189,7 +285,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                     parse_quote! {
                         let #skip_ident = ::xmlity::de::AttributesAccess::next_attribute::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
                         if ::core::option::Option::is_none(&#skip_ident) {
-                            break
+                            break;
                         }
                     }
                 } else {
@@ -204,73 +300,85 @@ impl<'a> StructElementVisitorBuilder<'a> {
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #(#field_visits)*
                         #(#skip_unknown)*
                     }
-                }
+                })
             },
         }
     }
 
     pub fn element_access(
         element_access_ident: &Ident,
-        fields: impl IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>>
-            + Clone,
+        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
-    ) -> Vec<Stmt> {
+    ) -> DeriveResult<Vec<Stmt>> {
         let access_ident = Ident::new("__children", element_access_ident.span());
 
         let visit = SeqVisitLoop::new(&access_ident, allow_unknown_children, order, fields);
 
         let field_storage = visit.field_storage();
-        let access_loop = visit.access_loop();
+        let access_loop = visit.access_loop()?;
 
-        parse_quote! {
+        Ok(parse_quote! {
             let mut #access_ident = ::xmlity::de::ElementAccess::children(#element_access_ident)?;
 
             #field_storage
 
             #(#access_loop)*
-        }
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn struct_fields_visitor_end<T>(
+    fn struct_fields_visitor_end(
         struct_ident: &Ident,
         element_access_ident: &Ident,
         access_type: &Type,
         visitor_lifetime: &syn::Lifetime,
-        fields: T,
-        constructor_type: StructType,
+        struct_type: StructTypeWithFields<
+            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
+        >,
         children_order: ElementOrder,
         allow_unknown_children: bool,
         attributes_order: ElementOrder,
         allow_unknown_attributes: bool,
-    ) -> Vec<Stmt>
-    where
-        T: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldDeriveOpts>> + Clone,
-        T::IntoIter: Clone,
-    {
+    ) -> DeriveResult<Vec<Stmt>> {
+        let (constructor_type, fields) = match struct_type {
+            StructTypeWithFields::Named(n) => (
+                StructType::Named,
+                n.into_iter()
+                    .map(|a| a.map_ident(FieldIdent::Named))
+                    .collect(),
+            ),
+            StructTypeWithFields::Unnamed(n) => (
+                StructType::Unnamed,
+                n.into_iter()
+                    .map(|a| a.map_ident(FieldIdent::Indexed))
+                    .collect(),
+            ),
+            StructTypeWithFields::Unit => (StructType::Unit, Vec::new()),
+        };
         let element_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Value(opts) => Some(opts),
+                FieldOpts::Value(opts) => Some(opts),
                 _ => None,
             })
         });
 
         let attribute_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Attribute(opts) => Some(opts),
+                FieldOpts::Attribute(opts) => Some(opts),
                 _ => None,
             })
         });
 
         let group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Group(opts) => Some(opts),
+                FieldOpts::Group(opts) => Some(opts),
                 _ => None,
             })
         });
@@ -283,25 +391,17 @@ impl<'a> StructElementVisitorBuilder<'a> {
 
         let attribute_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Attribute(opts) => {
-                    Some(XmlityFieldAttributeGroupDeriveOpts::Attribute(opts))
-                }
-                XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldAttributeGroupDeriveOpts::Group(opts))
-                }
-                XmlityFieldDeriveOpts::Value(_) => None,
+                FieldOpts::Attribute(opts) => Some(FieldAttributeGroupOpts::Attribute(opts)),
+                FieldOpts::Group(opts) => Some(FieldAttributeGroupOpts::Group(opts)),
+                FieldOpts::Value(_) => None,
             })
         });
 
         let element_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
-                XmlityFieldDeriveOpts::Value(opts) => {
-                    Some(XmlityFieldValueGroupDeriveOpts::Value(opts))
-                }
-                XmlityFieldDeriveOpts::Group(opts) => {
-                    Some(XmlityFieldValueGroupDeriveOpts::Group(opts))
-                }
-                XmlityFieldDeriveOpts::Attribute(_) => None,
+                FieldOpts::Value(opts) => Some(FieldValueGroupOpts::Value(opts)),
+                FieldOpts::Group(opts) => Some(FieldValueGroupOpts::Group(opts)),
+                FieldOpts::Attribute(_) => None,
             })
         });
 
@@ -312,7 +412,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 attribute_group_fields,
                 allow_unknown_attributes,
                 attributes_order,
-            )
+            )?
         } else {
             Vec::new()
         };
@@ -323,7 +423,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
                 element_group_fields,
                 allow_unknown_children,
                 children_order,
-            )
+            )?
         } else {
             Vec::new()
         };
@@ -338,7 +438,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
             constructor_type,
         );
 
-        parse_quote! {
+        Ok(parse_quote! {
             #(#getter_declarations)*
 
             #(#attribute_loop)*
@@ -346,7 +446,7 @@ impl<'a> StructElementVisitorBuilder<'a> {
             #(#children_loop)*
 
             ::core::result::Result::Ok(#constructor)
-        }
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -355,125 +455,53 @@ impl<'a> StructElementVisitorBuilder<'a> {
         element_access_ident: &Ident,
         access_type: &Type,
         visitor_lifetime: &syn::Lifetime,
-        fields: &syn::Fields,
+        struct_type: StructTypeWithFields<
+            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
+        >,
         children_order: ElementOrder,
         allow_unknown_children: bool,
         attribute_order: ElementOrder,
         allow_unknown_attributes: bool,
-    ) -> Result<Vec<Stmt>, DeriveError> {
-        let constructor_type = match fields {
-            syn::Fields::Named(_) => StructType::Named,
-            syn::Fields::Unnamed(_) => StructType::Unnamed,
-            _ => unreachable!(),
-        };
-
-        let fields = match fields {
-            syn::Fields::Named(fields) => fields
-                .named
-                .iter()
-                .map(|f| {
-                    let field_ident = f.ident.clone().expect("Named struct");
-
-                    DeriveResult::Ok(DeserializeField {
-                        builder_field_ident: FieldIdent::Named(field_ident.clone()),
-                        field_ident: FieldIdent::Named(field_ident),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-            syn::Fields::Unnamed(fields) => fields
-                .unnamed
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    DeriveResult::Ok(DeserializeField {
-                        builder_field_ident: FieldIdent::Named(Ident::new(
-                            &format!("__{}", i),
-                            f.span(),
-                        )),
-                        field_ident: FieldIdent::Indexed(syn::Index::from(i)),
-                        options: XmlityFieldDeriveOpts::from_field(f)?,
-                        field_type: f.ty.clone(),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-            _ => unreachable!(),
-        };
-
-        Ok(Self::struct_fields_visitor_end(
+    ) -> DeriveResult<Vec<Stmt>> {
+        Self::struct_fields_visitor_end(
             ident,
             element_access_ident,
             access_type,
             visitor_lifetime,
-            fields,
-            constructor_type,
+            struct_type,
             children_order,
             allow_unknown_children,
             attribute_order,
             allow_unknown_attributes,
-        ))
-    }
-
-    fn visit_element_unit_fn_impl(ident: &Ident) -> Vec<Stmt> {
-        parse_quote! {
-            ::core::result::Result::Ok(#ident)
-        }
+        )
     }
 }
 
-impl VisitorBuilder for StructElementVisitorBuilder<'_> {
+impl VisitorBuilder for StructDeserializeElementBuilder<'_> {
     fn visit_element_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
         element_access_ident: &Ident,
         access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let DeriveInput { ident, data, .. } = &self.ast;
-        let XmlityRootElementDeriveOpts {
-            deserialize_any_name,
-            allow_unknown_attributes,
-            allow_unknown_children,
-            children_order,
-            attribute_order,
-            ..
-        } = self.opts;
-
-        let data_struct = match data {
-            syn::Data::Struct(data_struct) => data_struct,
-            _ => unreachable!(),
-        };
-
-        let ident_name = ident.to_string();
-        let expanded_name = self.opts.expanded_name(&ident_name);
-        let expanded_name = if *deserialize_any_name {
-            None
-        } else {
-            Some(expanded_name)
-        };
-
-        let xml_name_identification = expanded_name.as_ref().map::<Stmt, _>(|qname| {
+        let xml_name_identification = self.required_expanded_name.as_ref().map::<Stmt, _>(|qname| {
           parse_quote! {
               ::xmlity::de::ElementAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
           }
       });
 
-        let deserialization_impl = match &data_struct.fields {
-            fields @ syn::Fields::Named(_) | fields @ syn::Fields::Unnamed(_) => {
-                Self::visit_element_data_fn_impl(
-                    ident,
-                    element_access_ident,
-                    access_type,
-                    visitor_lifetime,
-                    fields,
-                    *children_order,
-                    *allow_unknown_children,
-                    *attribute_order,
-                    *allow_unknown_attributes,
-                )?
-            }
-            syn::Fields::Unit => Self::visit_element_unit_fn_impl(ident),
-        };
+        let deserialization_impl = Self::visit_element_data_fn_impl(
+            self.ident,
+            element_access_ident,
+            access_type,
+            visitor_lifetime,
+            self.struct_type.clone(),
+            self.children_order,
+            self.allow_unknown_children,
+            self.attribute_order,
+            self.allow_unknown_attributes,
+        )?;
 
         Ok(Some(parse_quote! {
             #xml_name_identification
@@ -483,9 +511,9 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
     }
 
     fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {
-        let DeriveInput {
+        let Self {
             ident, generics, ..
-        } = &self.ast;
+        } = &self;
         let non_bound_generics = crate::non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
@@ -507,22 +535,22 @@ impl VisitorBuilder for StructElementVisitorBuilder<'_> {
     }
 
     fn visitor_ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(&self.ast.ident)
+        Cow::Borrowed(self.ident)
     }
 
     fn visitor_generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(&self.ast.generics)
+        Cow::Borrowed(self.generics)
     }
 }
 
-impl DeserializeBuilder for StructElementVisitorBuilder<'_> {
+impl DeserializeBuilder for StructDeserializeElementBuilder<'_> {
     fn deserialize_fn_body(
         &self,
 
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let formatter_expecting = format!("struct {}", self.ast.ident);
+        let formatter_expecting = format!("struct {}", self.ident);
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
@@ -542,10 +570,10 @@ impl DeserializeBuilder for StructElementVisitorBuilder<'_> {
     }
 
     fn ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(&self.ast.ident)
+        Cow::Borrowed(self.ident)
     }
 
     fn generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(&self.ast.generics)
+        Cow::Borrowed(self.generics)
     }
 }

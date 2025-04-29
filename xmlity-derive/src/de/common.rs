@@ -6,7 +6,7 @@ use syn::{
     Type,
 };
 
-use crate::{options::XmlityFieldValueGroupDeriveOpts, DeriveError};
+use crate::{options::structs::fields::FieldValueGroupOpts, DeriveError, DeriveResult};
 
 pub trait VisitorBuilder {
     fn visit_text_fn_body(
@@ -561,12 +561,12 @@ use syn::spanned::Spanned;
 use crate::{
     de::{all_elements_done_expr, builder_element_field_visitor, element_done_expr},
     options::ElementOrder,
-    DeserializeField, FieldIdent,
+    FieldIdent, FieldWithOpts,
 };
 
 pub struct SeqVisitLoop<
     'a,
-    F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>> + Clone,
+    F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
 > {
     seq_access_ident: &'a Ident,
     allow_unknown_children: bool,
@@ -574,10 +574,8 @@ pub struct SeqVisitLoop<
     fields: F,
 }
 
-impl<
-        'a,
-        F: IntoIterator<Item = DeserializeField<FieldIdent, XmlityFieldValueGroupDeriveOpts>> + Clone,
-    > SeqVisitLoop<'a, F>
+impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone>
+    SeqVisitLoop<'a, F>
 {
     pub fn new(
         seq_access_ident: &'a Ident,
@@ -597,7 +595,7 @@ impl<
         quote! {}
     }
 
-    pub fn access_loop(&self) -> Vec<Stmt> {
+    pub fn access_loop(&self) -> DeriveResult<Vec<Stmt>> {
         let Self {
             seq_access_ident: access_ident,
             allow_unknown_children,
@@ -619,7 +617,7 @@ impl<
             parse_quote! {continue;},
             parse_quote! {},
             pop_error,
-        );
+        )?;
 
         match order {
             ElementOrder::Loose => field_visits.into_iter().zip(fields.clone()).map(|(field_visit, field)| {
@@ -644,12 +642,12 @@ impl<
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #field_visit
                         #(#skip_unknown)*
                     }
-                }
+                })
             }).collect(),
             ElementOrder::None => {
                 let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
@@ -672,12 +670,12 @@ impl<
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #(#field_visits)*
                         #(#skip_unknown)*
                     }
-                }
+                })
             },
         }
     }
