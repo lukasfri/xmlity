@@ -231,7 +231,7 @@ impl StructDeserializeElementBuilder<'_> {
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>> + Clone,
         allow_unknown_attributes: bool,
         order: ElementOrder,
-    ) -> Vec<Stmt> {
+    ) -> DeriveResult<Vec<Stmt>> {
         let field_visits = builder_attribute_field_visitor(
             access_ident,
             quote! {},
@@ -247,7 +247,7 @@ impl StructDeserializeElementBuilder<'_> {
                 ElementOrder::Loose => true,
                 ElementOrder::None => false,
             },
-        );
+        )?;
 
         match order {
             ElementOrder::Loose => field_visits.into_iter().zip(fields).map(|(field_visit, field)| {
@@ -272,12 +272,12 @@ impl StructDeserializeElementBuilder<'_> {
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #field_visit
                         #(#skip_unknown)*
                     }
-                }
+                })
             }).collect(),
             ElementOrder::None => {
                 let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
@@ -300,12 +300,12 @@ impl StructDeserializeElementBuilder<'_> {
                     }
                 };
 
-                parse_quote! {
+                Ok(parse_quote! {
                     loop {
                         #(#field_visits)*
                         #(#skip_unknown)*
                     }
-                }
+                })
             },
         }
     }
@@ -412,7 +412,7 @@ impl StructDeserializeElementBuilder<'_> {
                 attribute_group_fields,
                 allow_unknown_attributes,
                 attributes_order,
-            )
+            )?
         } else {
             Vec::new()
         };

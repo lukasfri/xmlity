@@ -4,9 +4,12 @@ use proc_macro2::Span;
 use syn::{parse_quote, Data, DeriveInput, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
-    de::common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-    options::{structs::roots::RootAttributeOpts, WithExpandedNameExt},
-    DeriveError,
+    de::{
+        common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+        StructTypeWithFields,
+    },
+    options::{structs::roots::RootAttributeOpts, FieldWithOpts, WithExpandedNameExt},
+    DeriveError, ExpandedName,
 };
 
 pub struct StructAttributeVisitorBuilder<'a> {
@@ -18,51 +21,166 @@ impl<'a> StructAttributeVisitorBuilder<'a> {
     pub fn new(opts: &'a RootAttributeOpts, ast: &'a syn::DeriveInput) -> Self {
         Self { opts, ast }
     }
+
+    pub fn to_builder(&self) -> Result<StructDeserializeAttributeBuilder, DeriveError> {
+        let DeriveInput {
+            ident, generics, ..
+        } = &self.ast;
+        let RootAttributeOpts {
+            deserialize_any_name,
+            ..
+        } = self.opts;
+
+        let required_expanded_name = if *deserialize_any_name {
+            None
+        } else {
+            Some(
+                self.opts
+                    .expanded_name(ident.to_string().as_str())
+                    .into_owned(),
+            )
+        };
+        let Data::Struct(data_struct) = &self.ast.data else {
+            unreachable!()
+        };
+
+        let struct_type = match &data_struct.fields {
+            syn::Fields::Named(fields_named) if fields_named.named.len() != 1 => {
+                return Err(DeriveError::custom(format!(
+                    "Expected a single field for attribute deserialization, found {}",
+                    fields_named.named.len()
+                )))
+            }
+            syn::Fields::Named(fields_named) => {
+                let field = &fields_named.named[0];
+                let field_ident = field.ident.as_ref().unwrap().clone();
+                let field_type = field.ty.clone();
+                StructTypeWithFields::Named(FieldWithOpts {
+                    field_ident,
+                    field_type,
+                    options: (),
+                })
+            }
+            syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() != 1 => {
+                return Err(DeriveError::custom(format!(
+                    "Expected a single field for attribute deserialization, found {}",
+                    fields_unnamed.unnamed.len()
+                )))
+            }
+            syn::Fields::Unnamed(fields_unnamed) => {
+                let field = &fields_unnamed.unnamed[0];
+                let field_type = field.ty.clone();
+                StructTypeWithFields::Unnamed(FieldWithOpts {
+                    field_ident: syn::Index::from(0),
+                    field_type,
+                    options: (),
+                })
+            }
+            syn::Fields::Unit => StructTypeWithFields::Unit,
+        };
+
+        Ok(StructDeserializeAttributeBuilder {
+            ident,
+            generics,
+            required_expanded_name,
+            struct_type,
+        })
+    }
 }
 
-impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
+pub struct SimpleDeserializeAttributeBuilder<'a> {
+    pub ident: &'a syn::Ident,
+    pub generics: &'a syn::Generics,
+    pub required_expanded_name: Option<ExpandedName<'static>>,
+    pub item_type: &'a syn::Type,
+}
+
+impl SimpleDeserializeAttributeBuilder<'_> {
+    fn value_access_ident(&self) -> Ident {
+        Ident::new("__value", Span::call_site())
+    }
+
+    pub fn struct_definition(&self) -> syn::ItemStruct {
+        let Self {
+            ident, item_type, ..
+        } = self;
+
+        let value_access_ident = self.value_access_ident();
+
+        parse_quote! {
+            struct #ident {
+                #value_access_ident: #item_type,
+            }
+        }
+    }
+
+    pub fn to_builder(&self) -> StructDeserializeAttributeBuilder {
+        StructDeserializeAttributeBuilder {
+            ident: self.ident,
+            generics: self.generics,
+            required_expanded_name: self.required_expanded_name.clone(),
+            struct_type: StructTypeWithFields::Named(FieldWithOpts {
+                field_ident: self.value_access_ident(),
+                field_type: self.item_type.clone(),
+                options: (),
+            }),
+        }
+    }
+}
+
+pub struct StructDeserializeAttributeBuilder<'a> {
+    pub ident: &'a syn::Ident,
+    pub generics: &'a syn::Generics,
+    pub required_expanded_name: Option<ExpandedName<'static>>,
+    pub struct_type:
+        StructTypeWithFields<FieldWithOpts<syn::Ident, ()>, FieldWithOpts<syn::Index, ()>>,
+}
+
+impl VisitorBuilder for StructDeserializeAttributeBuilder<'_> {
     fn visit_attribute_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
         attribute_access_ident: &Ident,
         access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let DeriveInput { ident, data, .. } = &self.ast;
-
-        let Data::Struct(data_struct) = data else {
-            unreachable!()
-        };
-        let RootAttributeOpts {
-            deserialize_any_name,
+        let Self {
+            ident,
+            required_expanded_name,
+            struct_type,
             ..
-        } = self.opts;
-        let ident_name = ident.to_string();
-        let expanded_name = if *deserialize_any_name {
-            None
-        } else {
-            Some(self.opts.expanded_name(&ident_name))
-        };
+        } = self;
 
-        let xml_name_identification = expanded_name.map::<Stmt, _>(|qname| {
+        let xml_name_identification = required_expanded_name.as_ref().map::<Stmt, _>(|qname| {
               parse_quote! {
                   ::xmlity::de::AttributeAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributeAccess<#visitor_lifetime>>::Error>(&#attribute_access_ident, &#qname)?;
               }
           });
 
-        let deserialization_impl: Vec<Stmt> = match &data_struct.fields {
-              syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => return Err(DeriveError::custom("Only tuple structs with 1 element are supported")),
-              syn::Fields::Unnamed(_) => {
-                  parse_quote! {
-                      ::core::str::FromStr::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
-                          .map(#ident)
-                          .map_err(::xmlity::de::Error::custom)
-                  }
-              }
-              syn::Fields::Named(_) =>
-              return Err(DeriveError::custom("Named fields in structs are not supported. Only tuple structs with 1 element are supported")),
-              syn::Fields::Unit =>
-                  return Err(DeriveError::custom("Unit structs are not supported. Only tuple structs with 1 element are supported")),
-          };
+        let deserialization_impl: Vec<Stmt> = match &struct_type {
+            StructTypeWithFields::Named(FieldWithOpts {
+                field_ident,
+                field_type,
+                ..
+            }) => {
+                parse_quote! {
+                    <#field_type as ::core::str::FromStr>::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
+                        .map(|a| #ident {#field_ident: a})
+                        .map_err(::xmlity::de::Error::custom)
+                }
+            }
+            StructTypeWithFields::Unnamed(FieldWithOpts { field_type, .. }) => {
+                parse_quote! {
+                    <#field_type as ::core::str::FromStr>::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
+                        .map(#ident)
+                        .map_err(::xmlity::de::Error::custom)
+                }
+            }
+            StructTypeWithFields::Unit => {
+                parse_quote! {
+                    Ok(#ident)
+                }
+            }
+        };
 
         Ok(Some(parse_quote! {
             #xml_name_identification
@@ -96,15 +214,15 @@ impl VisitorBuilder for StructAttributeVisitorBuilder<'_> {
     }
 
     fn visitor_ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(&self.ast.ident)
+        Cow::Borrowed(self.ident)
     }
 
     fn visitor_generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(&self.ast.generics)
+        Cow::Borrowed(self.generics)
     }
 }
 
-impl DeserializeBuilder for StructAttributeVisitorBuilder<'_> {
+impl DeserializeBuilder for StructDeserializeAttributeBuilder<'_> {
     fn deserialize_fn_body(
         &self,
         deserializer_ident: &Ident,
@@ -130,10 +248,10 @@ impl DeserializeBuilder for StructAttributeVisitorBuilder<'_> {
     }
 
     fn ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(&self.ast.ident)
+        Cow::Borrowed(self.ident)
     }
 
     fn generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(&self.ast.generics)
+        Cow::Borrowed(self.generics)
     }
 }

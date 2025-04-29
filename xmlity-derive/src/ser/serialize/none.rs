@@ -40,7 +40,7 @@ impl SerializeBuilder for DeriveNoneStruct<'_> {
                 let value_fields = crate::ser::seq_field_serializer(
                     quote! {#seq_access_ident},
                     crate::ser::element_fields(crate::ser::fields(self.ast)?)?,
-                );
+                )?;
 
                 Ok(parse_quote! {
                     let mut #seq_access_ident = ::xmlity::Serializer::serialize_seq(#serializer_access)?;

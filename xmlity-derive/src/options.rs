@@ -82,6 +82,33 @@ impl FromMeta for RenameRule {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum Extendable {
+    Iterator,
+    Single,
+    #[default]
+    None,
+}
+
+impl FromMeta for Extendable {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        match value {
+            "iterator" => Ok(Extendable::Iterator),
+            "single" => Ok(Extendable::Single),
+            "none" => Ok(Extendable::None),
+            _ => Err(darling::Error::unknown_value(value)),
+        }
+    }
+
+    fn from_bool(value: bool) -> darling::Result<Self> {
+        if value {
+            Ok(Extendable::Single)
+        } else {
+            Ok(Extendable::None)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 pub enum TextSerializationFormat {
     CData,
@@ -100,15 +127,17 @@ pub trait WithExpandedNameExt: WithExpandedName {
 }
 
 impl<T: WithExpandedName> WithExpandedNameExt for T {
-    fn expanded_name<'a>(&'a self, ident: &'a str) -> ExpandedName<'a> {
+    fn expanded_name<'a>(&'a self, default_local_name: &'a str) -> ExpandedName<'a> {
         if self.namespace().is_some() {
             ExpandedName::new(
-                self.name().unwrap_or(LocalName(Cow::Borrowed(ident))),
+                self.name()
+                    .unwrap_or(LocalName(Cow::Borrowed(default_local_name))),
                 self.namespace(),
             )
         } else {
             ExpandedName::new_ref(
-                self.name().unwrap_or(LocalName(Cow::Borrowed(ident))),
+                self.name()
+                    .unwrap_or(LocalName(Cow::Borrowed(default_local_name))),
                 self.namespace_expr(),
             )
         }
@@ -405,13 +434,17 @@ pub mod structs {
             #[darling(default)]
             pub default: bool,
             #[darling(default)]
-            pub extendable: bool,
+            pub extendable: Extendable,
             #[darling(default)]
             pub name: Option<LocalName<'static>>,
             #[darling(default)]
             pub namespace: Option<XmlNamespace<'static>>,
             #[darling(default)]
             pub namespace_expr: Option<Expr>,
+            #[darling(default)]
+            pub preferred_prefix: Option<Prefix<'static>>,
+            #[darling(default)]
+            pub enforce_prefix: bool,
         }
 
         impl WithExpandedName for ElementOpts {
@@ -434,7 +467,7 @@ pub mod structs {
             #[darling(default)]
             pub default: bool,
             #[darling(default)]
-            pub extendable: bool,
+            pub extendable: Extendable,
         }
 
         #[derive(Clone)]
@@ -504,8 +537,25 @@ pub mod structs {
         #[derive(Clone)]
         pub struct AttributeDeclaredOpts {
             pub default: bool,
-            pub name: String,
-            pub namespace: Option<String>,
+            pub name: Option<LocalName<'static>>,
+            pub namespace: Option<XmlNamespace<'static>>,
+            pub namespace_expr: Option<Expr>,
+            pub preferred_prefix: Option<Prefix<'static>>,
+            pub enforce_prefix: bool,
+        }
+
+        impl WithExpandedName for AttributeDeclaredOpts {
+            fn name(&self) -> Option<LocalName<'_>> {
+                self.name.clone()
+            }
+
+            fn namespace(&self) -> Option<XmlNamespace<'_>> {
+                self.namespace.clone()
+            }
+
+            fn namespace_expr(&self) -> Option<Expr> {
+                self.namespace_expr.clone()
+            }
         }
 
         #[derive(Clone)]
@@ -538,9 +588,17 @@ pub mod structs {
                     #[darling(default)]
                     pub default: bool,
                     #[darling(default)]
-                    pub name: Option<String>,
+                    pub deferred: bool,
                     #[darling(default)]
-                    pub namespace: Option<String>,
+                    pub name: Option<LocalName<'static>>,
+                    #[darling(default)]
+                    pub namespace: Option<XmlNamespace<'static>>,
+                    #[darling(default)]
+                    pub namespace_expr: Option<Expr>,
+                    #[darling(default)]
+                    pub preferred_prefix: Option<Prefix<'static>>,
+                    #[darling(default)]
+                    pub enforce_prefix: Option<bool>,
                 }
 
                 let raw = FieldAttributeRawOpts::from_attributes(&[attribute])
@@ -551,21 +609,48 @@ pub mod structs {
                     return Ok(None);
                 };
 
-                if raw.name.is_some() {
-                    Ok(Some(Self::Declared(AttributeDeclaredOpts {
-                        default: raw.default,
-                        name: raw.name.expect("name should be set"),
-                        namespace: raw.namespace,
-                    })))
-                } else {
+                if raw.deferred {
+                    if raw.name.is_some() {
+                        return Err(DeriveError::custom(
+                            "name can not be set if deferred is set",
+                        ));
+                    }
+
                     if raw.namespace.is_some() {
                         return Err(DeriveError::custom(
-                            "namespace can only be set if name is set",
+                            "namespace can not be set if deferred is set",
+                        ));
+                    }
+
+                    if raw.namespace_expr.is_some() {
+                        return Err(DeriveError::custom(
+                            "namespace_expr can not be set if deferred is set",
+                        ));
+                    }
+
+                    if raw.preferred_prefix.is_some() {
+                        return Err(DeriveError::custom(
+                            "preferred_prefix can not be set if deferred is set",
+                        ));
+                    }
+
+                    if raw.enforce_prefix.is_some() {
+                        return Err(DeriveError::custom(
+                            "enforce_prefix can not be set if deferred is set",
                         ));
                     }
 
                     Ok(Some(Self::Deferred(AttributeDeferredOpts {
                         default: raw.default,
+                    })))
+                } else {
+                    Ok(Some(Self::Declared(AttributeDeclaredOpts {
+                        default: raw.default,
+                        name: raw.name,
+                        namespace: raw.namespace,
+                        namespace_expr: raw.namespace_expr,
+                        preferred_prefix: raw.preferred_prefix,
+                        enforce_prefix: raw.enforce_prefix.unwrap_or(false),
                     })))
                 }
             }

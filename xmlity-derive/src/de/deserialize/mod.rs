@@ -1,4 +1,5 @@
 mod attributes;
+pub use attributes::SimpleDeserializeAttributeBuilder;
 mod elements;
 mod simplified_element_wrapper;
 pub use simplified_element_wrapper::SingleChildDeserializeElementBuilder;
@@ -39,6 +40,7 @@ impl DeriveMacro for DeriveDeserialize {
                     }
                     structs::roots::DeserializeRootOpts::Attribute(opts) => {
                         StructAttributeVisitorBuilder::new(&opts, ast)
+                            .to_builder()?
                             .deserialize_trait_impl()
                             .map(|a| a.to_token_stream())
                     }

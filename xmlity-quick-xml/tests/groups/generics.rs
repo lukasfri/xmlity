@@ -23,7 +23,7 @@ pub enum NoteEnum<T: SerializeAttribute + DeserializeOwned> {
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 pub struct NoteGroup<T: SerializeAttribute + DeserializeOwned> {
-    #[xattribute]
+    #[xattribute(deferred = true)]
     pub to: T,
 }
 

@@ -845,6 +845,8 @@ impl quote::ToTokens for FieldIdent {
         }
     }
 }
+
+#[derive(Debug, Clone)]
 enum XmlNamespaceRef<'a> {
     Static(XmlNamespace<'a>),
     Dynamic(syn::Expr),
@@ -868,6 +870,7 @@ impl ToTokens for XmlNamespaceRef<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
 struct ExpandedName<'a> {
     name: LocalName<'a>,
     namespace: Option<XmlNamespaceRef<'a>>,

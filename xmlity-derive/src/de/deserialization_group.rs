@@ -352,7 +352,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                 GroupOrder::None => parse_quote! {},
             },
             false,
-        );
+        )?;
 
         Ok(Some(parse_quote! {
                 #(#attribute_visit)*

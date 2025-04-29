@@ -3,7 +3,7 @@ use std::borrow::Cow;
 
 pub use none::{DeriveEnum, DeriveNoneStruct};
 mod element;
-pub use element::DeriveElementStruct;
+pub use element::{DeriveElementStruct, SingleChildSerializeElementBuilder};
 
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -12,7 +12,7 @@ use syn::{parse_quote, DeriveInput, Generics, Ident, ImplItemFn, ItemImpl, Stmt}
 use crate::options::{enums, structs};
 use crate::{DeriveError, DeriveMacro};
 
-trait SerializeBuilder {
+pub trait SerializeBuilder {
     fn serialize_fn_body(
         &self,
         serializer_access: &Ident,
@@ -23,7 +23,7 @@ trait SerializeBuilder {
     fn generics(&self) -> Cow<'_, Generics>;
 }
 
-trait SerializeBuilderExt: SerializeBuilder {
+pub trait SerializeBuilderExt: SerializeBuilder {
     fn serialize_fn(&self) -> Result<ImplItemFn, DeriveError>;
     fn serialize_trait_impl(&self) -> Result<ItemImpl, DeriveError>;
 }

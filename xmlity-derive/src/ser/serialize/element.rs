@@ -1,12 +1,13 @@
 use std::borrow::Cow;
 
+use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, Data, DataStruct, Ident, Stmt};
+use syn::{parse_quote, Data, DataStruct, Expr, Ident, Lifetime, Stmt};
 
 use crate::de::StructTypeWithFields;
-use crate::options::structs::fields::FieldOpts;
+use crate::options::structs::fields::{ChildOpts, FieldOpts, ValueOpts};
 use crate::options::{structs::roots::RootElementOpts, WithExpandedNameExt};
-use crate::options::{FieldWithOpts, Prefix};
+use crate::options::{Extendable, FieldWithOpts, Prefix};
 use crate::{DeriveError, DeriveResult, ExpandedName, FieldIdent};
 
 use super::SerializeBuilder;
@@ -78,6 +79,87 @@ impl<'a> DeriveElementStruct<'a> {
 }
 
 #[allow(clippy::type_complexity)]
+pub struct SingleChildSerializeElementBuilder<'a> {
+    pub ident: &'a syn::Ident,
+    pub required_expanded_name: ExpandedName<'static>,
+    pub preferred_prefix: Option<Prefix<'static>>,
+    pub enforce_prefix: bool,
+    pub item_type: &'a syn::Type,
+}
+
+impl SingleChildSerializeElementBuilder<'_> {
+    fn value_access_ident(&self) -> Ident {
+        Ident::new("__value", Span::call_site())
+    }
+
+    fn value_lifetime(&self) -> Lifetime {
+        Lifetime::new("'__value", Span::call_site())
+    }
+
+    pub fn struct_definition(&self) -> syn::ItemStruct {
+        let Self {
+            ident, item_type, ..
+        } = self;
+
+        let value_access_ident = self.value_access_ident();
+        let generics = self.generics();
+        let lifetime = self.value_lifetime();
+
+        parse_quote! {
+            struct #ident #generics {
+                #value_access_ident: &#lifetime #item_type,
+            }
+        }
+    }
+
+    pub fn value_expression(&self, value_expr: &Expr) -> syn::Expr {
+        let Self { ident, .. } = self;
+        let value_access_ident = self.value_access_ident();
+        parse_quote! {
+            #ident {
+                #value_access_ident: #value_expr,
+            }
+        }
+    }
+}
+
+impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
+    fn serialize_fn_body(
+        &self,
+        serializer_access: &Ident,
+        serializer_type: &syn::Type,
+    ) -> Result<Vec<Stmt>, DeriveError> {
+        let builder = StructSerializeElementBuilder {
+            ident: self.ident,
+            generics: &self.generics(),
+            expanded_name: self.required_expanded_name.clone(),
+            struct_type: StructTypeWithFields::Named(vec![FieldWithOpts {
+                field_ident: self.value_access_ident(),
+                field_type: self.item_type.clone(),
+                options: FieldOpts::Value(ChildOpts::Value(ValueOpts {
+                    default: false,
+                    extendable: Extendable::None,
+                })),
+            }]),
+            preferred_prefix: self.preferred_prefix.clone(),
+            enforce_prefix: self.enforce_prefix,
+        };
+
+        builder.serialize_fn_body(serializer_access, serializer_type)
+    }
+
+    fn ident(&self) -> Cow<'_, Ident> {
+        Cow::Borrowed(self.ident)
+    }
+
+    fn generics(&self) -> Cow<'_, syn::Generics> {
+        let lifetime = self.value_lifetime();
+        let generics = parse_quote!(<#lifetime>);
+        Cow::Owned(generics)
+    }
+}
+
+#[allow(clippy::type_complexity)]
 pub struct StructSerializeElementBuilder<'a> {
     pub ident: &'a syn::Ident,
     pub generics: &'a syn::Generics,
@@ -127,7 +209,7 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
         let attribute_fields = crate::ser::attribute_group_field_serializer(
             quote! {#element_access_ident},
             attribute_fields,
-        );
+        )?;
 
         let element_end = if element_fields.is_empty() {
             quote! {
@@ -137,7 +219,7 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
             let element_fields = crate::ser::element_group_field_serializer(
                 quote! {#children_access_ident},
                 element_fields,
-            );
+            )?;
 
             quote! {
                 let mut #children_access_ident = ::xmlity::ser::SerializeElement::serialize_children(#element_access_ident)?;
