@@ -1,7 +1,9 @@
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DataStruct, DeriveInput, Ident, ImplItemFn, ItemImpl, Stmt};
 
-use crate::{options::structs::roots::RootGroupOpts, DeriveError, DeriveMacro};
+use crate::{
+    common::non_bound_generics, options::structs::roots::RootGroupOpts, DeriveError, DeriveMacro,
+};
 
 trait SerializationGroupBuilder {
     fn serialize_attributes_fn_body(
@@ -58,7 +60,7 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
         let DeriveInput {
             ident, generics, ..
         } = ast;
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let non_bound_generics = non_bound_generics(generics);
 
         let serialize_attributes_fn = self.serialize_attributes_fn(ast)?;
         let serialize_children_fn = self.serialize_children_fn(ast)?;

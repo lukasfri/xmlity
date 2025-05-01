@@ -7,12 +7,10 @@ use syn::{
 };
 
 use crate::{
+    common::{non_bound_generics, FieldIdent, StructType},
     de::{
-        common::{
-            DeserializeBuilder, DeserializeBuilderExt, SeqVisitLoop, VisitorBuilder,
-            VisitorBuilderExt,
-        },
-        constructor_expr, StructType,
+        builders::{DeserializeBuilder, DeserializeBuilderExt, VisitorBuilder, VisitorBuilderExt},
+        common::{constructor_expr, SeqVisitLoop},
     },
     options::{
         enums::{self, variants::ValueOpts},
@@ -20,9 +18,9 @@ use crate::{
             self,
             fields::{FieldOpts, FieldValueGroupOpts},
         },
-        ElementOrder,
+        ElementOrder, FieldWithOpts,
     },
-    DeriveError, DeriveResult, FieldIdent, FieldWithOpts,
+    DeriveError, DeriveResult,
 };
 
 use super::values::StringLiteralDeserializeBuilder;
@@ -242,7 +240,7 @@ impl VisitorBuilder for SerializeNoneStructBuilder<'_> {
         let DeriveInput {
             ident, generics, ..
         } = &self.ast;
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let non_bound_generics = non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
 
@@ -415,7 +413,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
         let DeriveInput {
             ident, generics, ..
         } = &self.ast;
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let non_bound_generics = non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
 

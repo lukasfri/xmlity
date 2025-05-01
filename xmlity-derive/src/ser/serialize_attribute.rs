@@ -5,11 +5,11 @@ use quote::{quote, ToTokens};
 use syn::{parse_quote, Arm, Data, Expr, ImplItemFn, ItemImpl, Lifetime, Stmt};
 use syn::{DeriveInput, Ident};
 
-use crate::de::StructTypeWithFields;
+use crate::common::{non_bound_generics, ExpandedName, Prefix, StructTypeWithFields};
 use crate::options::structs::roots::RootAttributeOpts;
-use crate::options::{FieldWithOpts, Prefix, WithExpandedNameExt};
+use crate::options::{FieldWithOpts, WithExpandedNameExt};
 
-use crate::{DeriveError, ExpandedName};
+use crate::DeriveError;
 use crate::{DeriveMacro, DeriveResult};
 
 pub trait SerializeAttributeBuilder {
@@ -48,7 +48,7 @@ impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
         let ident = self.ident();
         let generics = self.generics();
 
-        let non_bound_generics = crate::non_bound_generics(&generics);
+        let non_bound_generics = non_bound_generics(&generics);
 
         Ok(parse_quote! {
             impl #generics ::xmlity::SerializeAttribute for #ident #non_bound_generics {

@@ -6,9 +6,10 @@ use proc_macro2::Span;
 use syn::{parse_quote, Expr, ExprWhile, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
-    de::common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+    common::{non_bound_generics, ExpandedName},
+    de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
     options::Extendable,
-    DeriveError, ExpandedName,
+    DeriveError,
 };
 
 pub struct SingleChildDeserializeElementBuilder<'a> {
@@ -114,7 +115,7 @@ impl VisitorBuilder for SingleChildDeserializeElementBuilder<'_> {
         let Self {
             ident, generics, ..
         } = &self;
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let non_bound_generics = non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
 

@@ -15,7 +15,7 @@ use crate::{
     DeriveError, DeriveMacro,
 };
 
-use super::common::DeserializeBuilderExt;
+use super::builders::DeserializeBuilderExt;
 
 pub struct DeriveDeserialize;
 

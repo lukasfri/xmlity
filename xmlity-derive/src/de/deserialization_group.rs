@@ -8,17 +8,24 @@ use syn::{
 };
 
 use crate::{
+    common::{non_bound_generics, FieldIdent, StructType},
     options::{
         structs::{
             fields::{AttributeOpts, ChildOpts, GroupOpts},
             roots::RootGroupOpts,
         },
-        GroupOrder,
+        FieldWithOpts, GroupOrder,
     },
-    DeriveError, DeriveMacro, DeriveResult, FieldIdent, FieldWithOpts,
+    DeriveError, DeriveMacro, DeriveResult,
 };
 
-use super::{all_attributes_done_expr, all_elements_done_expr, constructor_expr, StructType};
+use super::common::{
+    all_attributes_done_expr, attribute_fields, attribute_group_fields,
+    builder_attribute_field_visitor, builder_element_field_visitor, element_fields,
+    element_group_fields, group_fields,
+};
+
+use super::common::{all_elements_done_expr, constructor_expr, struct_definition_expr};
 
 trait DeserializationGroupBuilderBuilder {
     fn contribute_attributes_fn_body(
@@ -226,7 +233,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         let builder_ident =
             Ident::new(format!("__{}Builder", ast.ident).as_str(), ast.ident.span());
 
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let value_non_bound_generics = non_bound_generics(generics);
 
         let mut builder_generics = (*generics).to_owned();
 
@@ -234,7 +241,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
             0,
             syn::GenericParam::Lifetime(LifetimeParam::new(deserialize_lifetime.clone())),
         );
-        let non_bound_builder_generics = crate::non_bound_generics(&builder_generics);
+        let non_bound_builder_generics = non_bound_generics(&builder_generics);
 
         let contribute_attributes_fn = self.contribute_attributes_fn(ast, &deserialize_lifetime)?;
 
@@ -248,7 +255,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
 
         Ok(parse_quote! {
         impl #builder_generics ::xmlity::de::DeserializationGroupBuilder<#deserialize_lifetime> for #builder_ident #non_bound_builder_generics {
-          type Value = #ident #non_bound_generics;
+          type Value = #ident #value_non_bound_generics;
 
             #contribute_attributes_fn
 
@@ -273,7 +280,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
 
         let deserialize_lifetime = Lifetime::new("'__deserialize", Span::call_site());
 
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let group_non_bound_generics = non_bound_generics(generics);
 
         let mut builder_generics = (*generics).to_owned();
 
@@ -281,12 +288,12 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
             0,
             syn::GenericParam::Lifetime(LifetimeParam::new((deserialize_lifetime).clone())),
         );
-        let non_bound_builder_generics = crate::non_bound_generics(&builder_generics);
+        let non_bound_builder_generics = non_bound_generics(&builder_generics);
 
         let builder_constructor = self.builder_constructor(ast, &builder_ident)?;
 
         Ok(parse_quote! {
-            impl #builder_generics ::xmlity::de::DeserializationGroup<#deserialize_lifetime> for #ident #non_bound_generics {
+            impl #builder_generics ::xmlity::de::DeserializationGroup<#deserialize_lifetime> for #ident #group_non_bound_generics {
                 type Builder = #builder_ident #non_bound_builder_generics;
 
                 fn builder() -> Self::Builder {
@@ -339,10 +346,10 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         attributes_access_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let attribute_visit = super::builder_attribute_field_visitor(
+        let attribute_visit = builder_attribute_field_visitor(
             attributes_access_ident,
             quote! {self.},
-            crate::de::attribute_group_fields(ast)?,
+            attribute_group_fields(ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
             parse_quote! {return ::core::result::Result::Ok(true);},
             parse_quote! {return ::core::result::Result::Ok(true);},
@@ -367,8 +374,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr =
-            all_attributes_done_expr(crate::de::attribute_group_fields(ast)?, quote! {self.});
+        let expr = all_attributes_done_expr(attribute_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
@@ -381,10 +387,10 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         elements_access_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> DeriveResult<Option<Vec<Stmt>>> {
-        let element_visit = super::builder_element_field_visitor(
+        let element_visit = builder_element_field_visitor(
             elements_access_ident,
             quote! {self.},
-            crate::de::element_group_fields(ast)?,
+            element_group_fields(ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
             parse_quote! {return ::core::result::Result::Ok(true);},
             parse_quote! {return ::core::result::Result::Ok(true);},
@@ -411,7 +417,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         ast: &syn::DeriveInput,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_elements_done_expr(crate::de::element_group_fields(ast)?, quote! {self.});
+        let expr = all_elements_done_expr(element_group_fields(ast)?, quote! {self.});
 
         Ok(Some(parse_quote!(
             #expr
@@ -421,9 +427,9 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
     fn finish_fn_body(&self, ast: &syn::DeriveInput) -> Result<Vec<Stmt>, DeriveError> {
         let finish_constructor = finish_constructor_expr(
             quote! {Self::Value},
-            crate::de::element_fields(ast)?,
-            crate::de::attribute_fields(ast)?,
-            crate::de::group_fields(ast)?,
+            element_fields(ast)?,
+            attribute_fields(ast)?,
+            group_fields(ast)?,
             &Self::constructor_type(ast),
         );
 
@@ -438,7 +444,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         builder_ident: &Ident,
         deserialize_lifetime: &Lifetime,
     ) -> Result<ItemStruct, DeriveError> {
-        let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
+        let local_value_expressions_constructors = attribute_fields(ast)?
             .into_iter()
             .map(
                 |FieldWithOpts {
@@ -452,7 +458,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                     (field_ident, expression)
                 },
             )
-            .chain(crate::de::element_fields(ast)?.into_iter().map(
+            .chain(element_fields(ast)?.into_iter().map(
                 |FieldWithOpts {
                      field_ident,
                      field_type,
@@ -464,7 +470,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                     (field_ident, expression)
                 },
             ));
-        let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
+        let group_value_expressions_constructors = group_fields(ast)?.into_iter().map(
             |FieldWithOpts {
                 field_ident,
                  field_type,
@@ -499,7 +505,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
             syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
         );
 
-        Ok(syn::parse2(super::struct_definition_expr(
+        Ok(syn::parse2(struct_definition_expr(
             builder_ident,
             // Builder only needs lifetime if there are groups
             Some(&generics),
@@ -514,7 +520,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         ast: &syn::DeriveInput,
         builder_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let local_value_expressions_constructors = crate::de::attribute_fields(ast)?
+        let local_value_expressions_constructors = attribute_fields(ast)?
             .into_iter()
             .map(|FieldWithOpts { field_ident, .. }| {
                 let expression = quote! {
@@ -522,7 +528,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                 };
                 (field_ident, expression)
             })
-            .chain(crate::de::element_fields(ast)?.into_iter().map(
+            .chain(element_fields(ast)?.into_iter().map(
                 |FieldWithOpts { field_ident, .. }| {
                     let expression = quote! {
                         ::core::option::Option::None
@@ -530,7 +536,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                     (field_ident, expression)
                 },
             ));
-        let group_value_expressions_constructors = crate::de::group_fields(ast)?.into_iter().map(
+        let group_value_expressions_constructors = group_fields(ast)?.into_iter().map(
             |FieldWithOpts {
                  field_ident,
                  field_type,

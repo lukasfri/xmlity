@@ -10,6 +10,7 @@ use serialize_attribute::{SerializeAttributeBuilderExt, SimpleSerializeAttribute
 use syn::{parse_quote, Ident};
 
 use crate::{
+    common::FieldIdent,
     options::{
         structs::fields::{
             AttributeDeclaredOpts, AttributeDeferredOpts, AttributeOpts, ChildOpts, ElementOpts,
@@ -17,7 +18,7 @@ use crate::{
         },
         FieldWithOpts, WithExpandedNameExt,
     },
-    DeriveError, DeriveResult, FieldIdent,
+    DeriveError, DeriveResult,
 };
 use quote::{quote, ToTokens};
 

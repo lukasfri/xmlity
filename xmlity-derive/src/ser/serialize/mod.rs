@@ -48,7 +48,7 @@ impl<T: SerializeBuilder> SerializeBuilderExt for T {
         let generics = self.generics();
         let serialize_fn = self.serialize_fn()?;
 
-        let non_bound_generics = crate::non_bound_generics(&generics);
+        let non_bound_generics = crate::common::non_bound_generics(&generics);
 
         Ok(parse_quote! {
             impl #generics ::xmlity::Serialize for #ident #non_bound_generics {
