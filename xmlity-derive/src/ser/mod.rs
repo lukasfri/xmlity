@@ -50,16 +50,16 @@ fn attribute_group_field_serializer(
                 Ok(quote! {{
                     #definition
                     #trait_impl
-                    ::xmlity::ser::SerializeAttributes::serialize_attribute(&mut #access_ident, &#serialize_expr)?;
+                    ::xmlity::ser::SerializeAttributes::serialize_attribute(#access_ident, &#serialize_expr)?;
                 }})
             },
             FieldAttributeGroupOpts::Attribute(AttributeOpts::Deferred(AttributeDeferredOpts {
                 ..
             })) => Ok(quote! {
-                ::xmlity::ser::SerializeAttributes::serialize_attribute(&mut #access_ident, &self.#field_ident)?;
+                ::xmlity::ser::SerializeAttributes::serialize_attribute(#access_ident, &self.#field_ident)?;
             }),
               FieldAttributeGroupOpts::Group(_) => Ok(quote! {
-                ::xmlity::ser::SerializationGroup::serialize_attributes(&self.#field_ident, &mut #access_ident)?;
+                ::xmlity::ser::SerializationGroup::serialize_attributes(&self.#field_ident, #access_ident)?;
             }),
           }
       }).collect::<DeriveResult<Vec<_>>>()?;
@@ -99,15 +99,15 @@ fn element_group_field_serializer(
                     {
                         #definition
                         #trait_impl
-                        ::xmlity::ser::SerializeChildren::serialize_child(&mut #access_ident, &#serialize_expr)?;
+                        ::xmlity::ser::SerializeSeq::serialize_element(#access_ident, &#serialize_expr)?;
                     }
                 })
             },
             FieldValueGroupOpts::Value(ChildOpts::Value(_)) => Ok(quote! {
-                ::xmlity::ser::SerializeChildren::serialize_child(&mut #access_ident, &self.#field_ident)?;
+                ::xmlity::ser::SerializeSeq::serialize_element(#access_ident, &self.#field_ident)?;
             }),
             FieldValueGroupOpts::Group(_) => Ok(quote! {
-                ::xmlity::ser::SerializationGroup::serialize_children(&self.#field_ident, &mut #access_ident)?;
+                ::xmlity::ser::SerializationGroup::serialize_children(&self.#field_ident, #access_ident)?;
             }),
         }
     }).collect::<Result<Vec<_>, _>>()?;
