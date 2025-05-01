@@ -313,21 +313,8 @@ pub struct EnumVisitorBuilder<'a> {
 }
 
 impl<'a> EnumVisitorBuilder<'a> {
-    pub fn new(ast: &'a DeriveInput) -> Self {
-        Self {
-            ast,
-            value_opts: None,
-        }
-    }
-
-    pub fn new_with_value_opts(
-        ast: &'a DeriveInput,
-        value_opts: &'a enums::roots::RootValueOpts,
-    ) -> Self {
-        Self {
-            ast,
-            value_opts: Some(value_opts),
-        }
+    pub fn new(ast: &'a DeriveInput, value_opts: Option<&'a enums::roots::RootValueOpts>) -> Self {
+        Self { ast, value_opts }
     }
 }
 

@@ -2,8 +2,8 @@ use std::{borrow::Cow, ops::Deref};
 
 use proc_macro2::Span;
 use syn::{
-    parse_quote, Generics, Ident, ImplItemFn, ItemImpl, ItemStruct, Lifetime, LifetimeParam, Stmt,
-    Type,
+    parse_quote, Generics, Ident, ImplItemFn, Item, ItemImpl, ItemStruct, Lifetime, LifetimeParam,
+    Stmt, Type,
 };
 
 use crate::{common::non_bound_generics, DeriveError};
@@ -552,5 +552,267 @@ impl<T: DeserializeBuilder> DeserializeBuilderExt for T {
                 #deserialize_fn
             }
         })
+    }
+}
+
+pub trait DeserializationGroupBuilderBuilder {
+    fn contribute_attributes_fn_body(
+        &self,
+        attributes_access_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn attributes_done_fn_body(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn contribute_elements_fn_body(
+        &self,
+        elements_access_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn elements_done_fn_body(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError>;
+
+    fn finish_fn_body(&self) -> Result<Vec<Stmt>, DeriveError>;
+
+    fn builder_definition(
+        &self,
+        builder_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<ItemStruct, DeriveError>;
+
+    fn builder_constructor(&self, builder_ident: &Ident) -> Result<Vec<Stmt>, DeriveError>;
+
+    fn ident(&self) -> Cow<'_, Ident>;
+
+    fn generics(&self) -> Cow<'_, Generics>;
+}
+
+pub trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderBuilder {
+    fn contribute_attributes_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
+
+    fn attributes_done_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
+
+    fn contribute_elements_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
+
+    fn elements_done_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError>;
+
+    fn finish_fn(&self) -> Result<ImplItemFn, DeriveError>;
+
+    fn deserialization_group_builder_def(&self) -> Result<ItemStruct, DeriveError>;
+
+    fn deserialization_group_builder_impl(&self) -> Result<ItemImpl, DeriveError>;
+
+    fn deserialize_impl(&self) -> Result<ItemImpl, DeriveError>;
+
+    fn total_impl(&self) -> Result<Vec<Item>, DeriveError>;
+}
+
+impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentExt for T {
+    fn contribute_attributes_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let attributes_access_ident = syn::Ident::new("__element", proc_macro2::Span::call_site());
+
+        let content =
+            self.contribute_attributes_fn_body(&attributes_access_ident, deserialize_lifetime)?;
+
+        let Some(content) = content else {
+            return Ok(None);
+        };
+
+        Ok(Some(parse_quote! {
+            fn contribute_attributes<A: ::xmlity::de::AttributesAccess<#deserialize_lifetime>>(
+                &mut self,
+                mut #attributes_access_ident: A,
+            ) -> Result<bool, <A as ::xmlity::de::AttributesAccess<#deserialize_lifetime>>::Error> {
+                #(#content)*
+            }
+        }))
+    }
+
+    fn attributes_done_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let content = self.attributes_done_fn_body(deserialize_lifetime)?;
+
+        let Some(content) = content else {
+            return Ok(None);
+        };
+
+        Ok(Some(parse_quote! {
+            fn attributes_done(&self) -> bool {
+                #(#content)*
+            }
+        }))
+    }
+
+    fn contribute_elements_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let elements_access_ident = syn::Ident::new("__children", proc_macro2::Span::call_site());
+
+        let content =
+            self.contribute_elements_fn_body(&elements_access_ident, deserialize_lifetime)?;
+
+        let Some(content) = content else {
+            return Ok(None);
+        };
+
+        Ok(Some(parse_quote! {
+            fn contribute_elements<A: ::xmlity::de::SeqAccess<#deserialize_lifetime>>(
+                &mut self,
+              mut #elements_access_ident: A,
+            ) -> Result<bool, <A as ::xmlity::de::SeqAccess<#deserialize_lifetime>>::Error> {
+                #(#content)*
+            }
+        }))
+    }
+
+    fn elements_done_fn(
+        &self,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<Option<ImplItemFn>, DeriveError> {
+        let content = self.elements_done_fn_body(deserialize_lifetime)?;
+
+        let Some(content) = content else {
+            return Ok(None);
+        };
+
+        Ok(Some(parse_quote! {
+            fn elements_done(&self) -> bool {
+                #(#content)*
+            }
+        }))
+    }
+
+    fn finish_fn(&self) -> Result<ImplItemFn, DeriveError> {
+        let content = self.finish_fn_body()?;
+
+        Ok(parse_quote! {
+        fn finish<E: ::xmlity::de::Error>(self) -> Result<Self::Value, E> {
+           #(#content)*
+          }
+        })
+    }
+
+    fn deserialization_group_builder_def(&self) -> Result<ItemStruct, DeriveError> {
+        let deserialize_lifetime = Lifetime::new("'__builder", Span::call_site());
+
+        let ident = self.ident();
+
+        let builder_ident = Ident::new(format!("__{}Builder", ident).as_str(), ident.span());
+
+        self.builder_definition(&builder_ident, &deserialize_lifetime)
+    }
+
+    fn deserialization_group_builder_impl(&self) -> Result<ItemImpl, DeriveError> {
+        let deserialize_lifetime = Lifetime::new("'__builder", Span::call_site());
+
+        let ident = self.ident();
+        let generics = self.generics();
+
+        let builder_ident = Ident::new(format!("__{}Builder", ident).as_str(), ident.span());
+
+        let value_non_bound_generics = non_bound_generics(&generics);
+
+        let mut builder_generics = (*generics).to_owned();
+
+        builder_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new(deserialize_lifetime.clone())),
+        );
+        let non_bound_builder_generics = non_bound_generics(&builder_generics);
+
+        let contribute_attributes_fn = self.contribute_attributes_fn(&deserialize_lifetime)?;
+
+        let attributes_done_fn = self.attributes_done_fn(&deserialize_lifetime)?;
+
+        let contribute_elements_fn = self.contribute_elements_fn(&deserialize_lifetime)?;
+
+        let elements_done_fn = self.elements_done_fn(&deserialize_lifetime)?;
+
+        let finish_fn = self.finish_fn()?;
+
+        Ok(parse_quote! {
+        impl #builder_generics ::xmlity::de::DeserializationGroupBuilder<#deserialize_lifetime> for #builder_ident #non_bound_builder_generics {
+          type Value = #ident #value_non_bound_generics;
+
+            #contribute_attributes_fn
+
+            #attributes_done_fn
+
+            #contribute_elements_fn
+
+            #elements_done_fn
+
+            #finish_fn
+        }
+        })
+    }
+
+    fn deserialize_impl(&self) -> Result<ItemImpl, DeriveError> {
+        let ident = self.ident();
+        let generics = self.generics();
+
+        let builder_ident = Ident::new(format!("__{}Builder", ident).as_str(), ident.span());
+
+        let deserialize_lifetime = Lifetime::new("'__deserialize", Span::call_site());
+
+        let group_non_bound_generics = non_bound_generics(&generics);
+
+        let mut builder_generics = (*generics).to_owned();
+
+        builder_generics.params.insert(
+            0,
+            syn::GenericParam::Lifetime(LifetimeParam::new((deserialize_lifetime).clone())),
+        );
+        let non_bound_builder_generics = non_bound_generics(&builder_generics);
+
+        let builder_constructor = self.builder_constructor(&builder_ident)?;
+
+        Ok(parse_quote! {
+            impl #builder_generics ::xmlity::de::DeserializationGroup<#deserialize_lifetime> for #ident #group_non_bound_generics {
+                type Builder = #builder_ident #non_bound_builder_generics;
+
+                fn builder() -> Self::Builder {
+                    #(#builder_constructor)*
+                }
+            }
+        })
+    }
+
+    fn total_impl(&self) -> Result<Vec<Item>, DeriveError> {
+        let builder_def = self.deserialization_group_builder_def()?;
+
+        let builder_impl = self.deserialization_group_builder_impl()?;
+
+        let deserialize_impl = self.deserialize_impl()?;
+
+        Ok(vec![
+            Item::Struct(builder_def),
+            Item::Impl(builder_impl),
+            Item::Impl(deserialize_impl),
+        ])
     }
 }
