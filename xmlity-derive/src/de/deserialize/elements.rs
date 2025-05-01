@@ -9,10 +9,11 @@ use syn::{
 };
 
 use crate::{
-    de::{
+    common::{non_bound_generics, ExpandedName, FieldIdent, StructType, StructTypeWithFields},
+    de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+    de::common::{
         all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
-        common::{DeserializeBuilder, SeqVisitLoop, VisitorBuilder, VisitorBuilderExt},
-        constructor_expr, StructType, StructTypeWithFields,
+        constructor_expr, SeqVisitLoop,
     },
     options::{
         structs::{
@@ -22,9 +23,9 @@ use crate::{
             },
             roots::RootElementOpts,
         },
-        ElementOrder, WithExpandedNameExt,
+        ElementOrder, FieldWithOpts, WithExpandedNameExt,
     },
-    DeriveError, DeriveResult, ExpandedName, FieldIdent, FieldWithOpts,
+    DeriveError, DeriveResult,
 };
 
 pub struct RootStructElementVisitorBuilder<'a> {
@@ -514,7 +515,7 @@ impl VisitorBuilder for StructDeserializeElementBuilder<'_> {
         let Self {
             ident, generics, ..
         } = &self;
-        let non_bound_generics = crate::non_bound_generics(generics);
+        let non_bound_generics = non_bound_generics(generics);
 
         let mut deserialize_generics = (*generics).to_owned();
 

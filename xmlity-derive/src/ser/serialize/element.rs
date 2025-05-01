@@ -4,13 +4,16 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::{parse_quote, Data, DataStruct, Expr, Ident, Lifetime, Stmt};
 
-use crate::de::StructTypeWithFields;
+use crate::common::Prefix;
+use crate::common::StructTypeWithFields;
 use crate::options::structs::fields::{ChildOpts, FieldOpts, ValueOpts};
 use crate::options::{structs::roots::RootElementOpts, WithExpandedNameExt};
-use crate::options::{Extendable, FieldWithOpts, Prefix};
-use crate::{DeriveError, DeriveResult, ExpandedName, FieldIdent};
-
-use super::SerializeBuilder;
+use crate::options::{Extendable, FieldWithOpts};
+use crate::ser::builders::SerializeBuilder;
+use crate::{
+    common::{ExpandedName, FieldIdent},
+    DeriveError, DeriveResult,
+};
 
 pub struct DeriveElementStruct<'a> {
     opts: &'a RootElementOpts,

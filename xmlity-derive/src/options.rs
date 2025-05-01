@@ -2,10 +2,12 @@
 use std::borrow::Cow;
 
 use darling::{FromAttributes, FromMeta};
-use quote::ToTokens;
 use syn::{DeriveInput, Expr};
 
-use crate::{DeriveError, ExpandedName};
+use crate::{
+    common::{ExpandedName, LocalName, XmlNamespace},
+    DeriveError,
+};
 
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
@@ -144,87 +146,12 @@ impl<T: WithExpandedName> WithExpandedNameExt for T {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LocalName<'a>(pub Cow<'a, str>);
-
-impl<'a> LocalName<'a> {
-    pub fn as_ref<'b: 'a>(&'b self) -> LocalName<'b> {
-        Self(Cow::Borrowed(&self.0))
-    }
-
-    pub fn into_owned(self) -> LocalName<'static> {
-        LocalName(Cow::Owned(self.0.to_string()))
-    }
-}
-
-impl FromMeta for LocalName<'_> {
-    fn from_string(value: &str) -> darling::Result<Self> {
-        // TODO: Validate local name
-        Ok(LocalName(Cow::Owned(value.to_owned())))
-    }
-}
-
-impl ToTokens for LocalName<'_> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let name = &self.0;
-        tokens.extend(quote::quote! { <::xmlity::LocalName as ::core::str::FromStr>::from_str(#name).expect("XML name in derive macro is invalid. This is a bug in xmlity. Please report it.") })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct XmlNamespace<'a>(pub Cow<'a, str>);
-
-impl<'a> XmlNamespace<'a> {
-    pub fn as_ref<'b: 'a>(&'b self) -> XmlNamespace<'b> {
-        Self(Cow::Borrowed(&self.0))
-    }
-
-    pub fn into_owned(self) -> XmlNamespace<'static> {
-        XmlNamespace(Cow::Owned(self.0.to_string()))
-    }
-}
-
-impl FromMeta for XmlNamespace<'_> {
-    fn from_string(value: &str) -> darling::Result<Self> {
-        // TODO: Validate namespace
-        Ok(XmlNamespace(Cow::Owned(value.to_owned())))
-    }
-}
-
-impl ToTokens for XmlNamespace<'_> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let namespace = &self.0;
-        tokens.extend(quote::quote! { <::xmlity::XmlNamespace as ::core::str::FromStr>::from_str(#namespace).expect("XML namespace in derive macro is invalid. This is a bug in xmlity. Please report it.") })
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct Prefix<'a>(pub Cow<'a, str>);
-
-impl<'a> Prefix<'a> {
-    pub fn as_ref<'b: 'a>(&'b self) -> Prefix<'b> {
-        Self(Cow::Borrowed(&self.0))
-    }
-}
-
-impl FromMeta for Prefix<'_> {
-    fn from_string(value: &str) -> darling::Result<Self> {
-        // TODO: Validate prefix
-        Ok(Prefix(Cow::Owned(value.to_owned())))
-    }
-}
-
-impl ToTokens for Prefix<'_> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let prefix = &self.0;
-        tokens.extend(quote::quote! { ::xmlity::Prefix::new(#prefix).expect("XML prefix in derive macro is invalid. This is a bug in xmlity. Please report it.") })
-    }
-}
-
 pub mod structs {
     use super::*;
 
     pub mod roots {
+        use crate::common::Prefix;
+
         use super::*;
 
         #[derive(FromAttributes)]
@@ -426,6 +353,8 @@ pub mod structs {
     }
 
     pub mod fields {
+        use crate::common::Prefix;
+
         use super::*;
 
         #[derive(FromAttributes, Clone)]

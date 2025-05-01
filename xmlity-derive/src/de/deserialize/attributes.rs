@@ -4,12 +4,10 @@ use proc_macro2::Span;
 use syn::{parse_quote, Data, DeriveInput, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
-    de::{
-        common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-        StructTypeWithFields,
-    },
+    common::{non_bound_generics, ExpandedName, StructTypeWithFields},
+    de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
     options::{structs::roots::RootAttributeOpts, FieldWithOpts, WithExpandedNameExt},
-    DeriveError, ExpandedName,
+    DeriveError,
 };
 
 pub struct StructAttributeVisitorBuilder<'a> {
@@ -193,7 +191,7 @@ impl VisitorBuilder for StructDeserializeAttributeBuilder<'_> {
         let ident = self.visitor_ident();
         let generics = self.visitor_generics();
 
-        let non_bound_generics = crate::non_bound_generics(generics.deref());
+        let non_bound_generics = non_bound_generics(generics.deref());
 
         let mut deserialize_generics = (*generics).to_owned();
 

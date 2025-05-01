@@ -8,10 +8,9 @@ use crate::{
         roots::RootValueOpts,
         variants::{ValueOpts, VariantOpts},
     },
+    ser::builders::SerializeBuilder,
     DeriveError,
 };
-
-use super::SerializeBuilder;
 
 pub struct DeriveNoneStruct<'a> {
     ast: &'a DeriveInput,
