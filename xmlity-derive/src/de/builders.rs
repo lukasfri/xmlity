@@ -618,9 +618,9 @@ pub trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderBuil
 
     fn deserialization_group_builder_def(&self) -> Result<ItemStruct, DeriveError>;
 
-    fn deserialization_group_builder_impl(&self) -> Result<ItemImpl, DeriveError>;
+    fn deserialization_group_builder_trait_impl(&self) -> Result<ItemImpl, DeriveError>;
 
-    fn deserialize_impl(&self) -> Result<ItemImpl, DeriveError>;
+    fn deserialization_group_trait_impl(&self) -> Result<ItemImpl, DeriveError>;
 
     fn total_impl(&self) -> Result<Vec<Item>, DeriveError>;
 }
@@ -726,7 +726,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         self.builder_definition(&builder_ident, &deserialize_lifetime)
     }
 
-    fn deserialization_group_builder_impl(&self) -> Result<ItemImpl, DeriveError> {
+    fn deserialization_group_builder_trait_impl(&self) -> Result<ItemImpl, DeriveError> {
         let deserialize_lifetime = Lifetime::new("'__builder", Span::call_site());
 
         let ident = self.ident();
@@ -771,7 +771,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         })
     }
 
-    fn deserialize_impl(&self) -> Result<ItemImpl, DeriveError> {
+    fn deserialization_group_trait_impl(&self) -> Result<ItemImpl, DeriveError> {
         let ident = self.ident();
         let generics = self.generics();
 
@@ -805,9 +805,9 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
     fn total_impl(&self) -> Result<Vec<Item>, DeriveError> {
         let builder_def = self.deserialization_group_builder_def()?;
 
-        let builder_impl = self.deserialization_group_builder_impl()?;
+        let builder_impl = self.deserialization_group_builder_trait_impl()?;
 
-        let deserialize_impl = self.deserialize_impl()?;
+        let deserialize_impl = self.deserialization_group_trait_impl()?;
 
         Ok(vec![
             Item::Struct(builder_def),

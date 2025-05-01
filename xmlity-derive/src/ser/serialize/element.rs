@@ -9,12 +9,11 @@ use crate::common::StructTypeWithFields;
 use crate::options::structs::fields::{ChildOpts, FieldOpts, ValueOpts};
 use crate::options::{structs::roots::RootElementOpts, WithExpandedNameExt};
 use crate::options::{Extendable, FieldWithOpts};
+use crate::ser::builders::SerializeBuilder;
 use crate::{
     common::{ExpandedName, FieldIdent},
     DeriveError, DeriveResult,
 };
-
-use super::SerializeBuilder;
 
 pub struct DeriveElementStruct<'a> {
     opts: &'a RootElementOpts,

@@ -1,12 +1,14 @@
+mod builders;
 mod serialization_group;
 mod serialize;
 mod serialize_attribute;
+use builders::{SerializeAttributeBuilderExt, SerializeBuilderExt};
 use proc_macro2::Span;
 pub use serialization_group::DeriveSerializationGroup;
 pub use serialize::DeriveSerialize;
-use serialize::{SerializeBuilderExt, SingleChildSerializeElementBuilder};
+use serialize::SingleChildSerializeElementBuilder;
 pub use serialize_attribute::DeriveSerializeAttribute;
-use serialize_attribute::{SerializeAttributeBuilderExt, SimpleSerializeAttributeBuilder};
+use serialize_attribute::SimpleSerializeAttributeBuilder;
 use syn::{parse_quote, Ident};
 
 use crate::{

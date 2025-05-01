@@ -2,61 +2,17 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{parse_quote, Arm, Data, Expr, ImplItemFn, ItemImpl, Lifetime, Stmt};
+use syn::{parse_quote, Arm, Data, Expr, Lifetime, Stmt};
 use syn::{DeriveInput, Ident};
 
-use crate::common::{non_bound_generics, ExpandedName, Prefix, StructTypeWithFields};
+use crate::common::{ExpandedName, Prefix, StructTypeWithFields};
 use crate::options::structs::roots::RootAttributeOpts;
 use crate::options::{FieldWithOpts, WithExpandedNameExt};
 
 use crate::DeriveError;
 use crate::{DeriveMacro, DeriveResult};
 
-pub trait SerializeAttributeBuilder {
-    fn serialize_attribute_fn_body(
-        &self,
-        serializer_access: &Ident,
-        serializer_type: &syn::Type,
-    ) -> Result<Vec<Stmt>, DeriveError>;
-
-    fn ident(&self) -> Cow<'_, Ident>;
-    fn generics(&self) -> Cow<'_, syn::Generics>;
-}
-
-pub trait SerializeAttributeBuilderExt: SerializeAttributeBuilder {
-    fn serialize_attribute_fn(&self) -> Result<ImplItemFn, DeriveError>;
-    fn serialize_attribute_trait_impl(&self) -> Result<ItemImpl, DeriveError>;
-}
-
-impl<T: SerializeAttributeBuilder> SerializeAttributeBuilderExt for T {
-    fn serialize_attribute_fn(&self) -> Result<ImplItemFn, DeriveError> {
-        let serializer_access_ident = Ident::new("__serializer", Span::call_site());
-        let serializer_type: syn::Type = parse_quote!(__XmlityAttributeSerializer);
-        let body = self.serialize_attribute_fn_body(&serializer_access_ident, &serializer_type)?;
-        Ok(parse_quote!(
-            fn serialize_attribute<#serializer_type>(&self, mut #serializer_access_ident: #serializer_type) -> Result<<#serializer_type as ::xmlity::AttributeSerializer>::Ok, <#serializer_type as ::xmlity::AttributeSerializer>::Error>
-            where
-                #serializer_type: ::xmlity::AttributeSerializer,
-            {
-                #(#body)*
-            }
-        ))
-    }
-
-    fn serialize_attribute_trait_impl(&self) -> Result<ItemImpl, DeriveError> {
-        let serialize_attribute_fn = self.serialize_attribute_fn()?;
-        let ident = self.ident();
-        let generics = self.generics();
-
-        let non_bound_generics = non_bound_generics(&generics);
-
-        Ok(parse_quote! {
-            impl #generics ::xmlity::SerializeAttribute for #ident #non_bound_generics {
-                #serialize_attribute_fn
-            }
-        })
-    }
-}
+use super::builders::{SerializeAttributeBuilder, SerializeAttributeBuilderExt};
 
 pub struct SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
     ast: &'a syn::DeriveInput,
