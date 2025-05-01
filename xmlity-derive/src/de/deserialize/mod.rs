@@ -15,14 +15,13 @@ use crate::{
     DeriveError, DeriveMacro,
 };
 
-use super::common::DeserializeBuilderExt;
+use super::builders::DeserializeBuilderExt;
 
 pub struct DeriveDeserialize;
 
 impl DeriveMacro for DeriveDeserialize {
     fn input_to_derive(ast: &syn::DeriveInput) -> Result<proc_macro2::TokenStream, DeriveError> {
         match &ast.data {
-            // `xelement`
             syn::Data::Struct(_) => {
                 let opts = structs::roots::DeserializeRootOpts::parse(ast)?;
 
@@ -52,16 +51,14 @@ impl DeriveMacro for DeriveDeserialize {
             syn::Data::Enum(_) => {
                 let opts = enums::roots::RootOpts::parse(ast)?;
 
-                match opts {
-                    enums::roots::RootOpts::None => EnumVisitorBuilder::new(ast)
-                        .deserialize_trait_impl()
-                        .map(|a| a.to_token_stream()),
-                    enums::roots::RootOpts::Value(opts) => {
-                        EnumVisitorBuilder::new_with_value_opts(ast, &opts)
-                            .deserialize_trait_impl()
-                            .map(|a| a.to_token_stream())
-                    }
-                }
+                let value_opts = match &opts {
+                    enums::roots::RootOpts::None => None,
+                    enums::roots::RootOpts::Value(opts) => Some(opts),
+                };
+
+                EnumVisitorBuilder::new(ast, value_opts)
+                    .deserialize_trait_impl()
+                    .map(|a| a.to_token_stream())
             }
             syn::Data::Union(_) => Err(DeriveError::custom(
                 "Unions are not supported for deserialization.",

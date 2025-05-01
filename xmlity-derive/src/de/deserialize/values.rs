@@ -4,7 +4,7 @@ use proc_macro2::Span;
 use syn::{parse_quote, Ident, Lifetime, Stmt, Type};
 
 use crate::{
-    de::common::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+    de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
     DeriveError,
 };
 

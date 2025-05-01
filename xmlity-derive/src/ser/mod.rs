@@ -1,15 +1,18 @@
+mod builders;
 mod serialization_group;
 mod serialize;
 mod serialize_attribute;
+use builders::{SerializeAttributeBuilderExt, SerializeBuilderExt};
 use proc_macro2::Span;
 pub use serialization_group::DeriveSerializationGroup;
 pub use serialize::DeriveSerialize;
-use serialize::{SerializeBuilderExt, SingleChildSerializeElementBuilder};
+use serialize::SingleChildSerializeElementBuilder;
 pub use serialize_attribute::DeriveSerializeAttribute;
-use serialize_attribute::{SerializeAttributeBuilderExt, SimpleSerializeAttributeBuilder};
+use serialize_attribute::SimpleSerializeAttributeBuilder;
 use syn::{parse_quote, Ident};
 
 use crate::{
+    common::FieldIdent,
     options::{
         structs::fields::{
             AttributeDeclaredOpts, AttributeDeferredOpts, AttributeOpts, ChildOpts, ElementOpts,
@@ -17,7 +20,7 @@ use crate::{
         },
         FieldWithOpts, WithExpandedNameExt,
     },
-    DeriveError, DeriveResult, FieldIdent,
+    DeriveError, DeriveResult,
 };
 use quote::{quote, ToTokens};
 
