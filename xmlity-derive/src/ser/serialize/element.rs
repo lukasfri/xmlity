@@ -207,7 +207,7 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
         let element_fields = crate::ser::element_group_fields(fields)?;
 
         let attribute_fields = crate::ser::attribute_group_field_serializer(
-            quote! {#element_access_ident},
+            quote! {&mut #element_access_ident},
             attribute_fields,
         )?;
 
@@ -217,14 +217,14 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
             }
         } else {
             let element_fields = crate::ser::element_group_field_serializer(
-                quote! {#children_access_ident},
+                quote! {&mut #children_access_ident},
                 element_fields,
             )?;
 
             quote! {
                 let mut #children_access_ident = ::xmlity::ser::SerializeElement::serialize_children(#element_access_ident)?;
                 #element_fields
-                ::xmlity::ser::SerializeElementChildren::end(#children_access_ident)
+                ::xmlity::ser::SerializeSeq::end(#children_access_ident)
             }
         };
 

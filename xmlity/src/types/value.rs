@@ -14,8 +14,8 @@ use std::{fmt::Formatter, iter, ops::Deref};
 use crate::{
     de::{self, AttributesAccess, ElementAccess, SeqAccess, Visitor},
     ser::{
-        self, IncludePrefix, SerializeAttributeAccess, SerializeAttributes, SerializeChildren,
-        SerializeElement, SerializeElementChildren, SerializeSeq,
+        self, IncludePrefix, SerializeAttributeAccess, SerializeAttributes, SerializeElement,
+        SerializeSeq,
     },
     AttributeSerializer, Deserialize, Deserializer, ExpandedName, Prefix, Serialize,
     SerializeAttribute, Serializer,
@@ -886,7 +886,7 @@ impl Serialize for XmlElement {
 
         let mut children = element.serialize_children()?;
         for child in &self.children.values {
-            children.serialize_child(child)?;
+            children.serialize_element(child)?;
         }
         children.end()
     }
@@ -992,7 +992,7 @@ impl ser::AttributeSerializer for &mut &mut XmlElement {
 }
 
 impl<'s> ser::SerializeElement for &'s mut XmlElement {
-    type SerializeElementChildren = &'s mut XmlSeq<XmlChild>;
+    type ChildrenSerializeSeq = &'s mut XmlSeq<XmlChild>;
 
     fn include_prefix(&mut self, should_enforce: IncludePrefix) -> Result<Self::Ok, Self::Error> {
         self.enforce_prefix = should_enforce;
@@ -1007,7 +1007,7 @@ impl<'s> ser::SerializeElement for &'s mut XmlElement {
         Ok(())
     }
 
-    fn serialize_children(self) -> Result<Self::SerializeElementChildren, Self::Error> {
+    fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
         Ok(&mut self.children)
     }
 
@@ -1333,23 +1333,6 @@ impl crate::ser::SerializeSeq for &mut XmlSeq<XmlChild> {
         Ok(())
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl crate::ser::SerializeChildren for &mut XmlSeq<XmlChild> {
-    type Ok = ();
-
-    type Error = XmlValueSerializerError;
-
-    fn serialize_child<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error> {
-        v.serialize(self)?;
-        Ok(())
-    }
-}
-
-impl crate::ser::SerializeElementChildren for &mut XmlSeq<XmlChild> {
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }

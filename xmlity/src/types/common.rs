@@ -2,7 +2,7 @@
 
 use crate::{
     de::{self, AttributesAccess, DeserializationGroupBuilder, SeqAccess},
-    ser::{SerializeAttributes, SerializeChildren},
+    ser::{SerializeAttributes, SerializeSeq},
     DeserializationGroup, Deserialize, Deserializer, SerializationGroup, Serialize,
     SerializeAttribute,
 };
@@ -77,7 +77,10 @@ impl<'de, T: DeserializationGroup<'de>> DeserializationGroup<'de> for Option<T> 
 }
 
 impl<T: SerializationGroup> SerializationGroup for Option<T> {
-    fn serialize_attributes<S: SerializeAttributes>(&self, serializer: S) -> Result<(), S::Error> {
+    fn serialize_attributes<S: SerializeAttributes>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error> {
         if let Some(value) = self {
             value.serialize_attributes(serializer)
         } else {
@@ -85,7 +88,7 @@ impl<T: SerializationGroup> SerializationGroup for Option<T> {
         }
     }
 
-    fn serialize_children<S: SerializeChildren>(&self, serializer: S) -> Result<(), S::Error> {
+    fn serialize_children<S: SerializeSeq>(&self, serializer: &mut S) -> Result<(), S::Error> {
         if let Some(value) = self {
             value.serialize_children(serializer)
         } else {
@@ -116,11 +119,14 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Box<T> {
 }
 
 impl<T: SerializationGroup> SerializationGroup for Box<T> {
-    fn serialize_attributes<S: SerializeAttributes>(&self, serializer: S) -> Result<(), S::Error> {
+    fn serialize_attributes<S: SerializeAttributes>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error> {
         (**self).serialize_attributes(serializer)
     }
 
-    fn serialize_children<S: SerializeChildren>(&self, serializer: S) -> Result<(), S::Error> {
+    fn serialize_children<S: SerializeSeq>(&self, serializer: &mut S) -> Result<(), S::Error> {
         (**self).serialize_children(serializer)
     }
 }

@@ -32,7 +32,7 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
         Ok(parse_quote!(
             fn serialize_attributes<#serialize_attributes_type: xmlity::ser::SerializeAttributes>(
                 &self,
-                mut #serialize_attributes_ident: #serialize_attributes_type,
+                #serialize_attributes_ident: &mut #serialize_attributes_type,
             ) -> Result<(), <#serialize_attributes_type as xmlity::ser::SerializeAttributes>::Error> {
                #(#body)*
             }
@@ -41,14 +41,14 @@ impl<T: SerializationGroupBuilder> SerializationGroupBuilderExt for T {
 
     fn serialize_children_fn(&self, ast: &syn::DeriveInput) -> Result<ImplItemFn, DeriveError> {
         let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
-        let children_access_type: syn::Type = parse_quote!(__XmlitySerializeChildren);
+        let children_access_type: syn::Type = parse_quote!(__XmlitySerializeSeq);
         let body = self.serialize_children_fn_body(ast, &children_access_ident)?;
 
         Ok(parse_quote!(
-            fn serialize_children<#children_access_type: xmlity::ser::SerializeChildren>(
+            fn serialize_children<#children_access_type: xmlity::ser::SerializeSeq>(
                 &self,
-                mut #children_access_ident: #children_access_type,
-            ) -> Result<(), <#children_access_type as xmlity::ser::SerializeChildren>::Error> {
+                #children_access_ident: &mut #children_access_type,
+            ) -> Result<(), <#children_access_type as xmlity::ser::SerializeSeq>::Error> {
                 #(#body)*
             }
         ))
@@ -91,7 +91,7 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         element_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let serialize_attributes_implementation = super::attribute_group_field_serializer(
-            quote! {&mut #element_access_ident},
+            quote! { #element_access_ident},
             crate::ser::attribute_group_fields(crate::ser::fields(ast)?)?,
         )?;
 
@@ -107,7 +107,7 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         children_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let serialize_children_implementation = super::element_group_field_serializer(
-            quote! {&mut #children_access_ident},
+            quote! { #children_access_ident},
             crate::ser::element_group_fields(crate::ser::fields(ast)?)?,
         )?;
 

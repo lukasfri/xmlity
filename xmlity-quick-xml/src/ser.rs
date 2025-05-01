@@ -450,7 +450,7 @@ impl<W: Write> ser::SerializeAttributes for SerializeElement<'_, W> {
 }
 
 impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
-    type SerializeElementChildren = SerializeElementChildren<'s, W>;
+    type ChildrenSerializeSeq = ChildrenSerializeSeq<'s, W>;
 
     fn include_prefix(&mut self, should_enforce: IncludePrefix) -> Result<Self::Ok, Self::Error> {
         self.enforce_prefix = should_enforce;
@@ -464,11 +464,11 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
         Ok(())
     }
 
-    fn serialize_children(self) -> Result<Self::SerializeElementChildren, Self::Error> {
+    fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
         self.serializer.push_namespace_scope();
         let (bytes_start, end_name, serializer) = self.finish_start();
 
-        Ok(SerializeElementChildren {
+        Ok(ChildrenSerializeSeq {
             bytes_start: Some(bytes_start),
             serializer,
             end_name,
@@ -490,25 +490,23 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
     }
 }
 
-pub struct SerializeElementChildren<'s, W: Write> {
+pub struct ChildrenSerializeSeq<'s, W: Write> {
     bytes_start: Option<OwnedBytesStart>,
     serializer: &'s mut Serializer<W>,
     end_name: QName<'static>,
 }
 
-impl<W: Write> ser::SerializeChildren for SerializeElementChildren<'_, W> {
+impl<W: Write> ser::SerializeSeq for ChildrenSerializeSeq<'_, W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_child<V: Serialize>(&mut self, value: &V) -> Result<Self::Ok, Self::Error> {
+    fn serialize_element<V: Serialize>(&mut self, value: &V) -> Result<Self::Ok, Self::Error> {
         value.serialize(SerializerWithPossibleBytesStart {
             serializer: self.serializer,
             possible_bytes_start: Some(&mut self.bytes_start),
         })
     }
-}
 
-impl<W: Write> ser::SerializeElementChildren for SerializeElementChildren<'_, W> {
     fn end(self) -> Result<Self::Ok, Self::Error> {
         // If we have a bytes_start, then we never wrote the start event, so we need to write an empty element instead.
         if let Some(bytes_start) = self.bytes_start {

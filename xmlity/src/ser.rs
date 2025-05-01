@@ -41,7 +41,7 @@ impl<T: SerializeAttributes> SerializeAttributes for &mut T {
 #[must_use = "serializers are lazy and must be consumed to perform serialization. Try calling `.end()` on the serializer."]
 pub trait SerializeElement: SerializeAttributes {
     /// The type of the value that is returned when serialization is successful.
-    type SerializeElementChildren: SerializeElementChildren<Ok = Self::Ok, Error = Self::Error>;
+    type ChildrenSerializeSeq: SerializeSeq<Ok = Self::Ok, Error = Self::Error>;
 
     /// Always serialize this element with the given prefix.
     fn include_prefix(&mut self, should_enforce: IncludePrefix) -> Result<Self::Ok, Self::Error>;
@@ -53,36 +53,9 @@ pub trait SerializeElement: SerializeAttributes {
     ) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize the children of this element.
-    fn serialize_children(self) -> Result<Self::SerializeElementChildren, Self::Error>;
+    fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error>;
 
     /// End the serialization of this element with no children.
-    fn end(self) -> Result<Self::Ok, Self::Error>;
-}
-
-/// A trait for serializing children of an element.
-#[must_use = "serializers are lazy and must be consumed to perform serialization. Try calling `.end()` on the serializer."]
-pub trait SerializeChildren: Sized {
-    /// The type of the value that is returned when serialization is successful.
-    type Ok;
-    /// The type of the error that is returned when serialization fails.
-    type Error: Error;
-
-    /// Serialize a child of this element.
-    fn serialize_child<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error>;
-}
-
-impl<S: SerializeChildren> SerializeChildren for &mut S {
-    type Ok = S::Ok;
-    type Error = S::Error;
-    fn serialize_child<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error> {
-        S::serialize_child(self, v)
-    }
-}
-
-/// A trait for ending the serialization of an element with children.
-#[must_use = "serializers are lazy and must be consumed to perform serialization. Try calling `.end()` on the serializer."]
-pub trait SerializeElementChildren: SerializeChildren {
-    /// End the serialization of this element with children.
     fn end(self) -> Result<Self::Ok, Self::Error>;
 }
 
@@ -235,14 +208,17 @@ pub trait SerializeAttribute: Sized {
 /// To see the documentation for the derive macro, see [`xmlity_derive::SerializationGroup`].
 pub trait SerializationGroup: Sized {
     /// Serialize the attributes of the type.
-    fn serialize_attributes<S: SerializeAttributes>(&self, serializer: S) -> Result<(), S::Error> {
+    fn serialize_attributes<S: SerializeAttributes>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error> {
         let _ = serializer;
 
         Ok(())
     }
 
     /// Serialize the children of the type.
-    fn serialize_children<S: SerializeChildren>(&self, serializer: S) -> Result<(), S::Error> {
+    fn serialize_children<S: SerializeSeq>(&self, serializer: &mut S) -> Result<(), S::Error> {
         let _ = serializer;
 
         Ok(())
