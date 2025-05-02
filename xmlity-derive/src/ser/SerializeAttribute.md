@@ -11,7 +11,7 @@ To configure the serialization, use the `#[xattribute(...)]` attribute on the ro
 
 ## Configuration
 
-### #[xattribute(...)]
+### Serialize as an attribute - `#[xattribute(...)]` on the root of a type
 
 <table style="width:100%;">
 <thead>
@@ -49,7 +49,7 @@ namespace
 <code>String</code>
 </td>
 <td>
-Must be a valid namespace string.
+Must be a valid namespace string. Exclusive with `namespace_expr`.
 </td>
 </tr>
 <!--=================================================-->
@@ -61,7 +61,7 @@ namespace_expr
 <code>Expr</code>
 </td>
 <td>
-Element namespace expression. This should be a value of type `xmlity::XmlNamespace`.
+Element namespace expression. This should be a value of type `xmlity::XmlNamespace`. Exclusive with `namespace`.
 </td>
 </tr>
 <!--=================================================-->
@@ -85,7 +85,7 @@ enforce_prefix
 <code>bool</code>
 </td>
 <td>
-Element namespace.
+Enforce the use of the preferred prefix. If this is set to `true`, the preferred prefix will be used even if it there is already a prefix bound to the namespace.
 </td>
 </tr>
 <!--=================================================-->

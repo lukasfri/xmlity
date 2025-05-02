@@ -9,13 +9,15 @@ One of the following can be applied to the root of a type:
 - `#[xattribute(...)]` - Specifies that the type can be deserialized as an attribute.
 - No attribute/default behavior - Specifies that the type is a composite type. Can be deserialized from a sequence of elements.
 
-## Configuration
+## Modes of deserialization
 
-### #[xelement(...)]
+Modes of deserialization depends on the type of data structure you are deserializing.
+
+### Deserialize as an element - `#[xelement(...)]` on the root of a type
 
 The `#[xelement(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from an element.
 
-#### Options
+#### Root Options
 
 <table style="width:100%;">
 <thead>
@@ -196,7 +198,7 @@ Note {
 </tbody>
 </table>
 
-### #[xvalue(...)]
+### Deserialize from a sequence - structs with `#[xvalue(...)]` on the root of a type or no root attribute
 
 The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from a text or CDATA node.
 
@@ -239,7 +241,7 @@ Decides in what form the value should be deserialized from.
 </tbody>
 </table>
 
-### #[xattribute(...)]
+### Deserialize from an attribute - structs with `#[xattribute(...)]` on the root of a type
 
 The `#[xattribute(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from an attribute.
 
@@ -306,6 +308,4 @@ Element namespace.
 </tbody>
 </table>
 
-### No attribute
-
-If no attribute is specified, the type will be deserialized from a sequence. Of note is that enums will try to deserialize each variant in order, and the first one that succeeds will be used. This allows for a form of trial-and-error deserialization which can be useful in many situations, including supporting multiple types of elements or falling back to an [`xmlity::XmlValue`] in case of an unknown element.
+### Deserialize as one of several types - enums with `#[xvalue(...)]` on the root of a type or no root attribute

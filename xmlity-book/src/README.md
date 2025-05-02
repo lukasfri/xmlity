@@ -1,3 +1,7 @@
+<div style="background:rgba(170, 153, 78, 0.45);padding:0.75em;">
+<strong>WARNING:</strong> This book and crate are currently in very active development. This means that the API is subject to change at any time, and that the documentation is not yet complete. The primary up to date documentation is the one on <a href="https://docs.rs/xmlity">docs.rs</a>. This book serves as a complement to that documentation, but may not be up to date.
+</div>
+
 # Introduction to XMLity
 
 XMLity is a (de)serialization library for XML, inspired by [`serde`][serde] and improves upon XML (de)serialization libraries such as [`yaserde`][yaserde] and [`quick-xml`][quick-xml] by providing a more flexible API that is more powerful, utilising primairly a trial and error approach to parsing XML.

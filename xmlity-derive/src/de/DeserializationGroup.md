@@ -11,9 +11,9 @@ To configure the deserialization, use the `#[xgroup(...)]` attribute on the root
 
 ## Configuration
 
-### #[xgroup(...)]
+### Serialize a part of an element - `#[xgroup(...)]` on the root of a type
 
-#### Options
+#### Root Options
 
 <table style="width:100%;">
 <thead>
@@ -33,7 +33,10 @@ attribute_order
 <code>"strict"</code>, <code>"loose"</code>, <code>"none"</code>
 </td>
 <td>
-Element namespace.
+The accepted order of attributes.
+- <code>"strict"</code> - The attributes must be in the same order as the fields with no fields between them.
+- <code>"loose"</code> - The attributes must be in the same order as the fields, but there can be fields between them.
+- <code>"none"</code> - The attributes can be in any order.
 </td>
 </tr>
 <!--=================================================-->
@@ -45,7 +48,10 @@ children_order
 <code>"strict"</code>, <code>"loose"</code>, <code>"none"</code>
 </td>
 <td>
-Element namespace.
+The accepted order of children.
+- <code>"strict"</code> - The children must be in the same order as the fields with no fields between them.
+- <code>"loose"</code> - The children must be in the same order as the fields, but there can be fields between them.
+- <code>"none"</code> - The children can be in any order.
 </td>
 </tr>
 <!--=================================================-->

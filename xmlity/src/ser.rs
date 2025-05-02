@@ -38,7 +38,7 @@ impl<T: SerializeAttributes> SerializeAttributes for &mut T {
 }
 
 /// A trait for serializing elements.
-#[must_use = "serializers are lazy and must be consumed to perform serialization. Try calling `.end()` on the serializer."]
+#[must_use = "Serializers could be lazy and must be consumed to guarantee serialization. Try calling `.serialize_children()` or `.end()` on the serializer."]
 pub trait SerializeElement: SerializeAttributes {
     /// The type of the value that is returned when serialization is successful.
     type ChildrenSerializeSeq: SerializeSeq<Ok = Self::Ok, Error = Self::Error>;
@@ -60,7 +60,7 @@ pub trait SerializeElement: SerializeAttributes {
 }
 
 /// A trait for serializing a sequence of elements.
-#[must_use = "serializers are lazy and must be consumed to perform serialization. Try calling `.end()` on the serializer."]
+#[must_use = "Serializers could be lazy and must be consumed to guarantee serialization. Try calling `.end()` on the serializer."]
 pub trait SerializeSeq {
     /// The type of the value that is returned when serialization is successful.
     type Ok;
