@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.1...xmlity-v0.0.2) - 2025-05-02
+
+### Added
+
+- *(core)* [**breaking**] Removed `SerializeChildren` in favour of `SerializeSeq`. ([#47](https://github.com/lukasfri/xmlity/pull/47))
+
+### Fixed
+
+- *(core)* Changed XmlRoot to serialize correctly as sequence. ([#28](https://github.com/lukasfri/xmlity/pull/28))
+- *(core)* [**breaking**] Fixes incorrect function signatures for "dangerous" methods. ([#27](https://github.com/lukasfri/xmlity/pull/27))
+
+### Other
+
+- Improved docs bringing documentation up to date for release 0.0.2 ([#48](https://github.com/lukasfri/xmlity/pull/48))
+- Removed accidental serde mention from license notice ([#46](https://github.com/lukasfri/xmlity/pull/46))
+
 ## [0.0.1](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.0...xmlity-v0.0.1) - 2025-04-16
 
 ### Added
