@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.1...xmlity-derive-v0.0.2) - 2025-05-02
+
+### Added
+
+- *(core)* [**breaking**] Removed `SerializeChildren` in favour of `SerializeSeq`. ([#47](https://github.com/lukasfri/xmlity/pull/47))
+- *(derive)* [**breaking**] Local element/attribute declarations ([#41](https://github.com/lukasfri/xmlity/pull/41))
+- *(derive)* Support both values and trial-and-error in enums ([#35](https://github.com/lukasfri/xmlity/pull/35))
+
+### Fixed
+
+- *(derive)* Make more type parameters odd to remove type conflicts ([#43](https://github.com/lukasfri/xmlity/pull/43))
+- *(derive)* Use a more odd deserializer type to not interfere with structs ([#42](https://github.com/lukasfri/xmlity/pull/42))
+- *(derive)* [**breaking**] Fixed xvalue in SerializationGroup/DeserializationGroup. ([#25](https://github.com/lukasfri/xmlity/pull/25))
+
+### Other
+
+- Improved docs bringing documentation up to date for release 0.0.2 ([#48](https://github.com/lukasfri/xmlity/pull/48))
+- *(derive)* Refactored derive to have docs from .md files and moved code. ([#49](https://github.com/lukasfri/xmlity/pull/49))
+
 ## [0.0.1](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.0...xmlity-derive-v0.0.1) - 2025-04-16
 
 ### Added

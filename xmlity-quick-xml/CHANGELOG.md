@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.1...xmlity-quick-xml-v0.0.2) - 2025-05-02
+
+### Added
+
+- *(core)* [**breaking**] Removed `SerializeChildren` in favour of `SerializeSeq`. ([#47](https://github.com/lukasfri/xmlity/pull/47))
+- *(derive)* [**breaking**] Local element/attribute declarations ([#41](https://github.com/lukasfri/xmlity/pull/41))
+- *(derive)* Support both values and trial-and-error in enums ([#35](https://github.com/lukasfri/xmlity/pull/35))
+- *(quick-xml)* Added `to_string_pretty` that supports indentation. ([#23](https://github.com/lukasfri/xmlity/pull/23))
+
+### Fixed
+
+- *(quick-xml)* If zero children are serialized, serialize as empty. ([#30](https://github.com/lukasfri/xmlity/pull/30))
+- *(quick-xml)* Don't escape XML incorrectly. ([#36](https://github.com/lukasfri/xmlity/pull/36))
+- *(derive)* [**breaking**] Fixed xvalue in SerializationGroup/DeserializationGroup. ([#25](https://github.com/lukasfri/xmlity/pull/25))
+- *(quick-xml)* Adds top-level scope including xml prefix. ([#26](https://github.com/lukasfri/xmlity/pull/26))
+
+### Other
+
+- *(tests)* Restructure tests to be simpler and organized by type ([#40](https://github.com/lukasfri/xmlity/pull/40))
+
 ## [0.0.1](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.0...xmlity-quick-xml-v0.0.1) - 2025-04-16
 
 ### Added
