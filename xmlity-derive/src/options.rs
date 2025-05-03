@@ -146,10 +146,13 @@ impl<T: WithExpandedName> WithExpandedNameExt for T {
     }
 }
 
-pub mod structs {
+/// Options for both structs and enum variants
+pub mod records {
     use super::*;
 
     pub mod roots {
+        use syn::Attribute;
+
         use crate::common::Prefix;
 
         use super::*;
@@ -187,12 +190,8 @@ pub mod structs {
         }
 
         impl RootElementOpts {
-            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-                let Some(attr) = ast
-                    .attrs
-                    .iter()
-                    .find(|attr| attr.path().is_ident("xelement"))
-                else {
+            pub fn parse(attrs: &[Attribute]) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = attrs.iter().find(|attr| attr.path().is_ident("xelement")) else {
                     return Ok(None);
                 };
 
@@ -241,11 +240,8 @@ pub mod structs {
         }
 
         impl RootAttributeOpts {
-            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-                let Some(attr) = ast
-                    .attrs
-                    .iter()
-                    .find(|attr| attr.path().is_ident("xattribute"))
+            pub fn parse(attrs: &[Attribute]) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = attrs.iter().find(|attr| attr.path().is_ident("xattribute"))
                 else {
                     return Ok(None);
                 };
@@ -271,12 +267,13 @@ pub mod structs {
 
         #[derive(FromAttributes)]
         #[darling(attributes(xvalue))]
-        pub struct RootValueOpts {}
+        pub struct RootValueOpts {
+            pub value: Option<String>,
+        }
 
         impl RootValueOpts {
-            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-                let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xvalue"))
-                else {
+            pub fn parse(attrs: &[Attribute]) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = attrs.iter().find(|attr| attr.path().is_ident("xvalue")) else {
                     return Ok(None);
                 };
 
@@ -297,9 +294,8 @@ pub mod structs {
         }
 
         impl RootGroupOpts {
-            pub fn parse(ast: &DeriveInput) -> Result<Option<Self>, DeriveError> {
-                let Some(attr) = ast.attrs.iter().find(|attr| attr.path().is_ident("xgroup"))
-                else {
+            pub fn parse(attrs: &[Attribute]) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = attrs.iter().find(|attr| attr.path().is_ident("xgroup")) else {
                     return Ok(None);
                 };
 
@@ -315,9 +311,9 @@ pub mod structs {
         }
 
         impl SerializeRootOpts {
-            pub fn parse(ast: &syn::DeriveInput) -> Result<Self, DeriveError> {
-                let element_opts = RootElementOpts::parse(ast)?;
-                let value_opts = RootValueOpts::parse(ast)?;
+            pub fn parse(attrs: &[Attribute]) -> Result<Self, DeriveError> {
+                let element_opts = RootElementOpts::parse(attrs)?;
+                let value_opts = RootValueOpts::parse(attrs)?;
 
                 match (element_opts, value_opts) {
                     (Some(element_opts), None) => Ok(Self::Element(element_opts)),
@@ -336,10 +332,10 @@ pub mod structs {
         }
 
         impl DeserializeRootOpts {
-            pub fn parse(ast: &syn::DeriveInput) -> Result<Self, DeriveError> {
-                let element_opts = RootElementOpts::parse(ast)?;
-                let attribute_opts = RootAttributeOpts::parse(ast)?;
-                let value_opts = RootValueOpts::parse(ast)?;
+            pub fn parse(attrs: &[Attribute]) -> Result<Self, DeriveError> {
+                let element_opts = RootElementOpts::parse(attrs)?;
+                let attribute_opts = RootAttributeOpts::parse(attrs)?;
+                let value_opts = RootValueOpts::parse(attrs)?;
 
                 match (element_opts, attribute_opts, value_opts) {
                     (Some(element_opts), None, None) => Ok(Self::Element(element_opts)),
@@ -686,69 +682,6 @@ pub mod enums {
                     Some(value_opts) => Ok(RootOpts::Value(value_opts)),
                     None => Ok(RootOpts::None),
                 }
-            }
-        }
-    }
-
-    pub mod variants {
-        use super::*;
-
-        #[derive(FromAttributes, Clone)]
-        #[darling(attributes(xelement))]
-        pub struct ElementOpts {
-            pub name: String,
-            pub namespace: Option<String>,
-        }
-
-        #[derive(FromAttributes, Clone, Default)]
-        #[darling(attributes(xvalue))]
-        pub struct ValueOpts {
-            pub value: Option<String>,
-        }
-
-        #[derive(Clone)]
-        pub enum VariantOpts {
-            Value(ValueOpts),
-            Element(ElementOpts),
-        }
-
-        impl VariantOpts {
-            pub fn from_variant(variant: &syn::Variant) -> Result<Option<Self>, DeriveError> {
-                let xvalue_attribute = variant
-                    .attrs
-                    .iter()
-                    .find(|attr| attr.path().is_ident("xvalue"))
-                    .cloned();
-                let xelement_attribute = variant
-                    .attrs
-                    .iter()
-                    .find(|attr| attr.path().is_ident("xelement"))
-                    .cloned();
-
-                match (xvalue_attribute, xelement_attribute) {
-                    (None, None) => Ok(None),
-                    (Some(_), Some(_)) => Err(DeriveError::custom(
-                        "Cannot have both `xvalue` and `xelement` attributes on the same field.",
-                    )),
-                    (Some(xvalue_attribute), None) => Self::from_xvalue_attribute(xvalue_attribute),
-                    (None, Some(xelement_attribute)) => {
-                        Self::from_xelement_attribute(xelement_attribute)
-                    }
-                }
-            }
-
-            pub fn from_xvalue_attribute(
-                xvalue_attribute: syn::Attribute,
-            ) -> Result<Option<Self>, DeriveError> {
-                let opts = ValueOpts::from_attributes(&[xvalue_attribute])?;
-                Ok(Some(VariantOpts::Value(opts)))
-            }
-
-            pub fn from_xelement_attribute(
-                xelement_attribute: syn::Attribute,
-            ) -> Result<Option<Self>, DeriveError> {
-                let opts = ElementOpts::from_attributes(&[xelement_attribute])?;
-                Ok(Some(VariantOpts::Element(opts)))
             }
         }
     }

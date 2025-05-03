@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DataStruct, DeriveInput, Generics, Ident, Stmt};
 
-use crate::{options::structs::roots::RootGroupOpts, DeriveError, DeriveMacro};
+use crate::{options::records::roots::RootGroupOpts, DeriveError, DeriveMacro};
 
 use super::builders::{SerializationGroupBuilder, SerializationGroupBuilderExt};
 
@@ -65,7 +65,7 @@ enum SerializationGroupOption {
 
 impl SerializationGroupOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let group_opts = RootGroupOpts::parse(ast)?.unwrap_or_default();
+        let group_opts = RootGroupOpts::parse(&ast.attrs)?.unwrap_or_default();
 
         Ok(SerializationGroupOption::Group(group_opts))
     }

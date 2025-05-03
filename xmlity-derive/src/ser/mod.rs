@@ -14,7 +14,7 @@ use syn::{parse_quote, Ident};
 use crate::{
     common::FieldIdent,
     options::{
-        structs::fields::{
+        records::fields::{
             AttributeDeclaredOpts, AttributeDeferredOpts, AttributeOpts, ChildOpts, ElementOpts,
             FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
         },

@@ -5,6 +5,11 @@ use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{parse_quote, Expr, Ident};
 
+use crate::{
+    derive::{DeriveError, DeriveResult},
+    options::{records::fields::FieldOpts, FieldWithOpts},
+};
+
 #[derive(Clone)]
 pub enum FieldIdent {
     Named(syn::Ident),
@@ -192,4 +197,106 @@ pub enum StructTypeWithFields<N, U> {
     Named(N),
     Unnamed(U),
     Unit,
+}
+
+pub struct RecordInput<'a, T: Fn(syn::Expr) -> syn::Expr> {
+    pub impl_for_ident: Cow<'a, syn::Ident>,
+    pub constructor_path: Cow<'a, syn::Path>,
+    pub result_type: Cow<'a, syn::Type>,
+    pub generics: Cow<'a, syn::Generics>,
+    pub wrapper_function: T,
+    pub fields: StructTypeWithFields<
+        Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+        Vec<FieldWithOpts<syn::Index, FieldOpts>>,
+    >,
+    // True if the record is an enum variant with more than one field
+    pub fallable_deconstruction: bool,
+}
+
+pub fn fields_with_opts(
+    fields: &syn::Fields,
+) -> DeriveResult<
+    StructTypeWithFields<
+        Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+        Vec<FieldWithOpts<syn::Index, FieldOpts>>,
+    >,
+> {
+    match fields {
+        syn::Fields::Named(fields) => fields
+            .named
+            .iter()
+            .map(|f| {
+                let field_ident = f.ident.clone().expect("Named struct");
+
+                DeriveResult::Ok(FieldWithOpts {
+                    field_ident,
+                    options: FieldOpts::from_field(f)?,
+                    field_type: f.ty.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, DeriveError>>()
+            .map(StructTypeWithFields::Named),
+        syn::Fields::Unnamed(fields) => fields
+            .unnamed
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                DeriveResult::Ok(FieldWithOpts {
+                    field_ident: syn::Index::from(i),
+                    options: FieldOpts::from_field(f)?,
+                    field_type: f.ty.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, DeriveError>>()
+            .map(StructTypeWithFields::Unnamed),
+        _ => Ok(StructTypeWithFields::Unit),
+    }
+}
+
+pub fn parse_struct_derive_input(
+    input: &syn::DeriveInput,
+) -> Result<RecordInput<'_, impl Fn(syn::Expr) -> syn::Expr + '_>, DeriveError> {
+    let ident = &input.ident;
+    let generics = &input.generics;
+    Ok(RecordInput {
+        impl_for_ident: Cow::Borrowed(ident),
+        constructor_path: Cow::Owned(parse_quote!(#ident)),
+        result_type: Cow::Owned(parse_quote! { #ident }),
+        generics: Cow::Borrowed(generics),
+        wrapper_function: std::convert::identity,
+        fields: match &input.data {
+            syn::Data::Struct(data_struct) => fields_with_opts(&data_struct.fields)?,
+            _ => panic!("Wrong options. Only structs can be used for xelement."),
+        },
+        fallable_deconstruction: false,
+    })
+}
+
+pub fn parse_enum_variant_derive_input<'a>(
+    enum_ident: &'a syn::Ident,
+    enum_generics: &'a syn::Generics,
+    variant: &'a syn::Variant,
+) -> Result<RecordInput<'a, impl Fn(syn::Expr) -> syn::Expr + 'a>, DeriveError> {
+    let variant_ident = &variant.ident;
+    let variant_wrapper_ident = Ident::new(
+        &format!("__XmlityVariant__{}", variant_ident),
+        variant_ident.span(),
+    );
+    let variant_wrapper_ident2 = variant_wrapper_ident.clone();
+    let wrapper_function = move |data| {
+        parse_quote!(
+            #variant_wrapper_ident {
+                __value: #data,
+            }
+        )
+    };
+    Ok(RecordInput {
+        impl_for_ident: Cow::Owned(variant_wrapper_ident2),
+        constructor_path: Cow::Owned(parse_quote!(#enum_ident::#variant_ident)),
+        result_type: Cow::Owned(parse_quote! { #enum_ident }),
+        generics: Cow::Borrowed(enum_generics),
+        wrapper_function,
+        fields: fields_with_opts(&variant.fields)?,
+        fallable_deconstruction: variant.fields.len() > 1,
+    })
 }

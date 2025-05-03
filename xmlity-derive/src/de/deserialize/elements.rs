@@ -4,19 +4,20 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use quote::quote;
-use syn::{
-    parse_quote, Data, DataStruct, DeriveInput, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type,
-};
+use syn::{parse_quote, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
     common::{non_bound_generics, ExpandedName, FieldIdent, StructType, StructTypeWithFields},
-    de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-    de::common::{
-        all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
-        constructor_expr, SeqVisitLoop,
+    de::{
+        builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
+        common::{
+            all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
+            constructor_expr, SeqVisitLoop,
+        },
     },
     options::{
-        structs::{
+        records::{
+            self,
             fields::{
                 AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
                 GroupOpts,
@@ -28,104 +29,31 @@ use crate::{
     DeriveError, DeriveResult,
 };
 
-pub struct RootStructElementVisitorBuilder<'a> {
-    ast: &'a syn::DeriveInput,
-    opts: &'a RootElementOpts,
+use super::RecordInput;
+
+pub struct RecordDeserializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
+    pub input: &'a RecordInput<'a, T>,
+    pub opts: &'a records::roots::RootElementOpts,
 }
 
-impl<'a> RootStructElementVisitorBuilder<'a> {
-    pub fn new(opts: &'a RootElementOpts, ast: &'a syn::DeriveInput) -> Self {
-        Self { ast, opts }
+impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
+    pub fn new(input: &'a RecordInput<'a, T>, opts: &'a RootElementOpts) -> Self {
+        Self { input, opts }
     }
 
-    pub fn to_builder(&self) -> Result<StructDeserializeElementBuilder, DeriveError> {
-        let DeriveInput { ident, .. } = &self.ast;
-        let RootElementOpts {
-            deserialize_any_name,
-            allow_unknown_attributes,
-            allow_unknown_children,
-            children_order,
-            attribute_order,
-            ..
-        } = self.opts;
+    pub fn required_expanded_name(&self) -> Option<ExpandedName<'_>> {
+        let expanded_name = self
+            .opts
+            .expanded_name(&self.input.impl_for_ident.to_string())
+            .into_owned();
 
-        let ident_name = ident.to_string();
-        let expanded_name = self.opts.expanded_name(&ident_name).into_owned();
-        let required_expanded_name = if *deserialize_any_name {
+        if self.opts.deserialize_any_name {
             None
         } else {
             Some(expanded_name)
-        };
-
-        let fields = match &self.ast.data {
-            Data::Struct(DataStruct { fields, .. }) => fields,
-            _ => unreachable!(),
-        };
-
-        let struct_type: StructTypeWithFields<
-            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-        > = match fields {
-            syn::Fields::Named(fields) => StructTypeWithFields::Named(
-                fields
-                    .named
-                    .iter()
-                    .map(|f| {
-                        let field_ident = f.ident.clone().expect("Named struct");
-
-                        DeriveResult::Ok(FieldWithOpts {
-                            field_ident,
-                            options: FieldOpts::from_field(f)?,
-                            field_type: f.ty.clone(),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, DeriveError>>()?,
-            ),
-            syn::Fields::Unnamed(fields) => StructTypeWithFields::Unnamed(
-                fields
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| {
-                        DeriveResult::Ok(FieldWithOpts {
-                            field_ident: syn::Index::from(i),
-                            options: FieldOpts::from_field(f)?,
-                            field_type: f.ty.clone(),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, DeriveError>>()?,
-            ),
-            _ => StructTypeWithFields::Unit,
-        };
-
-        Ok(StructDeserializeElementBuilder {
-            ident,
-            generics: &self.ast.generics,
-            required_expanded_name,
-            struct_type,
-            allow_unknown_attributes: *allow_unknown_attributes,
-            allow_unknown_children: *allow_unknown_children,
-            children_order: *children_order,
-            attribute_order: *attribute_order,
-        })
+        }
     }
-}
 
-pub struct StructDeserializeElementBuilder<'a> {
-    pub ident: &'a syn::Ident,
-    pub generics: &'a syn::Generics,
-    pub required_expanded_name: Option<ExpandedName<'static>>,
-    pub struct_type: StructTypeWithFields<
-        Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-        Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-    >,
-    pub allow_unknown_attributes: bool,
-    pub allow_unknown_children: bool,
-    pub children_order: ElementOrder,
-    pub attribute_order: ElementOrder,
-}
-
-impl StructDeserializeElementBuilder<'_> {
     pub fn field_decl(
         element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
         attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
@@ -175,14 +103,14 @@ impl StructDeserializeElementBuilder<'_> {
     }
 
     pub fn constructor_expr(
-        ident: &Ident,
+        ident: &syn::Path,
         visitor_lifetime: &syn::Lifetime,
         access_type: &syn::Type,
         element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
         attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
         group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
         constructor_type: StructType,
-    ) -> proc_macro2::TokenStream {
+    ) -> Expr {
         let local_value_expressions_constructors = attribute_fields.into_iter()
             .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
                 a.field_ident,
@@ -332,33 +260,45 @@ impl StructDeserializeElementBuilder<'_> {
             #(#access_loop)*
         })
     }
+}
 
-    #[allow(clippy::too_many_arguments)]
-    fn struct_fields_visitor_end(
-        struct_ident: &Ident,
+impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementBuilder<'_, T> {
+    fn visit_element_fn_body(
+        &self,
+        visitor_lifetime: &Lifetime,
         element_access_ident: &Ident,
         access_type: &Type,
-        visitor_lifetime: &syn::Lifetime,
-        struct_type: StructTypeWithFields<
-            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-        >,
-        children_order: ElementOrder,
-        allow_unknown_children: bool,
-        attributes_order: ElementOrder,
-        allow_unknown_attributes: bool,
-    ) -> DeriveResult<Vec<Stmt>> {
-        let (constructor_type, fields) = match struct_type {
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let Self { input, opts, .. } = self;
+        let RecordInput {
+            impl_for_ident: ident,
+            ..
+        } = input;
+        let RootElementOpts {
+            allow_unknown_attributes,
+            allow_unknown_children,
+            children_order,
+            attribute_order,
+            ..
+        } = opts;
+
+        let xml_name_identification = self.required_expanded_name().as_ref().map::<Stmt, _>(|qname| {
+          parse_quote! {
+              ::xmlity::de::ElementAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
+          }
+      });
+
+        let (constructor_type, fields) = match &input.fields {
             StructTypeWithFields::Named(n) => (
                 StructType::Named,
-                n.into_iter()
-                    .map(|a| a.map_ident(FieldIdent::Named))
+                n.iter()
+                    .map(|a| a.clone().map_ident(FieldIdent::Named))
                     .collect(),
             ),
             StructTypeWithFields::Unnamed(n) => (
                 StructType::Unnamed,
-                n.into_iter()
-                    .map(|a| a.map_ident(FieldIdent::Indexed))
+                n.iter()
+                    .map(|a| a.clone().map_ident(FieldIdent::Indexed))
                     .collect(),
             ),
             StructTypeWithFields::Unit => (StructType::Unit, Vec::new()),
@@ -409,10 +349,10 @@ impl StructDeserializeElementBuilder<'_> {
         let attribute_loop = if attribute_group_fields.clone().next().is_some() {
             Self::attribute_access(
                 element_access_ident,
-                struct_ident.span(),
+                ident.span(),
                 attribute_group_fields,
-                allow_unknown_attributes,
-                attributes_order,
+                *allow_unknown_attributes,
+                *attribute_order,
             )?
         } else {
             Vec::new()
@@ -422,24 +362,28 @@ impl StructDeserializeElementBuilder<'_> {
             Self::element_access(
                 element_access_ident,
                 element_group_fields,
-                allow_unknown_children,
-                children_order,
+                *allow_unknown_children,
+                *children_order,
             )?
         } else {
             Vec::new()
         };
 
-        let constructor = Self::constructor_expr(
-            struct_ident,
+        let struct_path: syn::Path = parse_quote!(#ident);
+
+        let constructor = (self.input.wrapper_function)(Self::constructor_expr(
+            &struct_path,
             visitor_lifetime,
             access_type,
             element_fields.clone(),
             attribute_fields.clone(),
             group_fields.clone(),
             constructor_type,
-        );
+        ));
 
-        Ok(parse_quote! {
+        Ok(Some(parse_quote! {
+            #xml_name_identification
+
             #(#getter_declarations)*
 
             #(#attribute_loop)*
@@ -447,77 +391,18 @@ impl StructDeserializeElementBuilder<'_> {
             #(#children_loop)*
 
             ::core::result::Result::Ok(#constructor)
-        })
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn visit_element_data_fn_impl(
-        ident: &Ident,
-        element_access_ident: &Ident,
-        access_type: &Type,
-        visitor_lifetime: &syn::Lifetime,
-        struct_type: StructTypeWithFields<
-            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-        >,
-        children_order: ElementOrder,
-        allow_unknown_children: bool,
-        attribute_order: ElementOrder,
-        allow_unknown_attributes: bool,
-    ) -> DeriveResult<Vec<Stmt>> {
-        Self::struct_fields_visitor_end(
-            ident,
-            element_access_ident,
-            access_type,
-            visitor_lifetime,
-            struct_type,
-            children_order,
-            allow_unknown_children,
-            attribute_order,
-            allow_unknown_attributes,
-        )
-    }
-}
-
-impl VisitorBuilder for StructDeserializeElementBuilder<'_> {
-    fn visit_element_fn_body(
-        &self,
-        visitor_lifetime: &Lifetime,
-        element_access_ident: &Ident,
-        access_type: &Type,
-    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let xml_name_identification = self.required_expanded_name.as_ref().map::<Stmt, _>(|qname| {
-          parse_quote! {
-              ::xmlity::de::ElementAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
-          }
-      });
-
-        let deserialization_impl = Self::visit_element_data_fn_impl(
-            self.ident,
-            element_access_ident,
-            access_type,
-            visitor_lifetime,
-            self.struct_type.clone(),
-            self.children_order,
-            self.allow_unknown_children,
-            self.attribute_order,
-            self.allow_unknown_attributes,
-        )?;
-
-        Ok(Some(parse_quote! {
-            #xml_name_identification
-
-            #(#deserialization_impl)*
         }))
     }
 
     fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {
-        let Self {
-            ident, generics, ..
-        } = &self;
+        let RecordInput {
+            impl_for_ident: ident,
+            generics,
+            ..
+        } = &self.input;
         let non_bound_generics = non_bound_generics(generics);
 
-        let mut deserialize_generics = (*generics).to_owned();
+        let mut deserialize_generics = generics.as_ref().clone();
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
         let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());
@@ -536,22 +421,22 @@ impl VisitorBuilder for StructDeserializeElementBuilder<'_> {
     }
 
     fn visitor_ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(self.ident)
+        Cow::Borrowed(self.input.impl_for_ident.as_ref())
     }
 
     fn visitor_generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(self.generics)
+        Cow::Borrowed(self.input.generics.as_ref())
     }
 }
 
-impl DeserializeBuilder for StructDeserializeElementBuilder<'_> {
+impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeElementBuilder<'_, T> {
     fn deserialize_fn_body(
         &self,
 
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let formatter_expecting = format!("struct {}", self.ident);
+        let formatter_expecting = format!("struct {}", self.input.impl_for_ident);
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
 
@@ -571,10 +456,10 @@ impl DeserializeBuilder for StructDeserializeElementBuilder<'_> {
     }
 
     fn ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(self.ident)
+        Cow::Borrowed(self.input.impl_for_ident.as_ref())
     }
 
     fn generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(self.generics)
+        Cow::Borrowed(self.input.generics.as_ref())
     }
 }

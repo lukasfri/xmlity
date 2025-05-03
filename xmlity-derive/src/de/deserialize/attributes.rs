@@ -1,28 +1,39 @@
 use std::{borrow::Cow, ops::Deref};
 
-use proc_macro2::Span;
-use syn::{parse_quote, Data, DeriveInput, Ident, Lifetime, LifetimeParam, Stmt, Type};
+use proc_macro2::{Span, TokenStream};
+use syn::{parse_quote, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
     common::{non_bound_generics, ExpandedName, StructTypeWithFields},
     de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-    options::{structs::roots::RootAttributeOpts, FieldWithOpts, WithExpandedNameExt},
+    options::{
+        records::{
+            fields::{FieldOpts, ValueOpts},
+            roots::RootAttributeOpts,
+        },
+        FieldWithOpts, WithExpandedNameExt,
+    },
     DeriveError,
 };
 
-pub struct StructAttributeVisitorBuilder<'a> {
+use super::RecordInput;
+
+pub struct RecordDeserializeAttributeBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     opts: &'a RootAttributeOpts,
-    ast: &'a syn::DeriveInput,
+    ast: &'a RecordInput<'a, T>,
 }
 
-impl<'a> StructAttributeVisitorBuilder<'a> {
-    pub fn new(opts: &'a RootAttributeOpts, ast: &'a syn::DeriveInput) -> Self {
+impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeAttributeBuilder<'a, T> {
+    pub fn new(ast: &'a RecordInput<'a, T>, opts: &'a RootAttributeOpts) -> Self {
         Self { opts, ast }
     }
 
     pub fn to_builder(&self) -> Result<StructDeserializeAttributeBuilder, DeriveError> {
-        let DeriveInput {
-            ident, generics, ..
+        let RecordInput {
+            impl_for_ident: ident,
+            generics,
+            fields,
+            ..
         } = &self.ast;
         let RootAttributeOpts {
             deserialize_any_name,
@@ -38,43 +49,29 @@ impl<'a> StructAttributeVisitorBuilder<'a> {
                     .into_owned(),
             )
         };
-        let Data::Struct(data_struct) = &self.ast.data else {
-            unreachable!()
-        };
 
-        let struct_type = match &data_struct.fields {
-            syn::Fields::Named(fields_named) if fields_named.named.len() != 1 => {
+        let struct_type = match &fields {
+            StructTypeWithFields::Named(fields_named) if fields_named.len() != 1 => {
                 return Err(DeriveError::custom(format!(
                     "Expected a single field for attribute deserialization, found {}",
-                    fields_named.named.len()
+                    fields_named.len()
                 )))
             }
-            syn::Fields::Named(fields_named) => {
-                let field = &fields_named.named[0];
-                let field_ident = field.ident.as_ref().unwrap().clone();
-                let field_type = field.ty.clone();
-                StructTypeWithFields::Named(FieldWithOpts {
-                    field_ident,
-                    field_type,
-                    options: (),
-                })
+            StructTypeWithFields::Named(fields_named) => {
+                let field = &fields_named[0];
+                StructTypeWithFields::Named(field.clone())
             }
-            syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() != 1 => {
+            StructTypeWithFields::Unnamed(fields_unnamed) if fields_unnamed.len() != 1 => {
                 return Err(DeriveError::custom(format!(
                     "Expected a single field for attribute deserialization, found {}",
-                    fields_unnamed.unnamed.len()
+                    fields_unnamed.len()
                 )))
             }
-            syn::Fields::Unnamed(fields_unnamed) => {
-                let field = &fields_unnamed.unnamed[0];
-                let field_type = field.ty.clone();
-                StructTypeWithFields::Unnamed(FieldWithOpts {
-                    field_ident: syn::Index::from(0),
-                    field_type,
-                    options: (),
-                })
+            StructTypeWithFields::Unnamed(fields_unnamed) => {
+                let field = &fields_unnamed[0];
+                StructTypeWithFields::Unnamed(field.clone())
             }
-            syn::Fields::Unit => StructTypeWithFields::Unit,
+            StructTypeWithFields::Unit => StructTypeWithFields::Unit,
         };
 
         Ok(StructDeserializeAttributeBuilder {
@@ -120,7 +117,9 @@ impl SimpleDeserializeAttributeBuilder<'_> {
             struct_type: StructTypeWithFields::Named(FieldWithOpts {
                 field_ident: self.value_access_ident(),
                 field_type: self.item_type.clone(),
-                options: (),
+                options: FieldOpts::Value(crate::options::records::fields::ChildOpts::Value(
+                    ValueOpts::default(),
+                )),
             }),
         }
     }
@@ -130,8 +129,10 @@ pub struct StructDeserializeAttributeBuilder<'a> {
     pub ident: &'a syn::Ident,
     pub generics: &'a syn::Generics,
     pub required_expanded_name: Option<ExpandedName<'static>>,
-    pub struct_type:
-        StructTypeWithFields<FieldWithOpts<syn::Ident, ()>, FieldWithOpts<syn::Index, ()>>,
+    pub struct_type: StructTypeWithFields<
+        FieldWithOpts<syn::Ident, FieldOpts>,
+        FieldWithOpts<syn::Index, FieldOpts>,
+    >,
 }
 
 impl VisitorBuilder for StructDeserializeAttributeBuilder<'_> {

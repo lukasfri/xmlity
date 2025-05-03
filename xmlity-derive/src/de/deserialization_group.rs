@@ -2,12 +2,14 @@ use std::{borrow::Cow, iter};
 
 use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, DeriveInput, Ident, Index, ItemStruct, Lifetime, LifetimeParam, Stmt};
+use syn::{
+    parse_quote, DeriveInput, Expr, Ident, Index, ItemStruct, Lifetime, LifetimeParam, Stmt,
+};
 
 use crate::{
     common::{FieldIdent, StructType},
     options::{
-        structs::{
+        records::{
             fields::{AttributeOpts, ChildOpts, GroupOpts},
             roots::RootGroupOpts,
         },
@@ -133,7 +135,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
 
     fn finish_fn_body(&self) -> Result<Vec<Stmt>, DeriveError> {
         let finish_constructor = finish_constructor_expr(
-            quote! {Self::Value},
+            &parse_quote! {Self::Value},
             element_fields(self.ast)?,
             attribute_fields(self.ast)?,
             group_fields(self.ast)?,
@@ -267,8 +269,10 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                 },
             )));
 
+        let builder_path: syn::Path = parse_quote!(#builder_ident);
+
         let expr = constructor_expr(
-            builder_ident,
+            &builder_path,
             value_expressions_constructors,
             &Self::constructor_type(self.ast),
         );
@@ -285,13 +289,13 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
     }
 }
 
-fn finish_constructor_expr<T: quote::ToTokens>(
-    ident: T,
+fn finish_constructor_expr(
+    ident: &syn::Path,
     element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
     attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
     group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
     constructor_type: &StructType,
-) -> proc_macro2::TokenStream {
+) -> Expr {
     let local_value_expressions_constructors = attribute_fields.into_iter()
         .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
             a.field_ident,
@@ -336,7 +340,7 @@ enum DeserializationGroupOption {
 
 impl DeserializationGroupOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let group_opts = RootGroupOpts::parse(ast)?.unwrap_or_default();
+        let group_opts = RootGroupOpts::parse(&ast.attrs)?.unwrap_or_default();
 
         Ok(DeserializationGroupOption::Group(group_opts))
     }
