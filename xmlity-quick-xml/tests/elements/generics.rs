@@ -27,14 +27,14 @@ define_test!(
 );
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub enum BEnum<T: SerializeAttribute + DeserializeOwned> {
+pub enum C<T: SerializeAttribute + DeserializeOwned> {
     B(B<T>),
 }
 
 define_test!(
     generic_enum,
     [(
-        BEnum::B(B {
+        C::B(B {
             a: A("A".to_string()),
         }),
         r#"<b a="A"/>"#
@@ -42,26 +42,56 @@ define_test!(
 );
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
-pub struct C<T: SerializeAttribute + DeserializeOwned> {
+pub struct D<T: SerializeAttribute + DeserializeOwned> {
     #[xattribute(deferred = true)]
     pub c: T,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "d")]
-pub struct D {
+pub struct E {
     #[xgroup]
-    pub c: C<A>,
+    pub c: D<A>,
 }
 
 define_test!(
     generic_group,
     [(
-        D {
-            c: C {
+        E {
+            c: D {
                 c: A("A".to_string()),
             },
         },
         r#"<d a="A"/>"#
     )]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum F<T: Serialize + DeserializeOwned, U: Serialize + DeserializeOwned> {
+    T(T),
+    U(U),
+}
+
+define_test!(
+    generic_enum_enum,
+    [
+        (F::<String, String>::T("A".to_string()), r#"A"#),
+        (F::<u32, f32>::U(0.5), r#"0.5"#)
+    ]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum G<T: Serialize + DeserializeOwned, U: Serialize + DeserializeOwned> {
+    #[xelement(name = "t")]
+    T(T),
+    #[xelement(name = "u")]
+    U(U),
+}
+
+define_test!(
+    generic_enum_enum,
+    [
+        (G::<String, String>::T("A".to_string()), r#"<t>A</t>"#),
+        (G::<u32, f32>::U(0.5), r#"<u>0.5</u>"#)
+    ]
 );

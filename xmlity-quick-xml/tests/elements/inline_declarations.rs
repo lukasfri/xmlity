@@ -131,3 +131,20 @@ define_test!(
         r#"<g><d><b>A</b><c><b>B</b></c></d><d><b>C</b><c><b>D</b></c></d></g>"#
     )]
 );
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum I {
+    #[xelement(name = "g")]
+    G(D),
+}
+
+define_test!(
+    enum_with_extendable,
+    [(
+        I::G(D {
+            b: "A".to_string(),
+            c: C { c: "B".to_string() }
+        }),
+        r#"<g><d><b>A</b><c><b>B</b></c></d></g>"#
+    )]
+);
