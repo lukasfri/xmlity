@@ -1,6 +1,6 @@
 use std::{borrow::Cow, ops::Deref};
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::Span;
 use syn::{parse_quote, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{

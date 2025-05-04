@@ -2,15 +2,9 @@
 
 use std::borrow::Cow;
 
-use proc_macro2::{Span, TokenStream};
-use syn::{parse_quote, Expr, ExprWhile, Ident, Lifetime, LifetimeParam, Stmt, Type};
+use syn::{parse_quote, Ident, Lifetime, Stmt};
 
-use crate::{
-    common::{non_bound_generics, ExpandedName},
-    de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-    options::{records, Extendable},
-    DeriveError,
-};
+use crate::{de::builders::DeserializeBuilder, options::records, DeriveError};
 
 use super::{RecordDeserializeBuilder, RecordInput};
 
@@ -24,8 +18,11 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> DeserializeVariantBuilder<'a, T> {
         Self { record, opts }
     }
 
-    fn value_access_ident(&self) -> Ident {
-        Ident::new("__value", Span::call_site())
+    pub fn value_access_ident(&self) -> Ident {
+        self.record
+            .sub_path_ident
+            .clone()
+            .expect("This should be set for variants")
     }
 
     pub fn definition(&self) -> syn::ItemStruct {
@@ -37,6 +34,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> DeserializeVariantBuilder<'a, T> {
         let value_access_ident = self.value_access_ident();
 
         parse_quote! {
+            #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
             struct #ident {
                 #value_access_ident: #enum_type,
             }

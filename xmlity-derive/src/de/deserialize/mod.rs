@@ -1,5 +1,5 @@
 mod attributes;
-use std::{borrow::Cow, convert::identity};
+use std::borrow::Cow;
 
 pub use attributes::SimpleDeserializeAttributeBuilder;
 mod elements;
@@ -12,7 +12,6 @@ use attributes::RecordDeserializeAttributeBuilder;
 use elements::RecordDeserializeElementBuilder;
 use none::{EnumVisitorBuilder, RecordDeserializeValueBuilder};
 use quote::ToTokens;
-use syn::{parse_quote, Ident};
 
 use crate::{
     options::{enums, records},

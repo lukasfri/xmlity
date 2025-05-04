@@ -205,6 +205,9 @@ pub struct RecordInput<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub result_type: Cow<'a, syn::Type>,
     pub generics: Cow<'a, syn::Generics>,
     pub wrapper_function: T,
+    pub record_path: Cow<'a, syn::Expr>,
+    pub sub_path_ident: Option<Ident>,
+    #[allow(clippy::type_complexity)]
     pub fields: StructTypeWithFields<
         Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
         Vec<FieldWithOpts<syn::Index, FieldOpts>>,
@@ -213,6 +216,7 @@ pub struct RecordInput<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub fallable_deconstruction: bool,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn fields_with_opts(
     fields: &syn::Fields,
 ) -> DeriveResult<
@@ -263,12 +267,14 @@ pub fn parse_struct_derive_input(
         constructor_path: Cow::Owned(parse_quote!(#ident)),
         result_type: Cow::Owned(parse_quote! { #ident }),
         generics: Cow::Borrowed(generics),
+        record_path: Cow::Owned(parse_quote!(self)),
         wrapper_function: std::convert::identity,
         fields: match &input.data {
             syn::Data::Struct(data_struct) => fields_with_opts(&data_struct.fields)?,
             _ => panic!("Wrong options. Only structs can be used for xelement."),
         },
         fallable_deconstruction: false,
+        sub_path_ident: None,
     })
 }
 
@@ -276,27 +282,33 @@ pub fn parse_enum_variant_derive_input<'a>(
     enum_ident: &'a syn::Ident,
     enum_generics: &'a syn::Generics,
     variant: &'a syn::Variant,
+    fallible_enum: bool,
 ) -> Result<RecordInput<'a, impl Fn(syn::Expr) -> syn::Expr + 'a>, DeriveError> {
     let variant_ident = &variant.ident;
     let variant_wrapper_ident = Ident::new(
-        &format!("__XmlityVariant__{}", variant_ident),
+        &format!("__XmlityVariant__{variant_ident}"),
         variant_ident.span(),
     );
+    let sub_value_ident = Ident::new("__inner123", Span::call_site());
     let variant_wrapper_ident2 = variant_wrapper_ident.clone();
+    let sub_value_ident2 = sub_value_ident.clone();
     let wrapper_function = move |data| {
         parse_quote!(
             #variant_wrapper_ident {
-                __value: #data,
+                #sub_value_ident: #data,
             }
         )
     };
+
     Ok(RecordInput {
         impl_for_ident: Cow::Owned(variant_wrapper_ident2),
         constructor_path: Cow::Owned(parse_quote!(#enum_ident::#variant_ident)),
-        result_type: Cow::Owned(parse_quote! { #enum_ident }),
+        result_type: Cow::Owned(parse_quote! { #enum_ident #enum_generics }),
         generics: Cow::Borrowed(enum_generics),
         wrapper_function,
+        record_path: Cow::Owned(parse_quote!(self.#sub_value_ident2)),
         fields: fields_with_opts(&variant.fields)?,
-        fallable_deconstruction: variant.fields.len() > 1,
+        fallable_deconstruction: fallible_enum,
+        sub_path_ident: Some(sub_value_ident2),
     })
 }

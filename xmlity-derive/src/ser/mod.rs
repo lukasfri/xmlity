@@ -125,7 +125,7 @@ fn seq_field_serializer(
     fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
 ) -> DeriveResult<proc_macro2::TokenStream> {
     let fields = fields.into_iter().map(|var_field| {
-        let field_ident = &var_field.field_ident;
+        let field_ident = var_field.field_ident.to_named_ident();
 
         //TODO: Unify with element_group_field_serializer.
         match var_field.options {
@@ -134,7 +134,7 @@ fn seq_field_serializer(
 
                 let wrapper = SingleChildSerializeElementBuilder {
                     ident: &wrapper_ident,
-                    required_expanded_name: opts.expanded_name(field_ident.to_named_ident().to_string().as_str())
+                    required_expanded_name: opts.expanded_name(field_ident.to_string().as_str())
                     .into_owned(),
                     preferred_prefix: opts.preferred_prefix,
                     enforce_prefix: opts.enforce_prefix,
@@ -143,7 +143,7 @@ fn seq_field_serializer(
 
                 let definition = wrapper.struct_definition();
                 let trait_impl = wrapper.serialize_trait_impl()?;
-                let serialize_expr = wrapper.value_expression(&parse_quote!(&self.#field_ident));
+                let serialize_expr = wrapper.value_expression(&parse_quote!(#field_ident));
 
                 DeriveResult::Ok(quote! {
                     {
@@ -155,7 +155,7 @@ fn seq_field_serializer(
             },
             ChildOpts::Value(_) => {
                 Ok(quote! {
-                    ::xmlity::ser::SerializeSeq::serialize_element(&mut #access_ident, &self.#field_ident)?;
+                    ::xmlity::ser::SerializeSeq::serialize_element(&mut #access_ident, #field_ident)?;
                 })
             },
         }

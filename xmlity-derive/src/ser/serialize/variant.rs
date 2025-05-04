@@ -2,15 +2,9 @@
 
 use std::borrow::Cow;
 
-use proc_macro2::Span;
 use syn::{parse_quote, Expr, Ident, LifetimeParam, Stmt};
 
-use crate::{
-    common::RecordInput,
-    options::{records, Extendable},
-    ser::builders::SerializeBuilder,
-    DeriveError,
-};
+use crate::{common::RecordInput, options::records, ser::builders::SerializeBuilder, DeriveError};
 
 use super::RecordSerializeBuilder;
 
@@ -25,7 +19,10 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> SerializeVariantBuilder<'a, T> {
     }
 
     fn value_access_ident(&self) -> Ident {
-        Ident::new("__value", Span::call_site())
+        self.record
+            .sub_path_ident
+            .clone()
+            .expect("Should be set for variants.")
     }
 
     fn serialize_lifetime(&self) -> syn::Lifetime {
@@ -33,7 +30,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> SerializeVariantBuilder<'a, T> {
     }
 
     fn generics_with_serialize_lifetime(&self) -> syn::Generics {
-        let mut generics = self.generics().into_owned();
+        let mut generics = self.record.generics.clone().into_owned();
         let lifetime = self.serialize_lifetime();
         generics
             .params
@@ -50,9 +47,9 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> SerializeVariantBuilder<'a, T> {
         let value_access_ident = self.value_access_ident();
 
         let generics = self.generics_with_serialize_lifetime();
-        // let generics = self.generics();
 
         parse_quote! {
+            #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
             struct #ident #generics {
                 #value_access_ident: &'__xmlity #enum_type,
             }
@@ -86,6 +83,6 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for SerializeVariantBuilder
     }
 
     fn generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(self.record.generics.as_ref())
+        Cow::Owned(self.generics_with_serialize_lifetime())
     }
 }

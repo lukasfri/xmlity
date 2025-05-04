@@ -1,9 +1,7 @@
 use std::borrow::Cow;
 
-use proc_macro2::{Span, TokenStream};
-use syn::{
-    parse_quote, DeriveInput, Expr, Ident, ItemStruct, Lifetime, LifetimeParam, Stmt, Type, Variant,
-};
+use proc_macro2::Span;
+use syn::{parse_quote, DeriveInput, Expr, Ident, ItemStruct, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
     common::{non_bound_generics, FieldIdent, StructType, StructTypeWithFields},
@@ -16,6 +14,7 @@ use crate::{
         records::{
             self,
             fields::{FieldOpts, FieldValueGroupOpts},
+            roots::DeserializeRootOpts,
         },
         ElementOrder, FieldWithOpts,
     },
@@ -130,9 +129,94 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
             #(#access_loop)*
         })
     }
+
+    fn str_value_body(
+        &self,
+        value: &str,
+        value_ident: &Ident,
+        visitor_lifetime: &Lifetime,
+        access_type: &Type,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let constructor = (self.input.wrapper_function)(Self::constructor_expr(
+            self.input.constructor_path.as_ref(),
+            visitor_lifetime,
+            access_type,
+            [],
+            [],
+            StructType::Unit,
+        ));
+
+        Ok(Some(parse_quote! {
+            if ::core::primitive::str::trim(::core::ops::Deref::deref(&#value_ident)) == #value {
+                return ::core::result::Result::Ok(#constructor);
+            }
+
+            ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant("Value"))
+        }))
+    }
+
+    fn should_deserialize_as_str(&self) -> Option<&str> {
+        if matches!(self.input.fields, StructTypeWithFields::Unit)
+            && self.options.is_some_and(|a| a.value.is_some())
+        {
+            self.options.as_ref().unwrap().value.as_deref()
+        } else {
+            None
+        }
+    }
 }
 
 impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBuilder<'_, T> {
+    fn visit_text_fn_body(
+        &self,
+        visitor_lifetime: &Lifetime,
+        access_ident: &Ident,
+        access_type: &Type,
+        _error_type: &Type,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let Some(value) = self.should_deserialize_as_str() else {
+            return Ok(None);
+        };
+
+        let str_ident = Ident::new("__value_str", Span::mixed_site());
+
+        let str_body = self.str_value_body(value, &str_ident, visitor_lifetime, access_type)?;
+
+        let Some(str_body) = str_body else {
+            return Ok(None);
+        };
+
+        Ok(Some(parse_quote! {
+            let #str_ident = ::xmlity::de::XmlText::as_str(&#access_ident);
+            #(#str_body)*
+        }))
+    }
+
+    fn visit_cdata_fn_body(
+        &self,
+        visitor_lifetime: &Lifetime,
+        access_ident: &Ident,
+        access_type: &Type,
+        _error_type: &Type,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let Some(value) = self.should_deserialize_as_str() else {
+            return Ok(None);
+        };
+
+        let str_ident = Ident::new("__value_str", Span::mixed_site());
+
+        let str_body = self.str_value_body(value, &str_ident, visitor_lifetime, access_type)?;
+
+        let Some(str_body) = str_body else {
+            return Ok(None);
+        };
+
+        Ok(Some(parse_quote! {
+            let #str_ident = ::xmlity::de::XmlCData::as_str(&#access_ident);
+            #(#str_body)*
+        }))
+    }
+
     fn visit_seq_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
@@ -140,6 +224,11 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
         access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let RecordInput { fields, .. } = &self.input;
+
+        // Only text match
+        if self.should_deserialize_as_str().is_some() {
+            return Ok(None);
+        }
 
         let (constructor_type, fields) = match fields {
             StructTypeWithFields::Named(fields) => (
@@ -291,15 +380,30 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeValu
             &formatter_expecting,
         )?;
 
+        let deserialize_expr: syn::Expr = if matches!(self.input.fields, StructTypeWithFields::Unit)
+            && self.options.is_some_and(|a| a.value.is_some())
+        {
+            parse_quote!(
+                ::xmlity::de::Deserializer::deserialize_any(#deserializer_ident, #visitor_ident {
+                    lifetime: ::core::marker::PhantomData,
+                    marker: ::core::marker::PhantomData,
+                })
+            )
+        } else {
+            parse_quote!(
+                ::xmlity::de::Deserializer::deserialize_seq(#deserializer_ident, #visitor_ident {
+                    lifetime: ::core::marker::PhantomData,
+                    marker: ::core::marker::PhantomData,
+                })
+            )
+        };
+
         Ok(parse_quote! {
             #visitor_def
 
             #visitor_trait_impl
 
-            ::xmlity::de::Deserializer::deserialize_seq(#deserializer_ident, #visitor_ident {
-                lifetime: ::core::marker::PhantomData,
-                marker: ::core::marker::PhantomData,
-            })
+            #deserialize_expr
         })
     }
 
@@ -347,12 +451,38 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
             .into_iter()
             .map::<Result<Expr, DeriveError>, _>(
                 |variant | {
-                    let root_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
+                    let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
+                    if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+                        value: value @ None,
+                    }) = &mut variant_opts
+                    {
+
+                        let ident_value = self.value_opts
+                            .as_ref()
+                            .map(|a| a.rename_all)
+                            .unwrap_or_default()
+                            .apply_to_variant(&variant.ident.to_string());
+
+                        *value = Some(ident_value);
+                    }
+                    if let DeserializeRootOpts::None = variant_opts {
+                        let ident_value = self
+                            .value_opts
+                            .as_ref()
+                            .map(|a| a.rename_all)
+                            .unwrap_or_default()
+                            .apply_to_variant(&variant.ident.to_string());
+    
+                        variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
+                            value: Some(ident_value),
+                        });
+                    }
 
                     let record =
-                        parse_enum_variant_derive_input(ident, generics, variant)?;
+                        parse_enum_variant_derive_input(ident, generics, variant, variants.len() > 1)?;
 
-                    let builder = DeserializeVariantBuilder::new(&record, &root_opts);
+                    let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
+                    let inner_access = builder.value_access_ident();
                     let variant_deserializer_ident = builder.record.impl_for_ident.as_ref();
 
                     let definition = builder.definition();
@@ -362,7 +492,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                             #definition
                             #deserialize_trait_impl
                             if let ::core::result::Result::Ok(::core::option::Option::Some(__v)) = ::xmlity::de::SeqAccess::next_element::<#variant_deserializer_ident>(&mut #access_ident) {
-                                return ::core::result::Result::Ok(__v.__value);
+                                return ::core::result::Result::Ok(__v.#inner_access);
                             }
                         }
                     })

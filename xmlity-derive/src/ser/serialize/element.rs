@@ -2,19 +2,19 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, Data, DataStruct, Expr, Ident, Lifetime, Stmt};
+use syn::{parse_quote, Expr, Ident, Lifetime, Stmt};
 
 use crate::common::Prefix;
 use crate::common::RecordInput;
 use crate::common::StructTypeWithFields;
 use crate::options::records;
 use crate::options::records::fields::{ChildOpts, FieldOpts, ValueOpts};
-use crate::options::{records::roots::RootElementOpts, WithExpandedNameExt};
+use crate::options::WithExpandedNameExt;
 use crate::options::{Extendable, FieldWithOpts};
 use crate::ser::builders::SerializeBuilder;
 use crate::{
     common::{ExpandedName, FieldIdent},
-    DeriveError, DeriveResult,
+    DeriveError,
 };
 
 #[allow(clippy::type_complexity)]
@@ -76,6 +76,7 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
             result_type: Cow::Borrowed(self.item_type),
             generics: Cow::Owned(parse_quote!()),
             wrapper_function: std::convert::identity,
+            record_path: Cow::Owned(parse_quote!(self)),
             fields: StructTypeWithFields::Named(vec![FieldWithOpts {
                 field_ident: self.value_access_ident(),
                 field_type: self.item_type.clone(),
@@ -84,6 +85,7 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
                     extendable: Extendable::None,
                 })),
             }]),
+            sub_path_ident: None,
             fallable_deconstruction: false,
         };
 
