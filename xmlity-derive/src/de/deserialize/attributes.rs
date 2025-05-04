@@ -194,7 +194,7 @@ impl VisitorBuilder for StructDeserializeAttributeBuilder<'_> {
 
         let non_bound_generics = non_bound_generics(generics.deref());
 
-        let mut deserialize_generics = (*generics).to_owned();
+        let mut deserialize_generics = generics.into_owned();
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
         let visitor_lifetime = Lifetime::new("'__visitor", Span::mixed_site());

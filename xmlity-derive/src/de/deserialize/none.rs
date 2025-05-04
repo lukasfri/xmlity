@@ -249,31 +249,6 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             ),
             StructTypeWithFields::Unit => (StructType::Unit, vec![]),
         };
-        // let value = opts.as_ref().and_then(|a| match a {
-        //     enums::variants::VariantOpts::Value(ValueOpts {value: Some(value), ..}) => Some(value.clone()),
-        //     _ => None,
-        // }).unwrap_or_else(|| {
-        //     self.value_opts
-        //         .as_ref()
-        //         .map(|a| a.rename_all)
-        //         .unwrap_or_default()
-        //         .apply_to_variant(&variant_ident.to_string())
-        // });
-
-        // let deserialize_test_ident = Ident::new("__DeserializeTest", Span::call_site());
-
-        // let literal_deserializer = StringLiteralDeserializeBuilder::new(deserialize_test_ident.clone(), &value);
-        // let definition = literal_deserializer.definition()?;
-        // let deserialize_trait_impl = literal_deserializer.deserialize_trait_impl()?;
-        // Ok(parse_quote! {
-        //     {
-        //         #definition
-        //         #deserialize_trait_impl
-        //         if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) = ::xmlity::de::SeqAccess::next_element::<#deserialize_test_ident>(&mut #access_ident) {
-        //             return ::core::result::Result::Ok(#ident::#variant_ident);
-        //         }
-        //     }
-        // })
 
         let element_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
@@ -454,9 +429,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                     let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
                     if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
                         value: value @ None,
-                    }) = &mut variant_opts
-                    {
-
+                    }) = &mut variant_opts {
                         let ident_value = self.value_opts
                             .as_ref()
                             .map(|a| a.rename_all)
@@ -472,7 +445,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                             .map(|a| a.rename_all)
                             .unwrap_or_default()
                             .apply_to_variant(&variant.ident.to_string());
-    
+
                         variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
                             value: Some(ident_value),
                         });
@@ -483,7 +456,10 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
 
                     let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
                     let inner_access = builder.value_access_ident();
+                    let non_bound_generics = non_bound_generics(builder.record.generics.as_ref());
+
                     let variant_deserializer_ident = builder.record.impl_for_ident.as_ref();
+                    let variant_deserializer_type: syn::Type = parse_quote!( #variant_deserializer_ident #non_bound_generics);
 
                     let definition = builder.definition();
                     let deserialize_trait_impl = builder.deserialize_trait_impl()?;
@@ -491,7 +467,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                         {
                             #definition
                             #deserialize_trait_impl
-                            if let ::core::result::Result::Ok(::core::option::Option::Some(__v)) = ::xmlity::de::SeqAccess::next_element::<#variant_deserializer_ident>(&mut #access_ident) {
+                            if let ::core::result::Result::Ok(::core::option::Option::Some(__v)) = ::xmlity::de::SeqAccess::next_element::<#variant_deserializer_type>(&mut #access_ident) {
                                 return ::core::result::Result::Ok(__v.#inner_access);
                             }
                         }

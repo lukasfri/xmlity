@@ -304,6 +304,7 @@ pub mod records {
             }
         }
 
+        #[allow(clippy::large_enum_variant)]
         pub enum SerializeRootOpts {
             None,
             Element(RootElementOpts),
@@ -395,6 +396,7 @@ pub mod records {
             pub extendable: Extendable,
         }
 
+        #[allow(clippy::large_enum_variant)]
         #[derive(Clone)]
         pub enum ChildOpts {
             Value(ValueOpts),
@@ -483,6 +485,7 @@ pub mod records {
             }
         }
 
+        #[allow(clippy::large_enum_variant)]
         #[derive(Clone)]
         pub enum AttributeOpts {
             Deferred(AttributeDeferredOpts),
@@ -608,12 +611,14 @@ pub mod records {
             Group(GroupOpts),
         }
 
+        #[allow(clippy::large_enum_variant)]
         #[derive(Clone)]
         pub enum FieldAttributeGroupOpts {
             Attribute(AttributeOpts),
             Group(GroupOpts),
         }
 
+        #[allow(clippy::large_enum_variant)]
         #[derive(Clone)]
         pub enum FieldValueGroupOpts {
             Value(ChildOpts),

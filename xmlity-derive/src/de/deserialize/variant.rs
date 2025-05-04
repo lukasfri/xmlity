@@ -29,13 +29,14 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> DeserializeVariantBuilder<'a, T> {
         let Self { record, .. } = self;
 
         let ident = record.impl_for_ident.as_ref();
+        let generics = record.generics.as_ref();
         let enum_type = record.result_type.as_ref();
 
         let value_access_ident = self.value_access_ident();
 
         parse_quote! {
             #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-            struct #ident {
+            struct #ident #generics {
                 #value_access_ident: #enum_type,
             }
         }

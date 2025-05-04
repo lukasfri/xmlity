@@ -289,7 +289,7 @@ pub fn parse_enum_variant_derive_input<'a>(
         &format!("__XmlityVariant__{variant_ident}"),
         variant_ident.span(),
     );
-    let sub_value_ident = Ident::new("__inner123", Span::call_site());
+    let sub_value_ident = Ident::new("__inner", Span::call_site());
     let variant_wrapper_ident2 = variant_wrapper_ident.clone();
     let sub_value_ident2 = sub_value_ident.clone();
     let wrapper_function = move |data| {
@@ -300,10 +300,12 @@ pub fn parse_enum_variant_derive_input<'a>(
         )
     };
 
+    let result_generics = non_bound_generics(enum_generics);
+
     Ok(RecordInput {
         impl_for_ident: Cow::Owned(variant_wrapper_ident2),
         constructor_path: Cow::Owned(parse_quote!(#enum_ident::#variant_ident)),
-        result_type: Cow::Owned(parse_quote! { #enum_ident #enum_generics }),
+        result_type: Cow::Owned(parse_quote! { #enum_ident #result_generics }),
         generics: Cow::Borrowed(enum_generics),
         wrapper_function,
         record_path: Cow::Owned(parse_quote!(self.#sub_value_ident2)),
