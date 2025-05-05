@@ -27,6 +27,7 @@ use quote::{quote, ToTokens};
 fn attribute_group_field_serializer(
     access_ident: impl ToTokens,
     fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>,
+    field_ident_to_expr: impl Fn(&FieldIdent) -> syn::Expr,
 ) -> DeriveResult<proc_macro2::TokenStream> {
     let fields = fields
       .into_iter()
@@ -48,7 +49,7 @@ fn attribute_group_field_serializer(
 
                 let definition = wrapper.struct_definition();
                 let trait_impl = wrapper.serialize_attribute_trait_impl()?;
-                let serialize_expr = wrapper.value_expression(&parse_quote!(&self.#field_ident));
+                let serialize_expr = wrapper.value_expression(&field_ident_to_expr(field_ident));
 
                 Ok(quote! {{
                     #definition
@@ -58,12 +59,16 @@ fn attribute_group_field_serializer(
             },
             FieldAttributeGroupOpts::Attribute(AttributeOpts::Deferred(AttributeDeferredOpts {
                 ..
-            })) => Ok(quote! {
-                ::xmlity::ser::SerializeAttributes::serialize_attribute(#access_ident, &self.#field_ident)?;
-            }),
-              FieldAttributeGroupOpts::Group(_) => Ok(quote! {
-                ::xmlity::ser::SerializationGroup::serialize_attributes(&self.#field_ident, #access_ident)?;
-            }),
+            })) => {
+                let ser_value = field_ident_to_expr(field_ident);
+                Ok(quote! {
+                ::xmlity::ser::SerializeAttributes::serialize_attribute(#access_ident, #ser_value)?;
+            })},
+              FieldAttributeGroupOpts::Group(_) => {
+                let ser_value = field_ident_to_expr(field_ident);
+                Ok(quote! {
+                ::xmlity::ser::SerializationGroup::serialize_attributes(#ser_value, #access_ident)?;
+            })},
           }
       }).collect::<DeriveResult<Vec<_>>>()?;
 
@@ -75,6 +80,7 @@ fn attribute_group_field_serializer(
 fn element_group_field_serializer(
     access_ident: impl ToTokens,
     fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
+    field_ident_to_expr: impl Fn(&FieldIdent) -> syn::Expr,
 ) -> DeriveResult<proc_macro2::TokenStream> {
     let fields = fields
     .into_iter()
@@ -96,7 +102,7 @@ fn element_group_field_serializer(
 
                 let definition = wrapper.struct_definition();
                 let trait_impl = wrapper.serialize_trait_impl()?;
-                let serialize_expr = wrapper.value_expression(&parse_quote!(&self.#field_ident));
+                let serialize_expr = wrapper.value_expression(&field_ident_to_expr(field_ident));
 
                 Ok(quote! {
                     {
@@ -106,12 +112,17 @@ fn element_group_field_serializer(
                     }
                 })
             },
-            FieldValueGroupOpts::Value(ChildOpts::Value(_)) => Ok(quote! {
-                ::xmlity::ser::SerializeSeq::serialize_element(#access_ident, &self.#field_ident)?;
-            }),
-            FieldValueGroupOpts::Group(_) => Ok(quote! {
-                ::xmlity::ser::SerializationGroup::serialize_children(&self.#field_ident, #access_ident)?;
-            }),
+            FieldValueGroupOpts::Value(ChildOpts::Value(_)) => {
+                let ser_value = field_ident_to_expr(field_ident);
+                Ok(quote! {
+                ::xmlity::ser::SerializeSeq::serialize_element(#access_ident, #ser_value)?;
+            })},
+            FieldValueGroupOpts::Group(_) => {
+                let ser_value = field_ident_to_expr(field_ident);
+
+                Ok(quote! {
+                ::xmlity::ser::SerializationGroup::serialize_children(#ser_value, #access_ident)?;
+            })},
         }
     }).collect::<Result<Vec<_>, _>>()?;
 

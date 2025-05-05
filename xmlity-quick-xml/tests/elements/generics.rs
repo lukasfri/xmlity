@@ -73,7 +73,7 @@ pub enum F<T: Serialize + DeserializeOwned, U: Serialize + DeserializeOwned> {
 }
 
 define_test!(
-    generic_enum_enum,
+    two_armed_generic_enum,
     [
         (F::<String, String>::T("A".to_string()), r#"A"#),
         (F::<u32, f32>::U(0.5), r#"0.5"#)
@@ -89,7 +89,7 @@ pub enum G<T: Serialize + DeserializeOwned, U: Serialize + DeserializeOwned> {
 }
 
 define_test!(
-    generic_enum_enum,
+    two_armed_element_generic_enum,
     [
         (G::<String, String>::T("A".to_string()), r#"<t>A</t>"#),
         (G::<u32, f32>::U(0.5), r#"<u>0.5</u>"#)

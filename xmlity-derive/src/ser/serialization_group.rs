@@ -27,6 +27,7 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         let serialize_attributes_implementation = super::attribute_group_field_serializer(
             quote! { #element_access_ident},
             crate::ser::attribute_group_fields(crate::ser::fields(self.ast)?)?,
+            |field_ident| parse_quote!(&self.#field_ident),
         )?;
 
         Ok(parse_quote! {
@@ -42,6 +43,7 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         let serialize_children_implementation = super::element_group_field_serializer(
             quote! { #children_access_ident},
             crate::ser::element_group_fields(crate::ser::fields(self.ast)?)?,
+            |field_ident| parse_quote!(&self.#field_ident),
         )?;
 
         Ok(parse_quote! {

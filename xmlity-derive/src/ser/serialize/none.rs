@@ -1,25 +1,23 @@
 use std::borrow::Cow;
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, Arm, Data, DataEnum, DeriveInput, Fields, Generics, Ident, Index, Stmt};
+use syn::{parse_quote, Arm, Data, DataEnum, DeriveInput, Fields, Generics, Ident, Stmt};
 
 use crate::{
-    common::{self, FieldIdent, RecordInput, StructTypeWithFields},
+    common::{self, FieldIdent, RecordInput},
     options::{
         enums::roots::RootValueOpts as EnumRootVolueOpts,
         records::{
             self,
-            fields::FieldOpts,
             roots::{RootValueOpts as RecordRootValueOpts, SerializeRootOpts},
         },
-        FieldWithOpts,
     },
     ser::builders::{SerializeBuilder, SerializeBuilderExt},
     DeriveError,
 };
 
-use super::variant::SerializeVariantBuilder;
+use super::{value_deconstructor, variant::SerializeVariantBuilder};
 
 pub struct RecordSerializeValueBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     input: &'a RecordInput<'a, T>,
@@ -32,48 +30,6 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordSerializeValueBuilder<'a, T> {
             input: ast,
             options,
         }
-    }
-}
-
-#[allow(clippy::type_complexity)]
-fn value_deconstructor(
-    path: &syn::Path,
-    value_expr: &syn::Expr,
-    fields: &StructTypeWithFields<
-        Vec<FieldWithOpts<Ident, FieldOpts>>,
-        Vec<FieldWithOpts<Index, FieldOpts>>,
-    >,
-    fallible: bool,
-) -> Vec<Stmt> {
-    let fallible = if fallible {
-        quote!(
-            else {
-                unreachable!("Internal expectation failed. This is a bug in xmlity. Please report it.")
-            }
-        )
-    } else {
-        TokenStream::new()
-    };
-
-    let fields = match fields {
-        StructTypeWithFields::Named(fields) => {
-            let field_deconstructor = fields.iter().map(|f| &f.field_ident);
-
-            quote! {{ #(#field_deconstructor),* }}
-        }
-        StructTypeWithFields::Unnamed(fields) => {
-            let field_deconstructor = fields.iter().map(|f| {
-                FieldIdent::Indexed(f.field_ident.clone())
-                    .to_named_ident()
-                    .into_owned()
-            });
-            quote! { ( #(#field_deconstructor),* ) }
-        }
-        StructTypeWithFields::Unit => quote!(),
-    };
-
-    parse_quote! {
-        let #path #fields = #value_expr #fallible;
     }
 }
 

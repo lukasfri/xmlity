@@ -369,10 +369,8 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
             Vec::new()
         };
 
-        let struct_path: syn::Path = parse_quote!(#ident);
-
         let constructor = (self.input.wrapper_function)(Self::constructor_expr(
-            &struct_path,
+            &self.input.constructor_path,
             visitor_lifetime,
             access_type,
             element_fields.clone(),
