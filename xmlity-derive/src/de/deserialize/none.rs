@@ -4,10 +4,10 @@ use proc_macro2::Span;
 use syn::{parse_quote, DeriveInput, Expr, Ident, ItemStruct, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
-    common::{non_bound_generics, FieldIdent, StructType, StructTypeWithFields},
+    common::{constructor_expr, non_bound_generics, FieldIdent, StructType, StructTypeWithFields},
     de::{
         builders::{DeserializeBuilder, DeserializeBuilderExt, VisitorBuilder, VisitorBuilderExt},
-        common::{constructor_expr, SeqVisitLoop},
+        common::SeqVisitLoop,
     },
     options::{
         enums::{self},

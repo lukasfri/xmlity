@@ -7,12 +7,15 @@ use quote::quote;
 use syn::{parse_quote, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
-    common::{non_bound_generics, ExpandedName, FieldIdent, StructType, StructTypeWithFields},
+    common::{
+        constructor_expr, non_bound_generics, ExpandedName, FieldIdent, StructType,
+        StructTypeWithFields,
+    },
     de::{
         builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
         common::{
             all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
-            constructor_expr, SeqVisitLoop,
+            SeqVisitLoop,
         },
     },
     options::{

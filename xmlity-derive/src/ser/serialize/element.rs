@@ -4,6 +4,7 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::{parse_quote, Expr, Ident, Lifetime, Stmt};
 
+use crate::common::value_deconstructor;
 use crate::common::Prefix;
 use crate::common::RecordInput;
 use crate::common::StructTypeWithFields;
@@ -12,12 +13,14 @@ use crate::options::records::fields::{ChildOpts, FieldOpts, ValueOpts};
 use crate::options::WithExpandedNameExt;
 use crate::options::{Extendable, FieldWithOpts};
 use crate::ser::builders::SerializeBuilder;
+use crate::ser::common::attribute_group_field_serializer;
+use crate::ser::common::attribute_group_fields;
+use crate::ser::common::element_group_field_serializer;
+use crate::ser::common::element_group_fields;
 use crate::{
     common::{ExpandedName, FieldIdent},
     DeriveError,
 };
-
-use super::value_deconstructor;
 
 #[allow(clippy::type_complexity)]
 pub struct SingleChildSerializeElementBuilder<'a> {
@@ -180,10 +183,10 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
                 .collect::<Vec<_>>(),
             StructTypeWithFields::Unit => vec![],
         };
-        let attribute_fields = crate::ser::attribute_group_fields(fields.clone())?;
-        let element_fields = crate::ser::element_group_fields(fields)?;
+        let attribute_fields = attribute_group_fields(fields.clone())?;
+        let element_fields = element_group_fields(fields)?;
 
-        let attribute_fields = crate::ser::attribute_group_field_serializer(
+        let attribute_fields = attribute_group_field_serializer(
             quote! {&mut #element_seq_ident},
             attribute_fields,
             |field_ident| {
@@ -197,7 +200,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
                 ::xmlity::ser::SerializeElement::end(#element_seq_ident)
             }
         } else {
-            let element_fields = crate::ser::element_group_field_serializer(
+            let element_fields = element_group_field_serializer(
                 quote! {&mut #children_seq_ident},
                 element_fields,
                 |field_ident| {

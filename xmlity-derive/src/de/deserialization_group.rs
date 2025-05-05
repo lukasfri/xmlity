@@ -27,7 +27,8 @@ use super::{
     },
 };
 
-use super::common::{all_elements_done_expr, constructor_expr, struct_definition_expr};
+use super::common::all_elements_done_expr;
+use crate::common::{constructor_expr, struct_definition_expr};
 
 pub struct DeriveDeserializationGroupStruct<'a> {
     opts: &'a RootGroupOpts,

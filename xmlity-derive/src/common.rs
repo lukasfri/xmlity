@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 
 use darling::FromMeta;
-use proc_macro2::Span;
-use quote::ToTokens;
-use syn::{parse_quote, Expr, Ident};
+use proc_macro2::{Span, TokenStream};
+use quote::{quote, ToTokens};
+use syn::{parse_quote, Expr, Ident, Index, Stmt, Type, Visibility};
 
 use crate::{
     derive::{DeriveError, DeriveResult},
@@ -313,4 +313,172 @@ pub fn parse_enum_variant_derive_input<'a>(
         fallable_deconstruction: fallible_enum,
         sub_path_ident: Some(sub_value_ident2),
     })
+}
+
+fn named_constructor_expr<K: ToTokens, V: ToTokens>(
+    ident: &syn::Path,
+    fields: impl IntoIterator<Item = (K, V)>,
+) -> Expr {
+    let field_tokens = fields.into_iter().map(|(ident, expression)| {
+        quote! {
+            #ident: #expression,
+        }
+    });
+
+    parse_quote! {
+        #ident {
+            #(#field_tokens)*
+        }
+    }
+}
+
+fn unnamed_constructor_expr<T: ToTokens>(
+    ident: &syn::Path,
+    fields: impl IntoIterator<Item = T>,
+) -> Expr {
+    let fields = fields.into_iter();
+
+    parse_quote! {
+      #ident (
+        #(#fields,)*
+    )
+    }
+}
+
+pub fn constructor_expr<T: ToTokens>(
+    ident: &syn::Path,
+    fields: impl IntoIterator<Item = (FieldIdent, T)>,
+    constructor_type: &StructType,
+) -> Expr {
+    let mut fields = fields.into_iter();
+    match constructor_type {
+        StructType::Unnamed => {
+            unnamed_constructor_expr(ident, fields.map(|(_, value_expression)| value_expression))
+        }
+        StructType::Named => named_constructor_expr(
+            ident,
+            fields.filter_map(|(a, value_expression)| match a {
+                FieldIdent::Named(field_ident) => Some((field_ident, value_expression)),
+                FieldIdent::Indexed(_) => None,
+            }),
+        ),
+        StructType::Unit => {
+            assert!(fields.next().is_none(), "unit structs cannot have fields");
+            parse_quote! { #ident }
+        }
+    }
+}
+
+fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
+    ident: I,
+    generics: Option<&syn::Generics>,
+    fields: impl IntoIterator<Item = (K, V)>,
+    visibility: &Visibility,
+) -> proc_macro2::TokenStream {
+    let field_tokens = fields.into_iter().map(|(ident, expression)| {
+        quote! {
+            #ident: #expression,
+        }
+    });
+
+    quote! {
+        #visibility struct #ident #generics {
+            #(#field_tokens)*
+        }
+    }
+}
+
+fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
+    ident: I,
+    generics: Option<&syn::Generics>,
+    fields: impl IntoIterator<Item = T>,
+    visibility: &Visibility,
+) -> proc_macro2::TokenStream {
+    let fields = fields.into_iter();
+
+    quote! {
+        #visibility struct #ident #generics (
+            #(#fields,)*
+        )
+    }
+}
+
+fn unit_struct_definition_expr<I: ToTokens>(
+    ident: I,
+    generics: Option<&syn::Generics>,
+    visibility: &Visibility,
+) -> proc_macro2::TokenStream {
+    quote! {
+        #visibility struct #ident #generics;
+    }
+}
+
+pub fn struct_definition_expr<I: ToTokens>(
+    ident: I,
+    generics: Option<&syn::Generics>,
+    fields: impl IntoIterator<Item = (FieldIdent, Type)>,
+    constructor_type: &StructType,
+    visibility: &Visibility,
+) -> proc_macro2::TokenStream {
+    let fields = fields.into_iter();
+    match constructor_type {
+        StructType::Unnamed => unnamed_struct_definition_expr(
+            ident,
+            generics,
+            fields.map(|(_, value_expression)| value_expression),
+            visibility,
+        ),
+        StructType::Named => named_struct_definition_expr(
+            ident,
+            generics,
+            fields.filter_map(|(a, value_expression)| match a {
+                FieldIdent::Named(field_ident) => Some((field_ident, value_expression)),
+                FieldIdent::Indexed(_) => None,
+            }),
+            visibility,
+        ),
+        StructType::Unit => unit_struct_definition_expr(ident, generics, visibility),
+    }
+}
+
+#[allow(clippy::type_complexity)]
+pub fn value_deconstructor(
+    path: &syn::Path,
+    value_expr: &syn::Expr,
+    fields: &StructTypeWithFields<
+        Vec<FieldWithOpts<Ident, FieldOpts>>,
+        Vec<FieldWithOpts<Index, FieldOpts>>,
+    >,
+    fallible: bool,
+) -> Vec<Stmt> {
+    let fallible = if fallible {
+        quote!(
+            else {
+                unreachable!("Internal expectation failed. This is a bug in xmlity. Please report it.")
+            }
+        )
+    } else {
+        TokenStream::new()
+    };
+
+    let fields = match fields {
+        StructTypeWithFields::Named(fields) => {
+            let field_deconstructor = fields.iter().map(|f| &f.field_ident);
+
+            quote! {{ #(#field_deconstructor),* }}
+        }
+        StructTypeWithFields::Unnamed(fields) => {
+            let field_deconstructor = fields.iter().map(|f| {
+                FieldIdent::Indexed(f.field_ident.clone())
+                    .to_named_ident()
+                    .into_owned()
+            });
+            quote! { ( #(#field_deconstructor),* ) }
+        }
+        StructTypeWithFields::Unit => quote!(),
+    };
+
+    parse_quote! {
+        let #path #fields = #value_expr #fallible;
+    }
 }

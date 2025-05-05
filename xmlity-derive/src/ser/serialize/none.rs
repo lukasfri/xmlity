@@ -5,7 +5,7 @@ use quote::quote;
 use syn::{parse_quote, Arm, Data, DataEnum, DeriveInput, Fields, Generics, Ident, Stmt};
 
 use crate::{
-    common::{self, FieldIdent, RecordInput},
+    common::{self, value_deconstructor, FieldIdent, RecordInput},
     options::{
         enums::roots::RootValueOpts as EnumRootVolueOpts,
         records::{
@@ -13,11 +13,14 @@ use crate::{
             roots::{RootValueOpts as RecordRootValueOpts, SerializeRootOpts},
         },
     },
-    ser::builders::{SerializeBuilder, SerializeBuilderExt},
+    ser::{
+        builders::{SerializeBuilder, SerializeBuilderExt},
+        common::{element_fields, seq_field_serializer},
+    },
     DeriveError,
 };
 
-use super::{value_deconstructor, variant::SerializeVariantBuilder};
+use super::variant::SerializeVariantBuilder;
 
 pub struct RecordSerializeValueBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     input: &'a RecordInput<'a, T>,
@@ -78,10 +81,8 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeValueBui
             self.input.fallable_deconstruction,
         );
 
-        let value_fields = crate::ser::seq_field_serializer(
-            quote! {#seq_access_ident},
-            crate::ser::element_fields(fields)?,
-        )?;
+        let value_fields =
+            seq_field_serializer(quote! {#seq_access_ident}, element_fields(fields)?)?;
 
         Ok(parse_quote! {
             #(#value_deconstructor)*

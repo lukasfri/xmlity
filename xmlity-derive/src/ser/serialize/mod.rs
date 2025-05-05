@@ -7,58 +7,14 @@ mod element;
 pub use element::{RecordSerializeElementBuilder, SingleChildSerializeElementBuilder};
 mod variant;
 
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse_quote, DeriveInput, Ident, Index, Stmt};
+use quote::ToTokens;
+use syn::{DeriveInput, Ident};
 
-use crate::common::{self, FieldIdent, RecordInput, StructTypeWithFields};
-use crate::options::records::fields::FieldOpts;
-use crate::options::{enums, records, FieldWithOpts};
+use crate::common::{self, RecordInput};
+use crate::options::{enums, records};
 use crate::{DeriveError, DeriveMacro};
 
 use super::builders::{SerializeBuilder, SerializeBuilderExt};
-
-#[allow(clippy::type_complexity)]
-fn value_deconstructor(
-    path: &syn::Path,
-    value_expr: &syn::Expr,
-    fields: &StructTypeWithFields<
-        Vec<FieldWithOpts<Ident, FieldOpts>>,
-        Vec<FieldWithOpts<Index, FieldOpts>>,
-    >,
-    fallible: bool,
-) -> Vec<Stmt> {
-    let fallible = if fallible {
-        quote!(
-            else {
-                unreachable!("Internal expectation failed. This is a bug in xmlity. Please report it.")
-            }
-        )
-    } else {
-        TokenStream::new()
-    };
-
-    let fields = match fields {
-        StructTypeWithFields::Named(fields) => {
-            let field_deconstructor = fields.iter().map(|f| &f.field_ident);
-
-            quote! {{ #(#field_deconstructor),* }}
-        }
-        StructTypeWithFields::Unnamed(fields) => {
-            let field_deconstructor = fields.iter().map(|f| {
-                FieldIdent::Indexed(f.field_ident.clone())
-                    .to_named_ident()
-                    .into_owned()
-            });
-            quote! { ( #(#field_deconstructor),* ) }
-        }
-        StructTypeWithFields::Unit => quote!(),
-    };
-
-    parse_quote! {
-        let #path #fields = #value_expr #fallible;
-    }
-}
 
 pub struct RecordSerializeBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub input: &'a RecordInput<'a, T>,
