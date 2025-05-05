@@ -147,12 +147,12 @@ impl<'de, T: DeserializationGroup<'de>> DeserializationGroup<'de> for Box<T> {
     type Builder = BoxBuilder<'de, T>;
 
     fn builder() -> Self::Builder {
-        BoxBuilder(T::builder())
+        BoxBuilder(Box::new(T::builder()))
     }
 }
 
 /// Builder for `Box<T>`.
-pub struct BoxBuilder<'de, T: DeserializationGroup<'de>>(T::Builder);
+pub struct BoxBuilder<'de, T: DeserializationGroup<'de>>(Box<T::Builder>);
 
 impl<'de, T: DeserializationGroup<'de>> DeserializationGroupBuilder<'de> for BoxBuilder<'de, T> {
     type Value = Box<T>;
