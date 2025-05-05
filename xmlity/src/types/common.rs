@@ -7,6 +7,18 @@ use crate::{
     SerializeAttribute,
 };
 
+impl<'de> Deserialize<'de> for () {
+    fn deserialize<D: Deserializer<'de>>(_reader: D) -> Result<Self, D::Error> {
+        Ok(())
+    }
+}
+
+impl Serialize for () {
+    fn serialize<S: crate::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_none()
+    }
+}
+
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Option<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
         Deserialize::deserialize(reader).map(Some)
