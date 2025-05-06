@@ -12,7 +12,7 @@ use crate::{
     DeriveError,
 };
 
-pub struct SingleChildDeserializeElementBuilder<'a> {
+pub struct DeserializeSingleChildElementBuilder<'a> {
     pub ident: &'a syn::Ident,
     pub generics: &'a syn::Generics,
     pub required_expanded_name: Option<ExpandedName<'static>>,
@@ -20,7 +20,7 @@ pub struct SingleChildDeserializeElementBuilder<'a> {
     pub extendable: Extendable,
 }
 
-impl SingleChildDeserializeElementBuilder<'_> {
+impl DeserializeSingleChildElementBuilder<'_> {
     fn value_access_ident(&self) -> Ident {
         Ident::new("__value", Span::call_site())
     }
@@ -40,7 +40,7 @@ impl SingleChildDeserializeElementBuilder<'_> {
     }
 }
 
-impl VisitorBuilder for SingleChildDeserializeElementBuilder<'_> {
+impl VisitorBuilder for DeserializeSingleChildElementBuilder<'_> {
     fn visit_element_fn_body(
         &self,
         visitor_lifetime: &Lifetime,
@@ -144,7 +144,7 @@ impl VisitorBuilder for SingleChildDeserializeElementBuilder<'_> {
     }
 }
 
-impl DeserializeBuilder for SingleChildDeserializeElementBuilder<'_> {
+impl DeserializeBuilder for DeserializeSingleChildElementBuilder<'_> {
     fn deserialize_fn_body(
         &self,
 

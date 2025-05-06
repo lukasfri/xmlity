@@ -5,6 +5,8 @@
 pub mod common;
 pub mod iterator;
 mod primitive;
+mod smart;
 pub mod string;
+mod tuples;
 pub mod utils;
 pub mod value;
