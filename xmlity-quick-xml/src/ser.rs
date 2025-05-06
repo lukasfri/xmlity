@@ -12,7 +12,31 @@ use xmlity::{ser, ExpandedName, LocalName, Prefix, QName, Serialize, XmlNamespac
 
 use crate::{OwnedQuickName, XmlnsDeclaration};
 
-use super::Error;
+/// Errors that can occur when using this crate.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// Error from the `quick-xml` crate.
+    #[error("Quick XML error: {0}")]
+    QuickXml(#[from] quick_xml::Error),
+    /// Error from the `quick-xml` crate when handling attributes.
+    #[error("Attribute error: {0}")]
+    AttrError(#[from] quick_xml::events::attributes::AttrError),
+    /// IO errors.
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    /// Custom errors from [`Serialize`] implementations.
+    #[error("Custom: {0}")]
+    Custom(String),
+    /// Invalid UTF-8 when serializing.
+    #[error("Invalid UTF-8: {0}")]
+    InvalidUtf8(#[from] std::string::FromUtf8Error),
+}
+
+impl xmlity::ser::Error for Error {
+    fn custom<T: ToString>(msg: T) -> Self {
+        Error::Custom(msg.to_string())
+    }
+}
 
 fn serializer_to_string<T>(serializer: QuickXmlWriter<Vec<u8>>, value: &T) -> Result<String, Error>
 where
@@ -25,6 +49,7 @@ where
     String::from_utf8(bytes).map_err(Error::InvalidUtf8)
 }
 
+/// Serialize a value into a string.
 pub fn to_string<T>(value: &T) -> Result<String, Error>
 where
     T: Serialize,
@@ -32,6 +57,7 @@ where
     serializer_to_string(QuickXmlWriter::new(Vec::new()), value)
 }
 
+/// Serialize a value into a string with pretty printing.
 pub fn to_string_pretty<T>(value: &T, indentation: usize) -> Result<String, Error>
 where
     T: Serialize,
@@ -212,6 +238,7 @@ impl<'a> NamespaceScopeContainer<'a> {
     }
 }
 
+/// The [`xmlity::Deserializer`] for the `quick-xml` crate.
 pub struct Serializer<W: Write> {
     writer: QuickXmlWriter<W>,
     preferred_namespace_prefixes: BTreeMap<XmlNamespace<'static>, Prefix<'static>>,
@@ -221,10 +248,12 @@ pub struct Serializer<W: Write> {
 }
 
 impl<W: Write> Serializer<W> {
+    /// Create a new serializer.
     pub fn new(writer: QuickXmlWriter<W>) -> Self {
         Self::new_with_namespaces(writer, BTreeMap::new())
     }
 
+    /// Create a new serializer with preferred namespace prefixes.
     pub fn new_with_namespaces(
         writer: QuickXmlWriter<W>,
         preferred_namespace_prefixes: BTreeMap<XmlNamespace<'static>, Prefix<'static>>,
@@ -238,27 +267,20 @@ impl<W: Write> Serializer<W> {
         }
     }
 
+    /// Consume the serializer and return the underlying writer.
     pub fn into_inner(self) -> W {
         self.writer.into_inner()
     }
 
-    pub fn push_namespace_scope(&mut self) {
+    fn push_namespace_scope(&mut self) {
         self.namespace_scopes.push_scope()
     }
 
-    pub fn pop_namespace_scope(&mut self) {
+    fn pop_namespace_scope(&mut self) {
         self.namespace_scopes.pop_scope();
     }
 
-    pub fn add_preferred_prefix(
-        &mut self,
-        namespace: XmlNamespace<'static>,
-        prefix: Prefix<'static>,
-    ) {
-        self.preferred_namespace_prefixes.insert(namespace, prefix);
-    }
-
-    pub fn resolve_name<'b>(
+    fn resolve_name<'b>(
         &mut self,
         name: ExpandedName<'b>,
         preferred_prefix: Option<&Prefix<'b>>,
@@ -288,32 +310,15 @@ impl<W: Write> From<W> for Serializer<W> {
     }
 }
 
-pub struct SerializeElement<'s, W: Write> {
-    serializer: &'s mut Serializer<W>,
-    end_name: QName<'static>,
-}
-
-impl<'s, W: Write> SerializeElement<'s, W> {
-    fn resolve_name_or_declare<'a>(
-        name: ExpandedName<'a>,
-        preferred_prefix: Option<&Prefix<'a>>,
-        enforce_prefix: IncludePrefix,
-        serializer: &mut Serializer<W>,
-    ) -> (QName<'a>, Option<XmlnsDeclaration<'a>>) {
-        let (qname, decl) = serializer.resolve_name(name, preferred_prefix, enforce_prefix);
-
-        (qname, decl)
-    }
-}
-
-pub struct AttributeSerializer<'t, W: Write> {
+///Provides the implementation of `SerializeAttributeAccess` trait for the `quick-xml` crate.
+pub struct SerializeAttributeAccess<'t, W: Write> {
     name: ExpandedName<'static>,
     serializer: &'t mut Serializer<W>,
     preferred_prefix: Option<Prefix<'static>>,
     enforce_prefix: IncludePrefix,
 }
 
-impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
+impl<W: Write> ser::SerializeAttributeAccess for SerializeAttributeAccess<'_, W> {
     type Ok = ();
     type Error = Error;
 
@@ -348,16 +353,17 @@ impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
     }
 }
 
-pub struct AttributeVecSerializer<'t, W: Write> {
+///Provides the implementation of `AttributeSerializer` trait for the `quick-xml` crate.
+pub struct AttributeSerializer<'t, W: Write> {
     serializer: &'t mut Serializer<W>,
 }
 
-impl<'t, W: Write> ser::AttributeSerializer for AttributeVecSerializer<'t, W> {
+impl<'t, W: Write> ser::AttributeSerializer for AttributeSerializer<'t, W> {
     type Error = Error;
 
     type Ok = ();
     type SerializeAttribute<'a>
-        = AttributeSerializer<'a, W>
+        = SerializeAttributeAccess<'a, W>
     where
         Self: 'a;
 
@@ -378,7 +384,24 @@ impl<'t, W: Write> ser::AttributeSerializer for AttributeVecSerializer<'t, W> {
     }
 }
 
+/// Provides the implementation of [`ser::SerializeElement`] for the `quick-xml` crate.
+pub struct SerializeElement<'s, W: Write> {
+    serializer: &'s mut Serializer<W>,
+    end_name: QName<'static>,
+}
+
 impl<'s, W: Write> SerializeElement<'s, W> {
+    fn resolve_name_or_declare<'a>(
+        name: ExpandedName<'a>,
+        preferred_prefix: Option<&Prefix<'a>>,
+        enforce_prefix: IncludePrefix,
+        serializer: &mut Serializer<W>,
+    ) -> (QName<'a>, Option<XmlnsDeclaration<'a>>) {
+        let (qname, decl) = serializer.resolve_name(name, preferred_prefix, enforce_prefix);
+
+        (qname, decl)
+    }
+
     fn finish_start(self) -> (QName<'static>, &'s mut Serializer<W>) {
         let Self {
             end_name,
@@ -403,7 +426,7 @@ impl<W: Write> ser::SerializeAttributes for SerializeElement<'_, W> {
         &mut self,
         a: &A,
     ) -> Result<Self::Ok, Self::Error> {
-        a.serialize_attribute(AttributeVecSerializer {
+        a.serialize_attribute(AttributeSerializer {
             serializer: self.serializer,
         })
     }
@@ -459,6 +482,7 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
     }
 }
 
+///Provides the implementation of `SerializeSeq` trait for element children for the `quick-xml` crate.
 pub struct ChildrenSerializeSeq<'s, W: Write> {
     serializer: &'s mut Serializer<W>,
     end_name: QName<'static>,
@@ -497,6 +521,7 @@ impl<W: Write> ser::SerializeSeq for ChildrenSerializeSeq<'_, W> {
     }
 }
 
+/// Provides the implementation of `SerializeSeq` trait for any nodes for the `quick-xml` crate.
 pub struct SerializeSeq<'e, W: Write> {
     serializer: &'e mut Serializer<W>,
 }
@@ -515,7 +540,7 @@ impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, W> {
 }
 
 impl<W: Write> Serializer<W> {
-    pub fn try_start(&mut self) -> Result<(), Error> {
+    fn try_start(&mut self) -> Result<(), Error> {
         if !self.buffered_bytes_start_empty {
             self.writer
                 .write_event(Event::Start(self.buffered_bytes_start.borrow()))
@@ -525,7 +550,7 @@ impl<W: Write> Serializer<W> {
         Ok(())
     }
 
-    pub fn push_attr(&mut self, qname: QName<'_>, value: &str) {
+    fn push_attr(&mut self, qname: QName<'_>, value: &str) {
         self.buffered_bytes_start
             .push_attribute(quick_xml::events::attributes::Attribute {
                 key: quick_xml::name::QName(qname.to_string().as_bytes()),
@@ -533,7 +558,7 @@ impl<W: Write> Serializer<W> {
             });
     }
 
-    pub fn push_decl_attr(&mut self, decl: XmlnsDeclaration<'_>) {
+    fn push_decl_attr(&mut self, decl: XmlnsDeclaration<'_>) {
         let XmlnsDeclaration { namespace, prefix } = decl;
 
         let key = XmlnsDeclaration::xmlns_qname(prefix);
