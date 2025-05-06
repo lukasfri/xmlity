@@ -37,11 +37,31 @@ impl<T: SerializeAttributes> SerializeAttributes for &mut T {
     }
 }
 
-/// A trait for serializing elements.
-#[must_use = "Serializers could be lazy and must be consumed to guarantee serialization. Try calling `.serialize_children()` or `.end()` on the serializer."]
-pub trait SerializeElement: SerializeAttributes {
+/// A trait for serializing attributes of an element.
+pub trait SerializeElementAttributes: SerializeAttributes {
     /// The type of the value that is returned when serialization is successful.
     type ChildrenSerializeSeq: SerializeSeq<Ok = Self::Ok, Error = Self::Error>;
+
+    /// Serialize the children of this element.
+    fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error>;
+
+    /// End the serialization of this element with no children.
+    fn end(self) -> Result<Self::Ok, Self::Error>;
+}
+
+/// A trait for serializing elements.
+#[must_use = "Serializers could be lazy and must be consumed to guarantee serialization. Try calling `.serialize_children()` or `.end()` on the serializer."]
+pub trait SerializeElement {
+    /// The type of the value that is returned when serialization is successful.
+    type Ok;
+    /// The type of the error that is returned when serialization fails.
+    type Error: Error;
+
+    /// The type of the serializer that is returned when serializing the children of this element.
+    type ChildrenSerializeSeq: SerializeSeq<Ok = Self::Ok, Error = Self::Error>;
+
+    /// The type of the serializer that is returned when serializing the attributes of this element.
+    type SerializeElementAttributes: SerializeElementAttributes<Ok = Self::Ok, Error = Self::Error>;
 
     /// Always serialize this element with the given prefix.
     fn include_prefix(&mut self, should_enforce: IncludePrefix) -> Result<Self::Ok, Self::Error>;
@@ -51,6 +71,9 @@ pub trait SerializeElement: SerializeAttributes {
         &mut self,
         preferred_prefix: Option<Prefix<'_>>,
     ) -> Result<Self::Ok, Self::Error>;
+
+    /// Serialize the attributes of this element.
+    fn serialize_attributes(self) -> Result<Self::SerializeElementAttributes, Self::Error>;
 
     /// Serialize the children of this element.
     fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error>;

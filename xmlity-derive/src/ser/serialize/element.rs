@@ -190,6 +190,7 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
         } = self;
 
         let element_access_ident = Ident::new("__element", proc_macro2::Span::call_site());
+        let attribute_access_ident = Ident::new("__attributes", proc_macro2::Span::call_site());
         let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
         let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
 
@@ -210,13 +211,13 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
         let element_fields = crate::ser::element_group_fields(fields)?;
 
         let attribute_fields = crate::ser::attribute_group_field_serializer(
-            quote! {&mut #element_access_ident},
+            quote! {&mut #attribute_access_ident},
             attribute_fields,
         )?;
 
         let element_end = if element_fields.is_empty() {
             quote! {
-                ::xmlity::ser::SerializeElement::end(#element_access_ident)
+                ::xmlity::ser::SerializeElementAttributes::end(#attribute_access_ident)
             }
         } else {
             let element_fields = crate::ser::element_group_field_serializer(
@@ -225,7 +226,7 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
             )?;
 
             quote! {
-                let mut #children_access_ident = ::xmlity::ser::SerializeElement::serialize_children(#element_access_ident)?;
+                let mut #children_access_ident = ::xmlity::ser::SerializeElementAttributes::serialize_children(#attribute_access_ident)?;
                 #element_fields
                 ::xmlity::ser::SerializeSeq::end(#children_access_ident)
             }
@@ -243,6 +244,7 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
             let mut #element_access_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
             #preferred_prefix_setting
             #enforce_prefix_setting
+            let mut #attribute_access_ident = ::xmlity::ser::SerializeElement::serialize_attributes(#element_access_ident)?;
             #attribute_fields
             #element_end
         })

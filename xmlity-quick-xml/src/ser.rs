@@ -290,7 +290,9 @@ impl<W: Write> From<W> for Serializer<W> {
 
 pub struct SerializeElement<'s, W: Write> {
     serializer: &'s mut Serializer<W>,
-    end_name: QName<'static>,
+    name: ExpandedName<'static>,
+    include_prefix: IncludePrefix,
+    preferred_prefix: Option<Prefix<'static>>,
 }
 
 impl<'s, W: Write> SerializeElement<'s, W> {
@@ -381,7 +383,9 @@ impl<'t, W: Write> ser::AttributeSerializer for AttributeVecSerializer<'t, W> {
 impl<'s, W: Write> SerializeElement<'s, W> {
     fn finish_start(self) -> (QName<'static>, &'s mut Serializer<W>) {
         let Self {
-            end_name,
+            name,
+            include_prefix,
+            preferred_prefix,
             serializer,
         } = self;
 
@@ -389,13 +393,52 @@ impl<'s, W: Write> SerializeElement<'s, W> {
             serializer.buffered_bytes_start_empty,
             "Should have been emptied by the serializer"
         );
+
+        serializer.buffered_bytes_start.clear_attributes();
+
+        let (qname, decl) = SerializeElement::resolve_name_or_declare(
+            name.clone(),
+            preferred_prefix.as_ref(),
+            include_prefix,
+            serializer,
+        );
+        serializer
+            .buffered_bytes_start
+            .set_name(qname.to_string().as_bytes());
+
+        if let Some(decl) = decl {
+            serializer.push_decl_attr(decl);
+        }
         serializer.buffered_bytes_start_empty = false;
 
-        (end_name, serializer)
+        (qname, serializer)
+    }
+
+    fn end_empty(serializer: &mut Serializer<W>) -> Result<(), Error> {
+        assert!(
+            !serializer.buffered_bytes_start_empty,
+            "start should be buffered"
+        );
+        let start = serializer.buffered_bytes_start.borrow();
+
+        serializer
+            .writer
+            .write_event(Event::Empty(start))
+            .map_err(Error::Io)?;
+
+        serializer.buffered_bytes_start_empty = true;
+
+        Ok(())
     }
 }
 
-impl<W: Write> ser::SerializeAttributes for SerializeElement<'_, W> {
+/// Provides the implementation of [`ser::SerializeElement`] for the `quick-xml` crate.
+pub struct SerializeElementAttributes<'s, W: Write> {
+    serializer: &'s mut Serializer<W>,
+    end_name: QName<'static>,
+}
+
+impl<W: Write> ser::SerializeAttributes for SerializeElementAttributes<'_, W> {
     type Ok = ();
     type Error = Error;
 
@@ -409,21 +452,46 @@ impl<W: Write> ser::SerializeAttributes for SerializeElement<'_, W> {
     }
 }
 
-impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
+impl<'s, W: Write> ser::SerializeElementAttributes for SerializeElementAttributes<'s, W> {
     type ChildrenSerializeSeq = ChildrenSerializeSeq<'s, W>;
 
+    fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
+        Ok(ChildrenSerializeSeq {
+            serializer: self.serializer,
+            end_name: self.end_name,
+        })
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeElement::end_empty(self.serializer)
+    }
+}
+
+impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
+    type Ok = ();
+    type Error = Error;
+    type ChildrenSerializeSeq = ChildrenSerializeSeq<'s, W>;
+    type SerializeElementAttributes = SerializeElementAttributes<'s, W>;
+
     fn include_prefix(&mut self, should_enforce: IncludePrefix) -> Result<Self::Ok, Self::Error> {
-        // self.enforce_prefix = should_enforce;
-        todo!()
-        // Ok(())
+        self.include_prefix = should_enforce;
+        Ok(())
     }
     fn preferred_prefix(
         &mut self,
         preferred_prefix: Option<Prefix<'_>>,
     ) -> Result<Self::Ok, Self::Error> {
-        todo!()
-        // self.preferred_prefix = preferred_prefix.map(Prefix::into_owned);
-        // Ok(())
+        self.preferred_prefix = preferred_prefix.map(Prefix::into_owned);
+        Ok(())
+    }
+
+    fn serialize_attributes(self) -> Result<Self::SerializeElementAttributes, Self::Error> {
+        self.serializer.push_namespace_scope();
+        let (end_name, serializer) = self.finish_start();
+        Ok(SerializeElementAttributes {
+            serializer,
+            end_name,
+        })
     }
 
     fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
@@ -440,18 +508,7 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
         self.serializer.push_namespace_scope();
         let (_, serializer) = self.finish_start();
 
-        assert!(
-            !serializer.buffered_bytes_start_empty,
-            "start should be buffered"
-        );
-        let start = serializer.buffered_bytes_start.borrow();
-
-        serializer
-            .writer
-            .write_event(Event::Empty(start))
-            .map_err(Error::Io)?;
-
-        serializer.buffered_bytes_start_empty = true;
+        SerializeElement::end_empty(serializer)?;
 
         serializer.pop_namespace_scope();
 
@@ -568,24 +625,11 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
     ) -> Result<Self::SerializeElement, Self::Error> {
         self.try_start()?;
 
-        self.buffered_bytes_start.clear_attributes();
-
-        let (qname, decl) = SerializeElement::resolve_name_or_declare(
-            name.clone(),
-            None,
-            IncludePrefix::default(),
-            self,
-        );
-        self.buffered_bytes_start
-            .set_name(qname.to_string().as_bytes());
-
-        if let Some(decl) = decl {
-            self.push_decl_attr(decl);
-        }
-
         Ok(SerializeElement {
             serializer: self,
-            end_name: qname.clone().into_owned(),
+            name: name.clone().into_owned(),
+            include_prefix: IncludePrefix::default(),
+            preferred_prefix: None,
         })
     }
 
