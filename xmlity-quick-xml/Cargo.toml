@@ -21,3 +21,10 @@ quick-xml = { version = "0.37.4" }
 pretty_assertions.workspace = true
 rstest.workspace = true
 xmlity = { workspace = true, features = ["derive"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+serde = { version = "1.0.210", features = ["derive"] }
+quick-xml = { version = "0.37.4", features = ["serialize"] }
+
+[[bench]]
+name = "xmlity_vs_serde"
+harness = false

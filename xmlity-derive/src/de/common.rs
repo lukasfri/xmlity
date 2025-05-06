@@ -1,16 +1,16 @@
 use proc_macro2::Span;
-use syn::{parse_quote, Expr, ExprWhile, Generics, Ident, Stmt, Type, Visibility};
+use syn::{parse_quote, Expr, ExprWhile, Generics, Ident, Stmt};
 
 use crate::{
-    common::{FieldIdent, StructType},
+    common::FieldIdent,
     de::builders::DeserializeBuilderExt,
-    options::{structs::fields::FieldValueGroupOpts, FieldWithOpts},
+    options::{records::fields::FieldValueGroupOpts, FieldWithOpts},
     DeriveError, DeriveResult,
 };
 
 use crate::{
     options::{
-        structs::fields::{
+        records::fields::{
             AttributeDeclaredOpts, AttributeOpts, ChildOpts, ElementOpts, FieldAttributeGroupOpts,
             FieldOpts, GroupOpts, ValueOpts,
         },
@@ -24,7 +24,7 @@ use syn::spanned::Spanned;
 
 use crate::options::ElementOrder;
 
-use super::deserialize::{SimpleDeserializeAttributeBuilder, SingleChildDeserializeElementBuilder};
+use super::deserialize::{DeserializeSingleChildElementBuilder, SimpleDeserializeAttributeBuilder};
 
 pub struct SeqVisitLoop<
     'a,
@@ -140,132 +140,6 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
                 })
             },
         }
-    }
-}
-
-fn named_constructor_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
-    ident: I,
-    fields: impl IntoIterator<Item = (K, V)>,
-) -> proc_macro2::TokenStream {
-    let field_tokens = fields.into_iter().map(|(ident, expression)| {
-        quote! {
-            #ident: #expression,
-        }
-    });
-
-    quote! {
-        #ident {
-            #(#field_tokens)*
-        }
-    }
-}
-
-fn unnamed_constructor_expr<I: ToTokens, T: ToTokens>(
-    ident: I,
-    fields: impl IntoIterator<Item = T>,
-) -> proc_macro2::TokenStream {
-    let fields = fields.into_iter();
-
-    quote! {
-      #ident (
-        #(#fields,)*
-    )
-    }
-}
-
-pub fn constructor_expr<I: ToTokens, T: ToTokens>(
-    ident: I,
-    fields: impl IntoIterator<Item = (FieldIdent, T)>,
-    constructor_type: &StructType,
-) -> proc_macro2::TokenStream {
-    let mut fields = fields.into_iter();
-    match constructor_type {
-        StructType::Unnamed => {
-            unnamed_constructor_expr(ident, fields.map(|(_, value_expression)| value_expression))
-        }
-        StructType::Named => named_constructor_expr(
-            ident,
-            fields.filter_map(|(a, value_expression)| match a {
-                FieldIdent::Named(field_ident) => Some((field_ident, value_expression)),
-                FieldIdent::Indexed(_) => None,
-            }),
-        ),
-        StructType::Unit => {
-            assert!(fields.next().is_none(), "unit structs cannot have fields");
-            quote! { #ident }
-        }
-    }
-}
-
-fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
-    ident: I,
-    generics: Option<&syn::Generics>,
-    fields: impl IntoIterator<Item = (K, V)>,
-    visibility: &Visibility,
-) -> proc_macro2::TokenStream {
-    let field_tokens = fields.into_iter().map(|(ident, expression)| {
-        quote! {
-            #ident: #expression,
-        }
-    });
-
-    quote! {
-        #visibility struct #ident #generics {
-            #(#field_tokens)*
-        }
-    }
-}
-
-fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
-    ident: I,
-    generics: Option<&syn::Generics>,
-    fields: impl IntoIterator<Item = T>,
-    visibility: &Visibility,
-) -> proc_macro2::TokenStream {
-    let fields = fields.into_iter();
-
-    quote! {
-        #visibility struct #ident #generics (
-            #(#fields,)*
-        )
-    }
-}
-
-fn unit_struct_definition_expr<I: ToTokens>(
-    ident: I,
-    generics: Option<&syn::Generics>,
-    visibility: &Visibility,
-) -> proc_macro2::TokenStream {
-    quote! {
-        #visibility struct #ident #generics;
-    }
-}
-
-pub fn struct_definition_expr<I: ToTokens>(
-    ident: I,
-    generics: Option<&syn::Generics>,
-    fields: impl IntoIterator<Item = (FieldIdent, Type)>,
-    constructor_type: &StructType,
-    visibility: &Visibility,
-) -> proc_macro2::TokenStream {
-    let fields = fields.into_iter();
-    match constructor_type {
-        StructType::Unnamed => unnamed_struct_definition_expr(
-            ident,
-            generics,
-            fields.map(|(_, value_expression)| value_expression),
-            visibility,
-        ),
-        StructType::Named => named_struct_definition_expr(
-            ident,
-            generics,
-            fields.filter_map(|(a, value_expression)| match a {
-                FieldIdent::Named(field_ident) => Some((field_ident, value_expression)),
-                FieldIdent::Indexed(_) => None,
-            }),
-            visibility,
-        ),
-        StructType::Unit => unit_struct_definition_expr(ident, generics, visibility),
     }
 }
 
@@ -483,7 +357,7 @@ pub fn element_field_deserialize_impl(
 
     let wrapper_data = match &options {
         ChildOpts::Element(opts @ ElementOpts { extendable, .. }) => {
-            let builder = SingleChildDeserializeElementBuilder {
+            let builder = DeserializeSingleChildElementBuilder {
                 ident: &wrapper_ident,
                 generics: &empty_generics,
                 required_expanded_name: Some(

@@ -2,84 +2,25 @@ use std::borrow::Cow;
 
 use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, Data, DataStruct, Expr, Ident, Lifetime, Stmt};
+use syn::{parse_quote, Expr, Ident, Lifetime, Stmt};
 
+use crate::common::value_deconstructor;
 use crate::common::Prefix;
+use crate::common::RecordInput;
 use crate::common::StructTypeWithFields;
-use crate::options::structs::fields::{ChildOpts, FieldOpts, ValueOpts};
-use crate::options::{structs::roots::RootElementOpts, WithExpandedNameExt};
+use crate::options::records;
+use crate::options::records::fields::{ChildOpts, FieldOpts, ValueOpts};
+use crate::options::WithExpandedNameExt;
 use crate::options::{Extendable, FieldWithOpts};
 use crate::ser::builders::SerializeBuilder;
+use crate::ser::common::attribute_group_field_serializer;
+use crate::ser::common::attribute_group_fields;
+use crate::ser::common::element_group_field_serializer;
+use crate::ser::common::element_group_fields;
 use crate::{
     common::{ExpandedName, FieldIdent},
-    DeriveError, DeriveResult,
+    DeriveError,
 };
-
-pub struct DeriveElementStruct<'a> {
-    opts: &'a RootElementOpts,
-    ast: &'a syn::DeriveInput,
-}
-
-impl<'a> DeriveElementStruct<'a> {
-    pub fn new(opts: &'a RootElementOpts, ast: &'a syn::DeriveInput) -> Self {
-        Self { opts, ast }
-    }
-
-    pub fn to_builder(&self) -> DeriveResult<StructSerializeElementBuilder> {
-        let Data::Struct(DataStruct { fields, .. }) = &self.ast.data else {
-            unreachable!()
-        };
-
-        #[allow(clippy::type_complexity)]
-        let struct_type: StructTypeWithFields<
-            Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-            Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-        > = match fields {
-            syn::Fields::Named(fields) => StructTypeWithFields::Named(
-                fields
-                    .named
-                    .iter()
-                    .map(|f| {
-                        let field_ident = f.ident.clone().expect("Named struct");
-
-                        DeriveResult::Ok(FieldWithOpts {
-                            field_ident,
-                            options: FieldOpts::from_field(f)?,
-                            field_type: f.ty.clone(),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, DeriveError>>()?,
-            ),
-            syn::Fields::Unnamed(fields) => StructTypeWithFields::Unnamed(
-                fields
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| {
-                        DeriveResult::Ok(FieldWithOpts {
-                            field_ident: syn::Index::from(i),
-                            options: FieldOpts::from_field(f)?,
-                            field_type: f.ty.clone(),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, DeriveError>>()?,
-            ),
-            _ => StructTypeWithFields::Unit,
-        };
-
-        Ok(StructSerializeElementBuilder {
-            ident: &self.ast.ident,
-            generics: &self.ast.generics,
-            expanded_name: self
-                .opts
-                .expanded_name(&self.ast.ident.to_string())
-                .into_owned(),
-            struct_type,
-            preferred_prefix: self.opts.preferred_prefix.clone(),
-            enforce_prefix: self.opts.enforce_prefix,
-        })
-    }
-}
 
 #[allow(clippy::type_complexity)]
 pub struct SingleChildSerializeElementBuilder<'a> {
@@ -132,11 +73,16 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
         serializer_access: &Ident,
         serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let builder = StructSerializeElementBuilder {
-            ident: self.ident,
-            generics: &self.generics(),
-            expanded_name: self.required_expanded_name.clone(),
-            struct_type: StructTypeWithFields::Named(vec![FieldWithOpts {
+        let ident = self.ident;
+
+        let input = RecordInput {
+            impl_for_ident: Cow::Borrowed(self.ident),
+            constructor_path: Cow::Owned(parse_quote!(#ident)),
+            result_type: Cow::Borrowed(self.item_type),
+            generics: Cow::Owned(parse_quote!()),
+            wrapper_function: std::convert::identity,
+            record_path: Cow::Owned(parse_quote!(self)),
+            fields: StructTypeWithFields::Named(vec![FieldWithOpts {
                 field_ident: self.value_access_ident(),
                 field_type: self.item_type.clone(),
                 options: FieldOpts::Value(ChildOpts::Value(ValueOpts {
@@ -144,6 +90,13 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
                     extendable: Extendable::None,
                 })),
             }]),
+            sub_path_ident: None,
+            fallable_deconstruction: false,
+        };
+
+        let builder = RecordSerializeElementBuilder {
+            input: &input,
+            required_expanded_name: self.required_expanded_name.clone(),
             preferred_prefix: self.preferred_prefix.clone(),
             enforce_prefix: self.enforce_prefix,
         };
@@ -163,38 +116,62 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
 }
 
 #[allow(clippy::type_complexity)]
-pub struct StructSerializeElementBuilder<'a> {
-    pub ident: &'a syn::Ident,
-    pub generics: &'a syn::Generics,
-    pub expanded_name: ExpandedName<'static>,
-    pub struct_type: StructTypeWithFields<
-        Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-        Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-    >,
+pub struct RecordSerializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
+    // pub ident: &'a syn::Ident,
+    // pub generics: &'a syn::Generics,
+    pub required_expanded_name: ExpandedName<'static>,
+    // pub struct_type: StructTypeWithFields<
+    //     Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
+    //     Vec<FieldWithOpts<syn::Index, FieldOpts>>,
+    // >,
     pub preferred_prefix: Option<Prefix<'static>>,
     pub enforce_prefix: bool,
+    pub input: &'a RecordInput<'a, T>,
 }
 
-impl SerializeBuilder for StructSerializeElementBuilder<'_> {
+impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordSerializeElementBuilder<'a, T> {
+    pub fn new(input: &'a RecordInput<'a, T>, opts: &'a records::roots::RootElementOpts) -> Self {
+        let expanded_name = opts
+            .expanded_name(&input.impl_for_ident.to_string())
+            .into_owned();
+        Self {
+            input,
+            preferred_prefix: opts.preferred_prefix.clone(),
+            enforce_prefix: opts.enforce_prefix,
+            required_expanded_name: expanded_name,
+        }
+    }
+}
+
+impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementBuilder<'_, T> {
     fn serialize_fn_body(
         &self,
         serializer_access: &Ident,
         _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let Self {
-            expanded_name,
-            preferred_prefix,
+            input,
             enforce_prefix,
-            struct_type,
+            required_expanded_name,
+            preferred_prefix,
             ..
         } = self;
 
-        let element_access_ident = Ident::new("__element", proc_macro2::Span::call_site());
-        let attribute_access_ident = Ident::new("__attributes", proc_macro2::Span::call_site());
-        let children_access_ident = Ident::new("__children", proc_macro2::Span::call_site());
+        let record_path = self.input.record_path.as_ref();
+
+        let value_deconstructor = value_deconstructor(
+            self.input.constructor_path.as_ref(),
+            &parse_quote!(&#record_path),
+            &self.input.fields,
+            self.input.fallable_deconstruction,
+        );
+
+        let ser_element_ident = Ident::new("__element", proc_macro2::Span::call_site());
+        let ser_attributes_ident = Ident::new("__attributes", proc_macro2::Span::call_site());
+        let ser_children_ident = Ident::new("__children", proc_macro2::Span::call_site());
         let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
 
-        let fields = match struct_type {
+        let fields = match &input.fields {
             StructTypeWithFields::Named(fields) => fields
                 .iter()
                 .cloned()
@@ -207,54 +184,63 @@ impl SerializeBuilder for StructSerializeElementBuilder<'_> {
                 .collect::<Vec<_>>(),
             StructTypeWithFields::Unit => vec![],
         };
-        let attribute_fields = crate::ser::attribute_group_fields(fields.clone())?;
-        let element_fields = crate::ser::element_group_fields(fields)?;
+        let attribute_fields = attribute_group_fields(fields.clone())?;
+        let element_fields = element_group_fields(fields)?;
 
-        let attribute_fields = crate::ser::attribute_group_field_serializer(
-            quote! {&mut #attribute_access_ident},
+        let attribute_fields = attribute_group_field_serializer(
+            quote! {&mut #ser_attributes_ident},
             attribute_fields,
+            |field_ident| {
+                let ident_name = field_ident.to_named_ident();
+                parse_quote!(#ident_name)
+            },
         )?;
 
         let element_end = if element_fields.is_empty() {
             quote! {
-                ::xmlity::ser::SerializeElementAttributes::end(#attribute_access_ident)
+                ::xmlity::ser::SerializeElementAttributes::end(#ser_attributes_ident)
             }
         } else {
-            let element_fields = crate::ser::element_group_field_serializer(
-                quote! {&mut #children_access_ident},
+            let element_fields = element_group_field_serializer(
+                quote! {&mut #ser_children_ident},
                 element_fields,
+                |field_ident| {
+                    let ident_name = field_ident.to_named_ident();
+                    parse_quote!(#ident_name)
+                },
             )?;
 
             quote! {
-                let mut #children_access_ident = ::xmlity::ser::SerializeElementAttributes::serialize_children(#attribute_access_ident)?;
+                let mut #ser_children_ident = ::xmlity::ser::SerializeElementAttributes::serialize_children(#ser_attributes_ident)?;
                 #element_fields
-                ::xmlity::ser::SerializeSeq::end(#children_access_ident)
+                ::xmlity::ser::SerializeSeq::end(#ser_children_ident)
             }
         };
 
         let preferred_prefix_setting = preferred_prefix.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
-              ::xmlity::ser::SerializeElement::preferred_prefix(&mut #element_access_ident, ::core::option::Option::Some(#preferred_prefix))?;
+              ::xmlity::ser::SerializeElement::preferred_prefix(&mut #ser_element_ident, ::core::option::Option::Some(#preferred_prefix))?;
           });
         let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map::<Stmt, _>(|enforce_prefix| parse_quote! {
-              ::xmlity::ser::SerializeElement::include_prefix(&mut #element_access_ident, #enforce_prefix)?;
+              ::xmlity::ser::SerializeElement::include_prefix(&mut #ser_element_ident, #enforce_prefix)?;
           });
 
         Ok(parse_quote! {
-            let #xml_name_temp_ident = #expanded_name;
-            let mut #element_access_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
+            let #xml_name_temp_ident = #required_expanded_name;
+            let mut #ser_element_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
+            #(#value_deconstructor)*
             #preferred_prefix_setting
             #enforce_prefix_setting
-            let mut #attribute_access_ident = ::xmlity::ser::SerializeElement::serialize_attributes(#element_access_ident)?;
+            let mut #ser_attributes_ident = ::xmlity::ser::SerializeElement::serialize_attributes(#ser_element_ident)?;
             #attribute_fields
             #element_end
         })
     }
 
     fn ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(self.ident)
+        Cow::Borrowed(self.input.impl_for_ident.as_ref())
     }
 
     fn generics(&self) -> Cow<'_, syn::Generics> {
-        Cow::Borrowed(self.generics)
+        Cow::Borrowed(self.input.generics.as_ref())
     }
 }

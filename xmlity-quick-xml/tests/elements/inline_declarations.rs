@@ -114,7 +114,7 @@ pub struct H {
 }
 
 define_test!(
-    multiple_elements_with_extendable,
+    multiple_elements,
     [(
         H {
             g: vec![
@@ -130,4 +130,42 @@ define_test!(
         },
         r#"<g><d><b>A</b><c><b>B</b></c></d><d><b>C</b><c><b>D</b></c></d></g>"#
     )]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum I {
+    #[xelement(name = "g")]
+    G(D),
+}
+
+define_test!(
+    enum_with_inline_element,
+    [(
+        I::G(D {
+            b: "A".to_string(),
+            c: C { c: "B".to_string() }
+        }),
+        r#"<g><d><b>A</b><c><b>B</b></c></d></g>"#
+    )]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum J {
+    #[xelement(name = "g")]
+    G(D),
+    U(String),
+}
+
+define_test!(
+    enum_with_inline_element_or_text,
+    [
+        (
+            I::G(D {
+                b: "A".to_string(),
+                c: C { c: "B".to_string() }
+            }),
+            r#"<g><d><b>A</b><c><b>B</b></c></d></g>"#
+        ),
+        (J::U("A".to_string()), r#"A"#)
+    ]
 );
