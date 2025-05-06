@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "xmlity"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "pretty_assertions",
  "rstest",
@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "xmlity-derive"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -897,7 +897,7 @@ dependencies = [
 
 [[package]]
 name = "xmlity-quick-xml"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "criterion",
  "pretty_assertions",
