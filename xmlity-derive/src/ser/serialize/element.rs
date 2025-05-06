@@ -166,8 +166,9 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
             self.input.fallable_deconstruction,
         );
 
-        let element_seq_ident = Ident::new("__element", proc_macro2::Span::call_site());
-        let children_seq_ident = Ident::new("__children", proc_macro2::Span::call_site());
+        let ser_element_ident = Ident::new("__element", proc_macro2::Span::call_site());
+        let ser_attributes_ident = Ident::new("__attributes", proc_macro2::Span::call_site());
+        let ser_children_ident = Ident::new("__children", proc_macro2::Span::call_site());
         let xml_name_temp_ident = Ident::new("__xml_name", proc_macro2::Span::call_site());
 
         let fields = match &input.fields {
@@ -187,7 +188,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
         let element_fields = element_group_fields(fields)?;
 
         let attribute_fields = attribute_group_field_serializer(
-            quote! {&mut #element_seq_ident},
+            quote! {&mut #ser_attributes_ident},
             attribute_fields,
             |field_ident| {
                 let ident_name = field_ident.to_named_ident();
@@ -197,11 +198,11 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
 
         let element_end = if element_fields.is_empty() {
             quote! {
-                ::xmlity::ser::SerializeElement::end(#element_seq_ident)
+                ::xmlity::ser::SerializeElementAttributes::end(#ser_attributes_ident)
             }
         } else {
             let element_fields = element_group_field_serializer(
-                quote! {&mut #children_seq_ident},
+                quote! {&mut #ser_children_ident},
                 element_fields,
                 |field_ident| {
                     let ident_name = field_ident.to_named_ident();
@@ -210,25 +211,26 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
             )?;
 
             quote! {
-                let mut #children_seq_ident = ::xmlity::ser::SerializeElement::serialize_children(#element_seq_ident)?;
+                let mut #ser_children_ident = ::xmlity::ser::SerializeElementAttributes::serialize_children(#ser_attributes_ident)?;
                 #element_fields
-                ::xmlity::ser::SerializeSeq::end(#children_seq_ident)
+                ::xmlity::ser::SerializeSeq::end(#ser_children_ident)
             }
         };
 
         let preferred_prefix_setting = preferred_prefix.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
-              ::xmlity::ser::SerializeElement::preferred_prefix(&mut #element_seq_ident, ::core::option::Option::Some(#preferred_prefix))?;
+              ::xmlity::ser::SerializeElement::preferred_prefix(&mut #ser_element_ident, ::core::option::Option::Some(#preferred_prefix))?;
           });
         let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map::<Stmt, _>(|enforce_prefix| parse_quote! {
-              ::xmlity::ser::SerializeElement::include_prefix(&mut #element_seq_ident, #enforce_prefix)?;
+              ::xmlity::ser::SerializeElement::include_prefix(&mut #ser_element_ident, #enforce_prefix)?;
           });
 
         Ok(parse_quote! {
             let #xml_name_temp_ident = #required_expanded_name;
-            let mut #element_seq_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
+            let mut #ser_element_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
             #(#value_deconstructor)*
             #preferred_prefix_setting
             #enforce_prefix_setting
+            let mut #ser_attributes_ident = ::xmlity::ser::SerializeElement::serialize_attributes(#ser_element_ident)?;
             #attribute_fields
             #element_end
         })

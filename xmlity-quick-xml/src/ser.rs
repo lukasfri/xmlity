@@ -2,14 +2,15 @@ use core::str;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::ops::DerefMut;
 
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer as QuickXmlWriter;
 
 use xmlity::ser::IncludePrefix;
-use xmlity::{ser, ExpandedName, Prefix, QName, Serialize, XmlNamespace};
+use xmlity::{ser, ExpandedName, LocalName, Prefix, QName, Serialize, XmlNamespace};
 
-use crate::{declaration_into_attribute, Attribute, OwnedQuickName, XmlnsDeclaration};
+use crate::{OwnedQuickName, XmlnsDeclaration};
 
 use super::Error;
 
@@ -133,7 +134,7 @@ impl<'a> NamespaceScopeContainer<'a> {
     /// Find matching prefix
     pub fn find_matching_namespace<'b>(
         &'b self,
-        namespace: &'b XmlNamespace<'b>,
+        namespace: &'_ XmlNamespace<'_>,
     ) -> Option<&'b Prefix<'a>> {
         self.scopes.iter().rev().find_map(|a| {
             a.defined_namespaces
@@ -146,17 +147,16 @@ impl<'a> NamespaceScopeContainer<'a> {
     /// This function takes in a namespace and tries to resolve it in different ways depending on the options provided. Unless `always_declare` is true, it will try to use an existing declaration. Otherwise, or if the namespace has not yet been declared, it will provide a declaration.
     pub fn resolve_namespace<'b>(
         &'b mut self,
-        namespace: &'b XmlNamespace<'b>,
+        namespace: &'_ XmlNamespace<'b>,
         preferred_prefix: Option<&'b Prefix<'b>>,
         always_declare: IncludePrefix,
-    ) -> (Prefix<'b>, Option<XmlnsDeclaration<'b>>) {
-        let existing_prefix = self
-            .find_matching_namespace(namespace)
-            // If we should always declare, we simply pretend it's not declared yet.
-            .filter(|_p| always_declare != IncludePrefix::Always);
+    ) -> (Prefix<'a>, Option<XmlnsDeclaration<'a>>) {
+        if always_declare != IncludePrefix::Always {
+            let existing_prefix = self.find_matching_namespace(namespace);
 
-        if let Some(existing_prefix) = existing_prefix {
-            return (existing_prefix.clone(), None);
+            if let Some(existing_prefix) = existing_prefix {
+                return (existing_prefix.clone(), None);
+            }
         }
 
         // If the namespace is not declared, use the specifically requested preferred prefix...
@@ -171,34 +171,44 @@ impl<'a> NamespaceScopeContainer<'a> {
             })
             .cloned()
             // If the preferred namespace prefix is not available, use a random prefix.
-            .unwrap_or_else(|| self.prefix_generator.new_prefix());
+            .unwrap_or_else(|| self.prefix_generator.new_prefix())
+            .into_owned();
+
+        let scope = self
+            .scopes
+            .last_mut()
+            .expect("There should be at least one scope");
+
+        scope
+            .defined_namespaces
+            .insert(prefix.clone(), namespace.clone().into_owned());
+
+        let (prefix, namespace) = scope
+            .defined_namespaces
+            .get_key_value(&prefix)
+            .expect("The namespace should be defined as it was just added");
 
         let xmlns = XmlnsDeclaration::new(prefix.clone(), namespace.clone());
 
-        self.scopes.last_mut().map(|a| {
-            a.defined_namespaces
-                .insert(prefix.clone().into_owned(), namespace.clone().into_owned())
-        });
-
-        (prefix, Some(xmlns))
+        (prefix.clone(), Some(xmlns))
     }
 
-    pub fn resolve_name<'b>(
-        &mut self,
-        name: ExpandedName<'b>,
-        preferred_prefix: Option<&Prefix<'b>>,
+    pub fn resolve_name<'c>(
+        &'c mut self,
+        local_name: LocalName<'c>,
+        namespace: &Option<XmlNamespace<'c>>,
+        preferred_prefix: Option<&'c Prefix<'c>>,
         always_declare: IncludePrefix,
-    ) -> (QName<'b>, Option<XmlnsDeclaration<'b>>) {
-        let (prefix, declaration) = name
-            .namespace()
+    ) -> (QName<'a>, Option<XmlnsDeclaration<'a>>) {
+        let (prefix, declaration) = namespace
+            .as_ref()
             .map(|namespace| self.resolve_namespace(namespace, preferred_prefix, always_declare))
             .unzip();
 
-        let declaration = declaration.flatten().map(|a| a.into_owned());
-        let resolved_prefix = prefix.map(|a| a.into_owned());
+        let declaration = declaration.flatten();
 
-        let name = name.to_q_name(resolved_prefix);
-        (name.into_owned(), declaration)
+        let name = QName::new(prefix, local_name.into_owned());
+        (name, declaration)
     }
 }
 
@@ -206,6 +216,8 @@ pub struct Serializer<W: Write> {
     writer: QuickXmlWriter<W>,
     preferred_namespace_prefixes: BTreeMap<XmlNamespace<'static>, Prefix<'static>>,
     namespace_scopes: NamespaceScopeContainer<'static>,
+    buffered_bytes_start: BytesStart<'static>,
+    buffered_bytes_start_empty: bool,
 }
 
 impl<W: Write> Serializer<W> {
@@ -221,6 +233,8 @@ impl<W: Write> Serializer<W> {
             writer,
             preferred_namespace_prefixes,
             namespace_scopes: NamespaceScopeContainer::new(),
+            buffered_bytes_start: BytesStart::new(""),
+            buffered_bytes_start_empty: true,
         }
     }
 
@@ -249,16 +263,16 @@ impl<W: Write> Serializer<W> {
         name: ExpandedName<'b>,
         preferred_prefix: Option<&Prefix<'b>>,
         always_declare: IncludePrefix,
-    ) -> (QName<'b>, Option<XmlnsDeclaration<'b>>) {
-        let name2 = name.clone();
-        let preferred_prefix = preferred_prefix.or_else(|| {
-            name2
-                .namespace()
-                .and_then(|a| self.preferred_namespace_prefixes.get(a))
-        });
+    ) -> (QName<'static>, Option<XmlnsDeclaration<'static>>) {
+        let (local_name, namespace) = name.into_parts();
+
+        let namespace_ref = namespace.as_ref();
+
+        let preferred_prefix = preferred_prefix
+            .or_else(|| namespace_ref.and_then(|a| self.preferred_namespace_prefixes.get(a)));
 
         self.namespace_scopes
-            .resolve_name(name, preferred_prefix, always_declare)
+            .resolve_name(local_name, &namespace, preferred_prefix, always_declare)
     }
 }
 
@@ -277,19 +291,31 @@ impl<W: Write> From<W> for Serializer<W> {
 pub struct SerializeElement<'s, W: Write> {
     serializer: &'s mut Serializer<W>,
     name: ExpandedName<'static>,
-    attributes: Vec<Attribute<'static>>,
+    include_prefix: IncludePrefix,
     preferred_prefix: Option<Prefix<'static>>,
-    enforce_prefix: IncludePrefix,
 }
 
-pub struct AttributeSerializer<'t> {
+impl<'s, W: Write> SerializeElement<'s, W> {
+    fn resolve_name_or_declare<'a>(
+        name: ExpandedName<'a>,
+        preferred_prefix: Option<&Prefix<'a>>,
+        enforce_prefix: IncludePrefix,
+        serializer: &mut Serializer<W>,
+    ) -> (QName<'a>, Option<XmlnsDeclaration<'a>>) {
+        let (qname, decl) = serializer.resolve_name(name, preferred_prefix, enforce_prefix);
+
+        (qname, decl)
+    }
+}
+
+pub struct AttributeSerializer<'t, W: Write> {
     name: ExpandedName<'static>,
-    on_end_add_to: &'t mut Vec<Attribute<'static>>,
+    serializer: &'t mut Serializer<W>,
     preferred_prefix: Option<Prefix<'static>>,
     enforce_prefix: IncludePrefix,
 }
 
-impl ser::SerializeAttributeAccess for AttributeSerializer<'_> {
+impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
     type Ok = ();
     type Error = Error;
 
@@ -307,27 +333,33 @@ impl ser::SerializeAttributeAccess for AttributeSerializer<'_> {
     }
 
     fn end<S: AsRef<str>>(self, value: S) -> Result<Self::Ok, Self::Error> {
-        self.on_end_add_to.push(Attribute {
-            name: self.name.into_owned(),
-            value: value.as_ref().to_owned(),
-            preferred_prefix: self.preferred_prefix,
-            enforce_prefix: self.enforce_prefix,
-        });
+        let (qname, decl) = SerializeElement::resolve_name_or_declare(
+            self.name,
+            None,
+            IncludePrefix::default(),
+            self.serializer,
+        );
+
+        if let Some(decl) = decl {
+            self.serializer.push_decl_attr(decl);
+        }
+
+        self.serializer.push_attr(qname, value.as_ref());
 
         Ok(())
     }
 }
 
-pub struct AttributeVecSerializer<'t> {
-    attributes: &'t mut Vec<Attribute<'static>>,
+pub struct AttributeVecSerializer<'t, W: Write> {
+    serializer: &'t mut Serializer<W>,
 }
 
-impl ser::AttributeSerializer for AttributeVecSerializer<'_> {
+impl<'t, W: Write> ser::AttributeSerializer for AttributeVecSerializer<'t, W> {
     type Error = Error;
 
     type Ok = ();
     type SerializeAttribute<'a>
-        = AttributeSerializer<'a>
+        = AttributeSerializer<'a, W>
     where
         Self: 'a;
 
@@ -337,7 +369,7 @@ impl ser::AttributeSerializer for AttributeVecSerializer<'_> {
     ) -> Result<Self::SerializeAttribute<'_>, Self::Error> {
         Ok(Self::SerializeAttribute {
             name: name.clone().into_owned(),
-            on_end_add_to: &mut self.attributes,
+            serializer: self.serializer.deref_mut(),
             preferred_prefix: None,
             enforce_prefix: IncludePrefix::default(),
         })
@@ -348,94 +380,65 @@ impl ser::AttributeSerializer for AttributeVecSerializer<'_> {
     }
 }
 
-/// This exists to allow us to transfer the practically completed BytesStart out of `finish_start` to then become the `quick_xml` BytesStart which is only exists by references to data.
-pub struct OwnedBytesStart {
-    name: OwnedQuickName,
-    attributes: Vec<(OwnedQuickName, Vec<u8>)>,
-}
-
-impl OwnedBytesStart {
-    pub fn as_quick_xml(&self) -> BytesStart<'_> {
-        BytesStart::from(self.name.as_ref()).with_attributes(self.attributes.iter().map(
-            |(key, value)| quick_xml::events::attributes::Attribute {
-                key: key.as_ref(),
-                value: Cow::Borrowed(value),
-            },
-        ))
-    }
-}
-
 impl<'s, W: Write> SerializeElement<'s, W> {
-    fn finish_start(self) -> (OwnedBytesStart, QName<'static>, &'s mut Serializer<W>) {
+    fn finish_start(self) -> (QName<'static>, &'s mut Serializer<W>) {
         let Self {
-            serializer,
             name,
-            attributes,
-            enforce_prefix,
+            include_prefix,
             preferred_prefix,
+            serializer,
         } = self;
 
-        let mut resolve_name_or_declare =
-            |name: &ExpandedName<'_>,
-             preferred_prefix: Option<&Prefix<'_>>,
-             enforce_prefix: IncludePrefix|
-             -> (QName<'static>, Option<XmlnsDeclaration<'static>>) {
-                let (qname, decl) =
-                    serializer.resolve_name(name.clone(), preferred_prefix, enforce_prefix);
-
-                (qname.into_owned(), decl.map(|a| a.into_owned()))
-            };
-
-        let (elem_qname, elem_name_decl) =
-            resolve_name_or_declare(&name, preferred_prefix.as_ref(), enforce_prefix);
-
-        let (attr_prefixes, attr_decls): (Vec<_>, Vec<_>) = attributes
-            .iter()
-            .map(|a| &a.name)
-            .map(|name| resolve_name_or_declare(name, None, IncludePrefix::default()))
-            .unzip();
-
-        let decls = elem_name_decl
-            .into_iter()
-            .chain(attr_decls.into_iter().flatten())
-            .collect::<Vec<_>>();
-
-        // Add declared namespaces first
-        let mut q_attributes = decls
-            .iter()
-            .map(|decl| declaration_into_attribute(decl.clone()))
-            .map(|attr| {
-                (
-                    OwnedQuickName::new(&attr.name),
-                    attr.value.as_bytes().to_owned(),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        // Then add the attributes
-        q_attributes.extend(
-            attributes
-                .into_iter()
-                .zip(attr_prefixes)
-                .map(|(attr, qname)| attr.resolve(qname.prefix().cloned()))
-                .map(|attr| {
-                    (
-                        OwnedQuickName::new(&attr.name),
-                        attr.value.as_bytes().to_owned(),
-                    )
-                }),
+        assert!(
+            serializer.buffered_bytes_start_empty,
+            "Should have been emptied by the serializer"
         );
 
-        let bytes_start = OwnedBytesStart {
-            name: OwnedQuickName::new(&elem_qname),
-            attributes: q_attributes,
-        };
+        serializer.buffered_bytes_start.clear_attributes();
 
-        (bytes_start, elem_qname, serializer)
+        let (qname, decl) = SerializeElement::resolve_name_or_declare(
+            name.clone(),
+            preferred_prefix.as_ref(),
+            include_prefix,
+            serializer,
+        );
+        serializer
+            .buffered_bytes_start
+            .set_name(qname.to_string().as_bytes());
+
+        if let Some(decl) = decl {
+            serializer.push_decl_attr(decl);
+        }
+        serializer.buffered_bytes_start_empty = false;
+
+        (qname, serializer)
+    }
+
+    fn end_empty(serializer: &mut Serializer<W>) -> Result<(), Error> {
+        assert!(
+            !serializer.buffered_bytes_start_empty,
+            "start should be buffered"
+        );
+        let start = serializer.buffered_bytes_start.borrow();
+
+        serializer
+            .writer
+            .write_event(Event::Empty(start))
+            .map_err(Error::Io)?;
+
+        serializer.buffered_bytes_start_empty = true;
+
+        Ok(())
     }
 }
 
-impl<W: Write> ser::SerializeAttributes for SerializeElement<'_, W> {
+/// Provides the implementation of [`ser::SerializeElement`] for the `quick-xml` crate.
+pub struct SerializeElementAttributes<'s, W: Write> {
+    serializer: &'s mut Serializer<W>,
+    end_name: QName<'static>,
+}
+
+impl<W: Write> ser::SerializeAttributes for SerializeElementAttributes<'_, W> {
     type Ok = ();
     type Error = Error;
 
@@ -444,16 +447,34 @@ impl<W: Write> ser::SerializeAttributes for SerializeElement<'_, W> {
         a: &A,
     ) -> Result<Self::Ok, Self::Error> {
         a.serialize_attribute(AttributeVecSerializer {
-            attributes: &mut self.attributes,
+            serializer: self.serializer,
         })
     }
 }
 
-impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
+impl<'s, W: Write> ser::SerializeElementAttributes for SerializeElementAttributes<'s, W> {
     type ChildrenSerializeSeq = ChildrenSerializeSeq<'s, W>;
 
+    fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
+        Ok(ChildrenSerializeSeq {
+            serializer: self.serializer,
+            end_name: self.end_name,
+        })
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeElement::end_empty(self.serializer)
+    }
+}
+
+impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
+    type Ok = ();
+    type Error = Error;
+    type ChildrenSerializeSeq = ChildrenSerializeSeq<'s, W>;
+    type SerializeElementAttributes = SerializeElementAttributes<'s, W>;
+
     fn include_prefix(&mut self, should_enforce: IncludePrefix) -> Result<Self::Ok, Self::Error> {
-        self.enforce_prefix = should_enforce;
+        self.include_prefix = should_enforce;
         Ok(())
     }
     fn preferred_prefix(
@@ -464,12 +485,20 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
         Ok(())
     }
 
+    fn serialize_attributes(self) -> Result<Self::SerializeElementAttributes, Self::Error> {
+        self.serializer.push_namespace_scope();
+        let (end_name, serializer) = self.finish_start();
+        Ok(SerializeElementAttributes {
+            serializer,
+            end_name,
+        })
+    }
+
     fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
         self.serializer.push_namespace_scope();
-        let (bytes_start, end_name, serializer) = self.finish_start();
+        let (end_name, serializer) = self.finish_start();
 
         Ok(ChildrenSerializeSeq {
-            bytes_start: Some(bytes_start),
             serializer,
             end_name,
         })
@@ -477,12 +506,9 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         self.serializer.push_namespace_scope();
-        let (bytes_start, _, serializer) = self.finish_start();
+        let (_, serializer) = self.finish_start();
 
-        serializer
-            .writer
-            .write_event(Event::Empty(bytes_start.as_quick_xml()))
-            .map_err(Error::Io)?;
+        SerializeElement::end_empty(serializer)?;
 
         serializer.pop_namespace_scope();
 
@@ -491,7 +517,6 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
 }
 
 pub struct ChildrenSerializeSeq<'s, W: Write> {
-    bytes_start: Option<OwnedBytesStart>,
     serializer: &'s mut Serializer<W>,
     end_name: QName<'static>,
 }
@@ -501,19 +526,17 @@ impl<W: Write> ser::SerializeSeq for ChildrenSerializeSeq<'_, W> {
     type Error = Error;
 
     fn serialize_element<V: Serialize>(&mut self, value: &V) -> Result<Self::Ok, Self::Error> {
-        value.serialize(SerializerWithPossibleBytesStart {
-            serializer: self.serializer,
-            possible_bytes_start: Some(&mut self.bytes_start),
-        })
+        value.serialize(self.serializer.deref_mut())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         // If we have a bytes_start, then we never wrote the start event, so we need to write an empty element instead.
-        if let Some(bytes_start) = self.bytes_start {
+        if !self.serializer.buffered_bytes_start_empty {
             self.serializer
                 .writer
-                .write_event(Event::Empty(bytes_start.as_quick_xml()))
+                .write_event(Event::Empty(self.serializer.buffered_bytes_start.borrow()))
                 .map_err(Error::Io)?;
+            self.serializer.buffered_bytes_start_empty = true;
         } else {
             let end_name = OwnedQuickName::new(&self.end_name);
 
@@ -531,20 +554,16 @@ impl<W: Write> ser::SerializeSeq for ChildrenSerializeSeq<'_, W> {
     }
 }
 
-pub struct SerializeSeq<'e, 'b, W: Write> {
+pub struct SerializeSeq<'e, W: Write> {
     serializer: &'e mut Serializer<W>,
-    possible_bytes_start: Option<&'b mut Option<OwnedBytesStart>>,
 }
 
-impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, '_, W> {
+impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, W> {
     type Ok = ();
     type Error = Error;
 
     fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error> {
-        v.serialize(SerializerWithPossibleBytesStart {
-            serializer: self.serializer,
-            possible_bytes_start: self.possible_bytes_start.as_deref_mut(),
-        })
+        v.serialize(self.serializer.deref_mut())
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
@@ -552,19 +571,49 @@ impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, '_, W> {
     }
 }
 
+impl<W: Write> Serializer<W> {
+    pub fn try_start(&mut self) -> Result<(), Error> {
+        if !self.buffered_bytes_start_empty {
+            self.writer
+                .write_event(Event::Start(self.buffered_bytes_start.borrow()))
+                .map_err(Error::Io)?;
+            self.buffered_bytes_start_empty = true;
+        }
+        Ok(())
+    }
+
+    pub fn push_attr(&mut self, qname: QName<'_>, value: &str) {
+        self.buffered_bytes_start
+            .push_attribute(quick_xml::events::attributes::Attribute {
+                key: quick_xml::name::QName(qname.to_string().as_bytes()),
+                value: Cow::Borrowed(value.as_bytes()),
+            });
+    }
+
+    pub fn push_decl_attr(&mut self, decl: XmlnsDeclaration<'_>) {
+        let XmlnsDeclaration { namespace, prefix } = decl;
+
+        let key = XmlnsDeclaration::xmlns_qname(prefix);
+
+        self.push_attr(key, namespace.as_str());
+    }
+}
+
 impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
     type Ok = ();
     type Error = Error;
     type SerializeElement = SerializeElement<'s, W>;
-    type SerializeSeq = SerializeSeq<'s, 'static, W>;
+    type SerializeSeq = SerializeSeq<'s, W>;
 
     fn serialize_cdata<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
         self.writer
             .write_event(Event::CData(BytesCData::new(text.as_ref())))
             .map_err(Error::Io)
     }
 
     fn serialize_text<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
         self.writer
             .write_event(Event::Text(BytesText::from_escaped(text.as_ref())))
             .map_err(Error::Io)
@@ -574,20 +623,18 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
         self,
         name: &'a ExpandedName<'a>,
     ) -> Result<Self::SerializeElement, Self::Error> {
+        self.try_start()?;
+
         Ok(SerializeElement {
             serializer: self,
             name: name.clone().into_owned(),
-            attributes: Vec::new(),
+            include_prefix: IncludePrefix::default(),
             preferred_prefix: None,
-            enforce_prefix: IncludePrefix::default(),
         })
     }
 
     fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
-        Ok(SerializeSeq {
-            serializer: self,
-            possible_bytes_start: None,
-        })
+        Ok(SerializeSeq { serializer: self })
     }
 
     fn serialize_decl<S: AsRef<str>>(
@@ -596,6 +643,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
         encoding: Option<S>,
         standalone: Option<S>,
     ) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
         self.writer
             .write_event(Event::Decl(BytesDecl::new(
                 version.as_ref(),
@@ -606,6 +654,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
     }
 
     fn serialize_pi<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
         self.writer
             .write_event(Event::PI(BytesPI::new(
                 str::from_utf8(text.as_ref()).unwrap(),
@@ -614,6 +663,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
     }
 
     fn serialize_comment<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
         self.writer
             .write_event(Event::Comment(BytesText::from_escaped(
                 str::from_utf8(text.as_ref()).unwrap(),
@@ -622,90 +672,12 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
     }
 
     fn serialize_doctype<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.try_start()?;
         self.writer
             .write_event(Event::DocType(BytesText::from_escaped(
                 str::from_utf8(text.as_ref()).unwrap(),
             )))
             .map_err(Error::Io)
-    }
-
-    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-pub struct SerializerWithPossibleBytesStart<'a, 'b, W: Write> {
-    serializer: &'a mut Serializer<W>,
-    possible_bytes_start: Option<&'b mut Option<OwnedBytesStart>>,
-}
-
-impl<W: Write> SerializerWithPossibleBytesStart<'_, '_, W> {
-    pub fn try_start(&mut self) -> Result<(), Error> {
-        if let Some(bytes_start) = self.possible_bytes_start.take().and_then(Option::take) {
-            self.serializer
-                .writer
-                .write_event(Event::Start(bytes_start.as_quick_xml()))
-                .map_err(Error::Io)?;
-        }
-        Ok(())
-    }
-}
-
-impl<'s, 'b, W: Write> xmlity::Serializer for SerializerWithPossibleBytesStart<'s, 'b, W> {
-    type Ok = ();
-    type Error = Error;
-    type SerializeElement = SerializeElement<'s, W>;
-    type SerializeSeq = SerializeSeq<'s, 'b, W>;
-
-    fn serialize_cdata<S: AsRef<str>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.try_start()?;
-        self.serializer.serialize_cdata(text)
-    }
-
-    fn serialize_text<S: AsRef<str>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.try_start()?;
-        self.serializer.serialize_text(text)
-    }
-
-    fn serialize_element<'a>(
-        mut self,
-        name: &'a ExpandedName<'a>,
-    ) -> Result<Self::SerializeElement, Self::Error> {
-        self.try_start()?;
-        self.serializer.serialize_element(name)
-    }
-
-    fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
-        Ok(SerializeSeq {
-            serializer: self.serializer,
-            possible_bytes_start: self.possible_bytes_start,
-        })
-    }
-
-    fn serialize_decl<S: AsRef<str>>(
-        mut self,
-        version: S,
-        encoding: Option<S>,
-        standalone: Option<S>,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.try_start()?;
-        self.serializer
-            .serialize_decl(version, encoding, standalone)
-    }
-
-    fn serialize_pi<S: AsRef<[u8]>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.try_start()?;
-        self.serializer.serialize_pi(text)
-    }
-
-    fn serialize_comment<S: AsRef<[u8]>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.try_start()?;
-        self.serializer.serialize_comment(text)
-    }
-
-    fn serialize_doctype<S: AsRef<[u8]>>(mut self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.try_start()?;
-        self.serializer.serialize_doctype(text)
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
