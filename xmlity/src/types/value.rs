@@ -15,7 +15,7 @@ use crate::{
     de::{self, AttributesAccess, ElementAccess, SeqAccess, Visitor},
     ser::{
         self, IncludePrefix, SerializeAttributeAccess, SerializeAttributes, SerializeElement,
-        SerializeSeq,
+        SerializeElementAttributes, SerializeSeq,
     },
     AttributeSerializer, Deserialize, Deserializer, ExpandedName, Prefix, Serialize,
     SerializeAttribute, Serializer,
@@ -875,16 +875,18 @@ impl Serialize for XmlElement {
     where
         S: Serializer,
     {
-        let mut element = serializer.serialize_element(&self.name)?;
+        let element = serializer.serialize_element(&self.name)?;
+
+        let mut attributes = element.serialize_attributes()?;
         for attr in &self.attributes {
-            element.serialize_attribute(attr)?;
+            attributes.serialize_attribute(attr)?;
         }
 
         if self.children.values.is_empty() {
-            return element.end();
+            return attributes.end();
         }
 
-        let mut children = element.serialize_children()?;
+        let mut children = attributes.serialize_children()?;
         for child in &self.children.values {
             children.serialize_element(child)?;
         }
@@ -991,8 +993,25 @@ impl ser::AttributeSerializer for &mut &mut XmlElement {
     }
 }
 
-impl<'s> ser::SerializeElement for &'s mut XmlElement {
+impl<'s> ser::SerializeElementAttributes for &'s mut XmlElement {
     type ChildrenSerializeSeq = &'s mut XmlSeq<XmlChild>;
+
+    fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
+        Ok(&mut self.children)
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+}
+
+impl<'s> ser::SerializeElement for &'s mut XmlElement {
+    type Ok = ();
+
+    type Error = XmlValueSerializerError;
+
+    type ChildrenSerializeSeq = &'s mut XmlSeq<XmlChild>;
+    type SerializeElementAttributes = &'s mut XmlElement;
 
     fn include_prefix(&mut self, should_enforce: IncludePrefix) -> Result<Self::Ok, Self::Error> {
         self.enforce_prefix = should_enforce;
@@ -1013,6 +1032,10 @@ impl<'s> ser::SerializeElement for &'s mut XmlElement {
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
+    }
+
+    fn serialize_attributes(self) -> Result<Self::SerializeElementAttributes, Self::Error> {
+        Ok(self)
     }
 }
 
