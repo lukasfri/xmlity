@@ -1,28 +1,42 @@
 use std::borrow::Cow;
 
+use proc_macro2::Span;
 use quote::quote;
-use syn::{parse_quote, Arm, Data, DataEnum, DataStruct, DeriveInput, Generics, Ident, Stmt};
+use syn::{parse_quote, Arm, Data, DataEnum, DeriveInput, Fields, Generics, Ident, Stmt};
 
 use crate::{
-    options::enums::{
-        roots::RootValueOpts,
-        variants::{ValueOpts, VariantOpts},
+    common::{self, value_deconstructor, FieldIdent, RecordInput},
+    options::{
+        enums::roots::RootValueOpts as EnumRootVolueOpts,
+        records::{
+            self,
+            roots::{RootValueOpts as RecordRootValueOpts, SerializeRootOpts},
+        },
     },
-    ser::builders::SerializeBuilder,
+    ser::{
+        builders::{SerializeBuilder, SerializeBuilderExt},
+        common::{element_fields, seq_field_serializer},
+    },
     DeriveError,
 };
 
-pub struct DeriveNoneStruct<'a> {
-    ast: &'a DeriveInput,
+use super::variant::SerializeVariantBuilder;
+
+pub struct RecordSerializeValueBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
+    input: &'a RecordInput<'a, T>,
+    options: Option<&'a RecordRootValueOpts>,
 }
 
-impl<'a> DeriveNoneStruct<'a> {
-    pub fn new(ast: &'a DeriveInput) -> Self {
-        Self { ast }
+impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordSerializeValueBuilder<'a, T> {
+    pub fn new(ast: &'a RecordInput<'a, T>, options: Option<&'a RecordRootValueOpts>) -> Self {
+        Self {
+            input: ast,
+            options,
+        }
     }
 }
 
-impl SerializeBuilder for DeriveNoneStruct<'_> {
+impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeValueBuilder<'_, T> {
     fn serialize_fn_body(
         &self,
         serializer_access: &Ident,
@@ -30,45 +44,70 @@ impl SerializeBuilder for DeriveNoneStruct<'_> {
     ) -> Result<Vec<Stmt>, DeriveError> {
         let seq_access_ident = Ident::new("__seq_access", proc_macro2::Span::call_site());
 
-        let Data::Struct(DataStruct { fields, .. }) = &self.ast.data else {
-            unreachable!()
+        let fields: Vec<_> = match (&self.input.fields, &self.options) {
+            (common::StructTypeWithFields::Named(fields), _) => fields
+                .iter()
+                .cloned()
+                .map(|f| f.map_ident(FieldIdent::Named))
+                .collect(),
+            (common::StructTypeWithFields::Unnamed(fields), _) => fields
+                .iter()
+                .cloned()
+                .map(|f| f.map_ident(FieldIdent::Indexed))
+                .collect(),
+            (
+                common::StructTypeWithFields::Unit,
+                Some(RecordRootValueOpts {
+                    value: Some(value), ..
+                }),
+            ) => {
+                return Ok(parse_quote! {
+                    ::xmlity::Serializer::serialize_text(#serializer_access, #value)
+                });
+            }
+            (common::StructTypeWithFields::Unit, _) => {
+                return Ok(parse_quote! {
+                    ::xmlity::Serializer::serialize_none(#serializer_access)
+                });
+            }
         };
 
-        match fields {
-            syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
-                let value_fields = crate::ser::seq_field_serializer(
-                    quote! {#seq_access_ident},
-                    crate::ser::element_fields(crate::ser::fields(self.ast)?)?,
-                )?;
+        let record_path = self.input.record_path.as_ref();
 
-                Ok(parse_quote! {
-                    let mut #seq_access_ident = ::xmlity::Serializer::serialize_seq(#serializer_access)?;
-                    #value_fields
-                    ::xmlity::ser::SerializeSeq::end(#seq_access_ident)
-                })
-            }
-            syn::Fields::Unit => Ok(parse_quote! {
-                ::xmlity::Serializer::serialize_none(serializer)?;
-            }),
-        }
+        let value_deconstructor = value_deconstructor(
+            self.input.constructor_path.as_ref(),
+            &parse_quote!(&#record_path),
+            &self.input.fields,
+            self.input.fallable_deconstruction,
+        );
+
+        let value_fields =
+            seq_field_serializer(quote! {#seq_access_ident}, element_fields(fields)?)?;
+
+        Ok(parse_quote! {
+            #(#value_deconstructor)*
+            let mut #seq_access_ident = ::xmlity::Serializer::serialize_seq(#serializer_access)?;
+            #value_fields
+            ::xmlity::ser::SerializeSeq::end(#seq_access_ident)
+        })
     }
 
     fn ident(&self) -> Cow<'_, Ident> {
-        Cow::Borrowed(&self.ast.ident)
+        Cow::Borrowed(self.input.impl_for_ident.as_ref())
     }
 
     fn generics(&self) -> Cow<'_, Generics> {
-        Cow::Borrowed(&self.ast.generics)
+        Cow::Borrowed(self.input.generics.as_ref())
     }
 }
 
 pub struct DeriveEnum<'a> {
     ast: &'a syn::DeriveInput,
-    value_opts: Option<&'a RootValueOpts>,
+    value_opts: Option<&'a EnumRootVolueOpts>,
 }
 
 impl<'a> DeriveEnum<'a> {
-    pub fn new(ast: &'a syn::DeriveInput, value_opts: Option<&'a RootValueOpts>) -> Self {
+    pub fn new(ast: &'a syn::DeriveInput, value_opts: Option<&'a EnumRootVolueOpts>) -> Self {
         Self { ast, value_opts }
     }
 }
@@ -79,7 +118,12 @@ impl SerializeBuilder for DeriveEnum<'_> {
         serializer_access: &Ident,
         _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let DeriveInput { ident, data, .. } = self.ast;
+        let DeriveInput {
+            ident: enum_ident,
+            data,
+            generics: enum_generics,
+            ..
+        } = self.ast;
 
         let Data::Enum(DataEnum { variants, .. }) = &data else {
             unreachable!()
@@ -90,53 +134,68 @@ impl SerializeBuilder for DeriveEnum<'_> {
             .map::<Result<Arm, DeriveError>, _>(|variant| {
                 let variant_ident = &variant.ident;
 
-                match &variant.fields {
-                    syn::Fields::Named(_fields) => {
-                        Err(DeriveError::custom("Named fields are not supported yet"))
-                    }
-                    syn::Fields::Unnamed(fields) if fields.unnamed.is_empty() => Ok(parse_quote! {
-                        #ident::#variant_ident() => {
-                            ::xmlity::Serialize::serialize(&__v, #serializer_access)
-                        },
-                    }),
-                    syn::Fields::Unnamed(fields) if fields.unnamed.len() != 1 => {
-                        Err(DeriveError::custom(
-                            "Enum variants with more than one field are not supported",
-                        ))
-                    }
-                    syn::Fields::Unnamed(_) => Ok(parse_quote! {
-                        #ident::#variant_ident(__v) => {
-                            ::xmlity::Serialize::serialize(&__v, #serializer_access)
-                        },
-                    }),
-                    syn::Fields::Unit => {
-                        let variant_ident = &variant.ident;
+                let record = common::parse_enum_variant_derive_input(
+                    enum_ident,
+                    enum_generics,
+                    variant,
+                    variants.len() > 1,
+                )?;
 
-                        let variant_opts = VariantOpts::from_variant(variant)?;
+                let mut variant_opts = records::roots::SerializeRootOpts::parse(&variant.attrs)?;
+                if let SerializeRootOpts::Value(records::roots::RootValueOpts {
+                    value: value @ None,
+                }) = &mut variant_opts
+                {
+                    let ident_value = self
+                        .value_opts
+                        .as_ref()
+                        .map(|a| a.rename_all)
+                        .unwrap_or_default()
+                        .apply_to_variant(&variant.ident.to_string());
 
-                        let value = variant_opts
-                            .as_ref()
-                            .and_then(|a| match a {
-                                VariantOpts::Value(ValueOpts {
-                                    value: Some(value), ..
-                                }) => Some(value.clone()),
-                                _ => None,
-                            })
-                            .unwrap_or_else(|| {
-                                self.value_opts
-                                    .as_ref()
-                                    .map(|a| a.rename_all)
-                                    .unwrap_or_default()
-                                    .apply_to_variant(&variant_ident.to_string())
-                            });
-
-                        Ok(parse_quote! {
-                            #ident::#variant_ident => {
-                                ::xmlity::Serialize::serialize(&#value, #serializer_access)
-                            },
-                        })
-                    }
+                    *value = Some(ident_value);
                 }
+                if let SerializeRootOpts::None = variant_opts {
+                    let ident_value = self
+                        .value_opts
+                        .as_ref()
+                        .map(|a| a.rename_all)
+                        .unwrap_or_default()
+                        .apply_to_variant(&variant.ident.to_string());
+
+                    variant_opts = SerializeRootOpts::Value(records::roots::RootValueOpts {
+                        value: Some(ident_value),
+                    });
+                }
+
+                let sub_value_ident = Ident::new("__sub_value", Span::call_site());
+
+                let matcher = match &variant.fields {
+                    Fields::Unit => quote! { #sub_value_ident @ #enum_ident::#variant_ident },
+                    Fields::Unnamed(fields) => {
+                        let fields = fields.unnamed.iter().map(|_| quote! { _ });
+                        quote! { #sub_value_ident @ #enum_ident::#variant_ident(#(#fields),*) }
+                    }
+                    Fields::Named(_) => {
+                        quote! { #sub_value_ident @ #enum_ident::#variant_ident { .. } }
+                    }
+                };
+
+                let variant_builder = SerializeVariantBuilder::new(&record, &variant_opts);
+
+                let definition = variant_builder.definition();
+                let serialize_impl = variant_builder.serialize_trait_impl()?;
+
+                let serialize_expr = variant_builder.serialize_expr(&sub_value_ident);
+
+                Ok(parse_quote!(
+                    __inner @ #matcher => {
+                        #definition
+                        #serialize_impl
+
+                        ::xmlity::Serialize::serialize(&#serialize_expr, #serializer_access)
+                    }
+                ))
             })
             .collect::<Result<Vec<_>, _>>()?;
 

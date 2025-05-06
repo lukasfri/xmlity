@@ -6,7 +6,7 @@ use syn::{parse_quote, Arm, Data, Expr, Lifetime, Stmt};
 use syn::{DeriveInput, Ident};
 
 use crate::common::{ExpandedName, Prefix, StructTypeWithFields};
-use crate::options::structs::roots::RootAttributeOpts;
+use crate::options::records::roots::RootAttributeOpts;
 use crate::options::{FieldWithOpts, WithExpandedNameExt};
 
 use crate::DeriveError;
@@ -315,7 +315,7 @@ enum SerializeAttributeOption {
 
 impl SerializeAttributeOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let attribute_opts = RootAttributeOpts::parse(ast)?.ok_or_else(|| {
+        let attribute_opts = RootAttributeOpts::parse(&ast.attrs)?.ok_or_else(|| {
             DeriveError::custom("SerializeAttribute requires the `xattribute` option.")
         })?;
 

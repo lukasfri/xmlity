@@ -721,7 +721,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
 
         let ident = self.ident();
 
-        let builder_ident = Ident::new(format!("__{}Builder", ident).as_str(), ident.span());
+        let builder_ident = Ident::new(format!("__{ident}Builder").as_str(), ident.span());
 
         self.builder_definition(&builder_ident, &deserialize_lifetime)
     }
@@ -732,7 +732,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         let ident = self.ident();
         let generics = self.generics();
 
-        let builder_ident = Ident::new(format!("__{}Builder", ident).as_str(), ident.span());
+        let builder_ident = Ident::new(format!("__{ident}Builder").as_str(), ident.span());
 
         let value_non_bound_generics = non_bound_generics(&generics);
 
@@ -775,7 +775,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         let ident = self.ident();
         let generics = self.generics();
 
-        let builder_ident = Ident::new(format!("__{}Builder", ident).as_str(), ident.span());
+        let builder_ident = Ident::new(format!("__{ident}Builder").as_str(), ident.span());
 
         let deserialize_lifetime = Lifetime::new("'__deserialize", Span::call_site());
 
