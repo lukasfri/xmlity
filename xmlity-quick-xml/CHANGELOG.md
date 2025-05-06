@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.2...xmlity-quick-xml-v0.0.3) - 2025-05-06
+
+### Added
+
+- *(quick-xml)* [**breaking**] Cleanup of the API of `xmlity-quick-xml`. ([#64](https://github.com/lukasfri/xmlity/pull/64))
+- *(core,quick-xml)* [**breaking**] Changes element serialization API to finish serializing name before attributes ([#62](https://github.com/lukasfri/xmlity/pull/62))
+- *(derive)* Changed structs and enum variants to use common (de)serialization logic ([#54](https://github.com/lukasfri/xmlity/pull/54))
+
+### Other
+
+- *(quick-xml)* Adds benchmarks for quick-xml (De)serializer ([#60](https://github.com/lukasfri/xmlity/pull/60))
+
 ## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.1...xmlity-quick-xml-v0.0.2) - 2025-05-02
 
 ### Added
