@@ -7,6 +7,18 @@ use crate::{
     SerializeAttribute,
 };
 
+impl<'de> Deserialize<'de> for () {
+    fn deserialize<D: Deserializer<'de>>(_reader: D) -> Result<Self, D::Error> {
+        Ok(())
+    }
+}
+
+impl Serialize for () {
+    fn serialize<S: crate::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_none()
+    }
+}
+
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Option<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
         Deserialize::deserialize(reader).map(Some)
@@ -135,12 +147,12 @@ impl<'de, T: DeserializationGroup<'de>> DeserializationGroup<'de> for Box<T> {
     type Builder = BoxBuilder<'de, T>;
 
     fn builder() -> Self::Builder {
-        BoxBuilder(T::builder())
+        BoxBuilder(Box::new(T::builder()))
     }
 }
 
 /// Builder for `Box<T>`.
-pub struct BoxBuilder<'de, T: DeserializationGroup<'de>>(T::Builder);
+pub struct BoxBuilder<'de, T: DeserializationGroup<'de>>(Box<T::Builder>);
 
 impl<'de, T: DeserializationGroup<'de>> DeserializationGroupBuilder<'de> for BoxBuilder<'de, T> {
     type Value = Box<T>;
