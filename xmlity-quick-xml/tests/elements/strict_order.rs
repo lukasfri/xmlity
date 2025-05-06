@@ -8,7 +8,6 @@ use xmlity::{
     DeserializationGroup, Deserialize, SerializationGroup, Serialize, SerializeAttribute,
 };
 use xmlity::{ExpandedName, LocalName};
-use xmlity_quick_xml::Error;
 
 const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
 <note to="Tove" from="Jani">
@@ -74,7 +73,7 @@ fn struct_2d_with_attributes_deserialize_fail() {
         quick_xml_deserialize_test(clean_string(SIMPLE_2D_STRUCT_TEST_XML_WRONG_ORDER).as_str());
 
     assert!(actual.is_err());
-    let Error::WrongName { actual, expected } = actual.unwrap_err() else {
+    let xmlity_quick_xml::de::Error::WrongName { actual, expected } = actual.unwrap_err() else {
         panic!("Wrong error type");
     };
     assert_eq!(

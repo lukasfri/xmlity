@@ -1,26 +1,31 @@
 #![allow(dead_code)]
 
+use std::collections::BTreeMap;
+
 use xmlity::{Prefix, XmlNamespace};
 
 pub fn quick_xml_serialize_test<T: xmlity::Serialize + std::fmt::Debug>(
     input: T,
-) -> Result<String, xmlity_quick_xml::Error> {
+) -> Result<String, xmlity_quick_xml::ser::Error> {
     quick_xml_serialize_test_with_default(input, None)
 }
 
 pub fn quick_xml_serialize_test_with_default<T: xmlity::Serialize + std::fmt::Debug>(
     input: T,
     default_namespace: Option<XmlNamespace<'static>>,
-) -> Result<String, xmlity_quick_xml::Error> {
+) -> Result<String, xmlity_quick_xml::ser::Error> {
     let serializer = quick_xml::Writer::new(Vec::new());
-    let mut serializer = xmlity_quick_xml::Serializer::from(serializer);
-    serializer.add_preferred_prefix(
-        XmlNamespace::new("http://my.namespace.example.com/this/is/a/namespace").unwrap(),
-        Prefix::new("testns").expect("testns is a valid prefix"),
-    );
-    if let Some(default_namespace) = default_namespace {
-        serializer.add_preferred_prefix(default_namespace, Prefix::default());
-    }
+    let mut serializer = xmlity_quick_xml::Serializer::new_with_namespaces(serializer, {
+        let mut map = BTreeMap::new();
+        map.insert(
+            XmlNamespace::new("http://my.namespace.example.com/this/is/a/namespace").unwrap(),
+            Prefix::new("testns").expect("testns is a valid prefix"),
+        );
+        if let Some(default_namespace) = default_namespace {
+            map.insert(default_namespace, Prefix::default());
+        }
+        map
+    });
 
     input.serialize(&mut serializer)?;
     let actual_xml = String::from_utf8(serializer.into_inner()).unwrap();
@@ -30,7 +35,7 @@ pub fn quick_xml_serialize_test_with_default<T: xmlity::Serialize + std::fmt::De
 
 pub fn quick_xml_deserialize_test<T: xmlity::DeserializeOwned + std::fmt::Debug>(
     input: &str,
-) -> Result<T, xmlity_quick_xml::Error> {
+) -> Result<T, xmlity_quick_xml::de::Error> {
     let reader = quick_xml::NsReader::from_reader(input.as_bytes());
 
     let mut deserializer = xmlity_quick_xml::de::Deserializer::from(reader);

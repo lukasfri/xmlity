@@ -73,7 +73,7 @@ fn simple_ns_1d_struct_wrong_ns_deserialize(#[case] test_xml: &str) {
     let err = quick_xml_deserialize_test::<To>(&clean_string(test_xml))
         .expect_err("deserialization should fail");
 
-    let xmlity_quick_xml::Error::WrongName { actual, expected } = err else {
+    let xmlity_quick_xml::de::Error::WrongName { actual, expected } = err else {
         panic!("unexpected error: {err:?}");
     };
 
