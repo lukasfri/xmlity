@@ -7,7 +7,7 @@
 ///     <"root">[
 ///         <"child" "attribute"="value">["Text"]</"child">
 ///         <![CDATA["CData content"]]>
-///         <?"pi instruction"?>
+///         <?"pi-target" "instruction"?>
 ///         <!-- "Comment" -->
 ///        "Text node"
 ///        <"child2":"http://example.com" "attr1"="value1" "attr2"="value2">[]</"child2">
@@ -66,8 +66,8 @@ macro_rules! xml_internal {
     (@seq $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] <![CDATA[$cdata:literal]]> $($rest:tt)*) => {
         $crate::xml_internal!(@seq $unwrapped_if_single $element_type [$($seq_elements,)* $crate::types::value::XmlCData::new($cdata.as_bytes())] $($rest)*)
     };
-    (@seq $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] <?$pi:literal?> $($rest:tt)*) => {
-        $crate::xml_internal!(@seq $unwrapped_if_single $element_type [$($seq_elements,)* $crate::types::value::XmlPI::new($pi.as_bytes())] $($rest)*)
+    (@seq $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] <?$target:literal $content:literal?> $($rest:tt)*) => {
+        $crate::xml_internal!(@seq $unwrapped_if_single $element_type [$($seq_elements,)* $crate::types::value::XmlProcessingInstruction::new($target.as_bytes(), $content.as_bytes())] $($rest)*)
     };
 
     // Elements
@@ -133,8 +133,8 @@ macro_rules! xml_internal {
     (<!--$comment:literal--> $($rest:tt)*) => {
         $crate::xml_internal!(@seq true "value" [] <!--$comment--> $($rest)*)
     };
-    (<?$pi:literal?> $($rest:tt)*) => {
-        $crate::xml_internal!(@seq true "value" [] <?$pi?> $($rest)*)
+    (<?$target:literal $content:literal?> $($rest:tt)*) => {
+        $crate::xml_internal!(@seq true "value" [] <?$target $content?> $($rest)*)
     };
     (<![CDATA[$cdata:literal]]> $($rest:tt)*) => {
         $crate::xml_internal!(@seq true "value" [] <![CDATA[$cdata]]> $($rest)*)

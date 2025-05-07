@@ -1,13 +1,19 @@
-use std::ops::Deref;
+use std::{borrow::Cow, ops::Deref};
 
 use quick_xml::{
-    events::{attributes::Attribute, BytesEnd, BytesStart, Event},
+    events::{
+        attributes::Attribute, BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText,
+        Event,
+    },
     name::QName as QuickName,
     NsReader,
 };
 
 use xmlity::{
-    de::{self, Error as _, Unexpected, Visitor},
+    de::{
+        self, Error as _, NamespaceContext, Unexpected, Visitor, XmlCData, XmlComment,
+        XmlDeclaration, XmlDoctype, XmlProcessingInstruction, XmlText,
+    },
     Deserialize, ExpandedName, LocalName, QName, XmlNamespace,
 };
 
@@ -226,7 +232,7 @@ impl<'i> Deserializer<'i> {
         res
     }
 
-    fn expand_name<'a>(&'a self, qname: QuickName<'a>) -> ExpandedName<'a> {
+    fn resolve_qname<'a>(&'a self, qname: QuickName<'a>) -> ExpandedName<'a> {
         let (resolve_result, _) = self.reader.resolve(qname, false);
         let namespace = xml_namespace_from_resolve_result(resolve_result);
 
@@ -234,11 +240,11 @@ impl<'i> Deserializer<'i> {
     }
 
     fn resolve_bytes_start<'a>(&'a self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
-        self.expand_name(bytes_start.name())
+        self.resolve_qname(bytes_start.name())
     }
 
     fn resolve_attribute<'a>(&'a self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
-        self.expand_name(attribute.key)
+        self.resolve_qname(attribute.key)
     }
 }
 
@@ -281,13 +287,28 @@ impl<'r> ElementAccess<'_, 'r> {
     }
 }
 
+impl NamespaceContext for &Deserializer<'_> {
+    fn resolve_prefix(&self, prefix: xmlity::Prefix<'_>) -> Option<XmlNamespace<'_>> {
+        let name = format!("{prefix}:a");
+        let (_, namespace) = self.resolve_qname(QuickName(name.as_bytes())).into_parts();
+
+        namespace.map(XmlNamespace::into_owned)
+    }
+}
+
 struct AttributeAccess<'a> {
     name: ExpandedName<'a>,
     value: &'a str,
+    deserializer: &'a Deserializer<'a>,
 }
 
 impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_> {
     type Error = Error;
+
+    type NamespaceContext<'b>
+        = &'b Deserializer<'b>
+    where
+        Self: 'b;
 
     fn name(&self) -> ExpandedName<'_> {
         self.name.as_ref()
@@ -295,6 +316,10 @@ impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_> {
 
     fn value(&self) -> &str {
         self.value
+    }
+
+    fn namespace_context<'a>(&'a self) -> Self::NamespaceContext<'a> {
+        self.deserializer
     }
 }
 
@@ -329,6 +354,7 @@ impl<'de> de::SeqAccess<'de> for EmptySeqAccess {
 struct AttributeDeserializer<'a> {
     name: ExpandedName<'a>,
     value: &'a str,
+    deserializer: &'a Deserializer<'a>,
 }
 
 impl<'de> xmlity::Deserializer<'de> for AttributeDeserializer<'_> {
@@ -341,6 +367,7 @@ impl<'de> xmlity::Deserializer<'de> for AttributeDeserializer<'_> {
         visitor.visit_attribute(AttributeAccess {
             name: self.name,
             value: self.value,
+            deserializer: self.deserializer,
         })
     }
 
@@ -383,7 +410,11 @@ fn next_attribute<'a, 'de, T: Deserialize<'de>>(
         let value =
             std::str::from_utf8(&attribute.value).expect("attribute value should be valid utf8");
 
-        let deserializer = AttributeDeserializer { name: key, value };
+        let deserializer = AttributeDeserializer {
+            name: key,
+            value,
+            deserializer,
+        };
 
         let res = T::deserialize(deserializer)?;
 
@@ -466,6 +497,10 @@ impl<'de> de::AttributesAccess<'de> for ElementAccess<'_, 'de> {
 
 impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
     type ChildrenAccess = ChildrenAccess<'a, 'de>;
+    type NamespaceContext<'b>
+        = &'b Deserializer<'de>
+    where
+        Self: 'b;
 
     fn name(&self) -> ExpandedName<'_> {
         self.deserializer().resolve_bytes_start(
@@ -493,6 +528,10 @@ impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
                 deserializer,
             }
         })
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+        self.deserializer()
     }
 }
 
@@ -734,6 +773,153 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     }
 }
 
+struct DataWithD<'a, T> {
+    data: T,
+    deserializer: &'a Deserializer<'a>,
+}
+
+impl<'a, T> DataWithD<'a, T> {
+    fn new(data: T, deserializer: &'a Deserializer<'a>) -> Self {
+        Self { data, deserializer }
+    }
+}
+
+impl XmlText for DataWithD<'_, BytesText<'_>> {
+    type NamespaceContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn as_bytes(&self) -> &[u8] {
+        self.data.deref()
+    }
+
+    fn as_str(&self) -> Cow<'_, str> {
+        Cow::Borrowed(std::str::from_utf8(self.data.deref()).unwrap())
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+        self.deserializer
+    }
+}
+
+impl XmlCData for DataWithD<'_, BytesCData<'_>> {
+    type NamespaceContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn as_bytes(&self) -> &[u8] {
+        self.data.deref()
+    }
+
+    fn as_str(&self) -> Cow<'_, str> {
+        Cow::Borrowed(std::str::from_utf8(self.data.deref()).unwrap())
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+        self.deserializer
+    }
+}
+
+impl XmlComment for DataWithD<'_, BytesText<'_>> {
+    type NamespaceContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn as_bytes(&self) -> &[u8] {
+        self.data.deref()
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+        self.deserializer
+    }
+}
+
+struct ClearedByteDecl<'a> {
+    version: Cow<'a, [u8]>,
+    encoding: Option<Cow<'a, [u8]>>,
+    standalone: Option<Cow<'a, [u8]>>,
+}
+
+impl<'a> TryFrom<&'a BytesDecl<'a>> for ClearedByteDecl<'a> {
+    type Error = Error;
+
+    fn try_from(bytes_decl: &'a BytesDecl<'a>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            version: bytes_decl.version()?,
+            encoding: match bytes_decl.encoding() {
+                Some(Ok(encoding)) => Some(encoding),
+                Some(Err(err)) => return Err(Error::QuickXml(err.into())),
+                None => None,
+            },
+            standalone: match bytes_decl.standalone() {
+                Some(Ok(standalone)) => Some(standalone),
+                Some(Err(err)) => return Err(Error::QuickXml(err.into())),
+                None => None,
+            },
+        })
+    }
+}
+
+impl XmlDeclaration for DataWithD<'_, ClearedByteDecl<'_>> {
+    type NamespaceContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn version(&self) -> &[u8] {
+        self.data.version.as_ref()
+    }
+
+    fn encoding(&self) -> Option<&[u8]> {
+        self.data.encoding.as_deref()
+    }
+
+    fn standalone(&self) -> Option<&[u8]> {
+        self.data.standalone.as_deref()
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+        self.deserializer
+    }
+}
+
+impl XmlProcessingInstruction for DataWithD<'_, BytesPI<'_>> {
+    type NamespaceContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn target(&self) -> &[u8] {
+        self.data.target()
+    }
+
+    fn content(&self) -> &[u8] {
+        self.data.content()
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+        self.deserializer
+    }
+}
+
+impl XmlDoctype for DataWithD<'_, BytesText<'_>> {
+    type NamespaceContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn as_bytes(&self) -> &[u8] {
+        self.data.deref()
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+        self.deserializer
+    }
+}
+
 impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
     type Error = Error;
 
@@ -780,24 +966,15 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
                 empty: true,
                 attribute_index: 0,
             }),
-            Event::Text(bytes_text) => visitor.visit_text(bytes_text.deref()),
-            Event::CData(bytes_cdata) => visitor.visit_cdata(bytes_cdata.deref()),
-            Event::Comment(bytes_text) => visitor.visit_comment(bytes_text.deref()),
-            Event::Decl(bytes_decl) => visitor.visit_decl(
-                bytes_decl.version()?,
-                match bytes_decl.encoding() {
-                    Some(Ok(encoding)) => Some(encoding),
-                    Some(Err(err)) => return Err(Error::QuickXml(err.into())),
-                    None => None,
-                },
-                match bytes_decl.standalone() {
-                    Some(Ok(standalone)) => Some(standalone),
-                    Some(Err(err)) => return Err(Error::QuickXml(err.into())),
-                    None => None,
-                },
-            ),
-            Event::PI(bytes_pi) => visitor.visit_pi(bytes_pi.deref()),
-            Event::DocType(bytes_text) => visitor.visit_doctype(bytes_text.deref()),
+            Event::Text(bytes_text) => visitor.visit_text(DataWithD::new(bytes_text, self)),
+            Event::CData(bytes_cdata) => visitor.visit_cdata(DataWithD::new(bytes_cdata, self)),
+            Event::Comment(bytes_text) => visitor.visit_comment(DataWithD::new(bytes_text, self)),
+            Event::Decl(bytes_decl) => visitor.visit_decl(DataWithD::new(
+                ClearedByteDecl::try_from(&bytes_decl)?,
+                self,
+            )),
+            Event::PI(bytes_pi) => visitor.visit_pi(DataWithD::new(bytes_pi, self)),
+            Event::DocType(bytes_text) => visitor.visit_doctype(DataWithD::new(bytes_text, self)),
             Event::Eof => Err(Error::custom("Unexpected EOF")),
         }
     }

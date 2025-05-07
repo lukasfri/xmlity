@@ -132,7 +132,7 @@ pub trait Serializer: Sized {
     ) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize a processing instruction.
-    fn serialize_pi<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error>;
+    fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize a comment.
     fn serialize_comment<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error>;

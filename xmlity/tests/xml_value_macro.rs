@@ -2,7 +2,8 @@ use rstest::rstest;
 use std::str::FromStr;
 use xmlity::{
     types::value::{
-        XmlAttribute, XmlCData, XmlChild, XmlComment, XmlElement, XmlPI, XmlSeq, XmlText, XmlValue,
+        XmlAttribute, XmlCData, XmlChild, XmlComment, XmlElement, XmlProcessingInstruction, XmlSeq,
+        XmlText, XmlValue,
     },
     xml, XmlNamespace,
 };
@@ -10,7 +11,7 @@ use xmlity::{ExpandedName, LocalName};
 
 #[rstest]
 #[case::comment(xml!(<!--"Test"-->), XmlComment::new(b"Test"))]
-#[case::pi(xml!(<?"Test"?>), XmlPI::new(b"Test"))]
+#[case::pi(xml!(<?"Test" "Content"?>), XmlProcessingInstruction::new(b"Test", b"Content"))]
 #[case::basic_element(xml!(<"Test"/>), XmlElement::new(ExpandedName::new(LocalName::from_str("Test").unwrap(), None)))]
 #[case::element_with_child(xml!(<"Test">["Childtext"]</"Test">), XmlElement::new(ExpandedName::new(LocalName::from_str("Test").unwrap(), None))
     .with_child(XmlChild::from(XmlText::new("Childtext"))))]

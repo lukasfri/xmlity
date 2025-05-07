@@ -673,12 +673,14 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
             .map_err(Error::Io)
     }
 
-    fn serialize_pi<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+    fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error> {
         self.try_start()?;
         self.writer
-            .write_event(Event::PI(BytesPI::new(
-                str::from_utf8(text.as_ref()).unwrap(),
-            )))
+            .write_event(Event::PI(BytesPI::new(format!(
+                "{} {}",
+                str::from_utf8(target.as_ref()).unwrap(),
+                str::from_utf8(content.as_ref()).unwrap()
+            ))))
             .map_err(Error::Io)
     }
 
