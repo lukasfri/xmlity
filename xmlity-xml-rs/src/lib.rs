@@ -18,16 +18,16 @@ pub use de::Deserializer;
 pub use ser::{to_string, Serializer};
 use xml::name::OwnedName;
 
-pub trait HasXmlRsAlternative {
+pub trait IsQName {
     type XmlityEquivalent;
 
-    fn into_xmlity(self) -> Self::XmlityEquivalent;
+    fn into_qname(self) -> Self::XmlityEquivalent;
 }
 
-impl HasXmlRsAlternative for OwnedName {
+impl IsQName for OwnedName {
     type XmlityEquivalent = QName<'static>;
 
-    fn into_xmlity(self) -> Self::XmlityEquivalent {
+    fn into_qname(self) -> Self::XmlityEquivalent {
         QName::new(
             self.prefix
                 .map(|prefix| Prefix::new(prefix).expect("A xml-rs prefix should be valid")),
@@ -36,15 +36,47 @@ impl HasXmlRsAlternative for OwnedName {
     }
 }
 
-impl<'a> HasXmlRsAlternative for &'a OwnedName {
+impl<'a> IsQName for &'a OwnedName {
     type XmlityEquivalent = QName<'a>;
 
-    fn into_xmlity(self) -> Self::XmlityEquivalent {
+    fn into_qname(self) -> Self::XmlityEquivalent {
         QName::new(
             self.prefix
                 .as_deref()
                 .map(|prefix| Prefix::new(prefix).expect("A xml-rs prefix should be valid")),
             LocalName::new(self.local_name.as_str()).expect("An xml-rs local name should be valid"),
+        )
+    }
+}
+
+pub trait IsExpandedName {
+    type XmlityEquivalent;
+
+    fn into_expanded_name(self) -> Self::XmlityEquivalent;
+}
+
+impl IsExpandedName for OwnedName {
+    type XmlityEquivalent = ExpandedName<'static>;
+
+    fn into_expanded_name(self) -> Self::XmlityEquivalent {
+        ExpandedName::new(
+            LocalName::new(self.local_name).expect("An xml-rs local name should be valid"),
+            self.namespace.map(|namespace| {
+                XmlNamespace::new(namespace).expect("A xml-rs namespace should be valid")
+            }),
+        )
+    }
+}
+
+impl<'a> IsExpandedName for &'a OwnedName {
+    type XmlityEquivalent = ExpandedName<'a>;
+
+    fn into_expanded_name(self) -> Self::XmlityEquivalent {
+        ExpandedName::new(
+            LocalName::new(self.local_name.as_str()).expect("An xml-rs local name should be valid"),
+            self.namespace.as_deref().map(|namespace| {
+                XmlNamespace::new(namespace).expect("A xml-rs namespace should be valid")
+            }),
         )
     }
 }

@@ -1,16 +1,17 @@
 use std::{io::Read, ops::Deref};
 
 use xml::{
+    attribute::OwnedAttribute,
     name::OwnedName,
     reader::{EventReader, XmlEvent},
 };
 
 use xmlity::{
     de::{self, Error as _, Unexpected, Visitor},
-    Deserialize, ExpandedName, LocalName, QName, XmlNamespace,
+    Deserialize, ExpandedName, QName, XmlNamespace,
 };
 
-use crate::HasXmlRsAlternative;
+use crate::{IsExpandedName, IsQName};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -114,10 +115,10 @@ impl<R: Read> Deserializer<R> {
     }
 
     fn read_event(&mut self) -> Result<Option<XmlEvent>, Error> {
-        while let Ok(event) = self.reader.read_event() {
+        while let Ok(event) = self.reader.next() {
             match event {
                 XmlEvent::EndDocument => return Ok(None),
-                XmlEvent::Characters(text) if text.clone().into_inner().trim_ascii().is_empty() => {
+                XmlEvent::Characters(text) if text.trim_ascii().is_empty() => {
                     continue;
                 }
                 event => return Ok(Some(event)),
@@ -127,10 +128,10 @@ impl<R: Read> Deserializer<R> {
         Ok(None)
     }
 
-    fn read_until_element_end(&mut self, name: &QuickName, depth: i16) -> Result<(), Error> {
+    fn read_until_element_end(&mut self, name: &OwnedName, depth: i16) -> Result<(), Error> {
         while let Some(event) = self.peek_event() {
             let correct_name = match event {
-                XmlEvent::EndElement { name: end_name } if end_name == *name => true,
+                XmlEvent::EndElement { name: end_name } if *end_name == *name => true,
                 XmlEvent::EndDocument => return Err(Error::Unexpected(Unexpected::Eof)),
                 _ => false,
             };
@@ -145,7 +146,7 @@ impl<R: Read> Deserializer<R> {
         Err(Error::Unexpected(de::Unexpected::Eof))
     }
 
-    pub fn peek_event(&mut self) -> Option<&XmlEvent> {
+    fn peek_event(&mut self) -> Option<&XmlEvent> {
         if self.peeked_event.is_some() {
             return self.peeked_event.as_ref();
         }
@@ -154,7 +155,7 @@ impl<R: Read> Deserializer<R> {
         self.peeked_event.as_ref()
     }
 
-    pub fn next_event(&mut self) -> Option<XmlEvent> {
+    fn next_event(&mut self) -> Option<XmlEvent> {
         let event = if self.peeked_event.is_some() {
             self.peeked_event.take()
         } else {
@@ -171,14 +172,14 @@ impl<R: Read> Deserializer<R> {
         event
     }
 
-    pub fn create_sub_seq_access<'p>(&'p mut self) -> SubSeqAccess<'p, R> {
+    fn create_sub_seq_access<'p>(&'p mut self) -> SubSeqAccess<'p, R> {
         SubSeqAccess::Filled {
             current: Some(self.clone()),
             parent: self,
         }
     }
 
-    pub fn try_deserialize<T, E>(
+    fn try_deserialize<T, E>(
         &mut self,
         closure: impl for<'a> FnOnce(&'a mut Deserializer<R>) -> Result<T, E>,
     ) -> Result<T, E> {
@@ -190,26 +191,12 @@ impl<R: Read> Deserializer<R> {
         }
         res
     }
-
-    pub fn expand_name<'a>(&self, qname: QuickName<'a>) -> ExpandedName<'a> {
-        let (resolve_result, _) = self.reader.resolve(qname, false);
-        let namespace = xml_namespace_from_resolve_result(resolve_result).map(|ns| ns.into_owned());
-
-        ExpandedName::new(LocalName::from_quick_xml(qname.local_name()), namespace)
-    }
-
-    pub fn resolve_bytes_start<'a>(&self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
-        self.expand_name(bytes_start.name())
-    }
-
-    pub fn resolve_attribute<'a>(&self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
-        self.expand_name(attribute.key)
-    }
 }
 
 pub struct ElementAccess<'a, R: Read> {
     deserializer: Option<&'a mut Deserializer<R>>,
     attribute_index: usize,
+    attributes: Vec<OwnedAttribute>,
     start_name: OwnedName,
     start_depth: i16,
     empty: bool,
@@ -234,8 +221,7 @@ impl<R: Read> ElementAccess<'_, R> {
         }
 
         if let Some(deserializer) = self.deserializer.as_mut() {
-            deserializer
-                .read_until_element_end(&self.start_name.into_xmlity(), self.start_depth)?;
+            deserializer.read_until_element_end(&self.start_name, self.start_depth)?;
         }
         Ok(())
     }
@@ -246,7 +232,7 @@ pub struct AttributeAccess<'a> {
     value: String,
 }
 
-impl<'a> de::AttributeAccess<'a> for AttributeAccess<'a> {
+impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_> {
     type Error = Error;
 
     fn name(&self) -> ExpandedName<'_> {
@@ -291,12 +277,12 @@ struct AttributeDeserializer<'a> {
     value: String,
 }
 
-impl<'a> xmlity::Deserializer<'a> for AttributeDeserializer<'a> {
+impl<'de> xmlity::Deserializer<'de> for AttributeDeserializer<'_> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
-        V: Visitor<'a>,
+        V: Visitor<'de>,
     {
         visitor.visit_attribute(AttributeAccess {
             name: self.name,
@@ -306,38 +292,35 @@ impl<'a> xmlity::Deserializer<'a> for AttributeDeserializer<'a> {
 
     fn deserialize_seq<V>(self, _: V) -> Result<V::Value, Self::Error>
     where
-        V: Visitor<'a>,
+        V: Visitor<'de>,
     {
         Err(Self::Error::Unexpected(de::Unexpected::Seq))
     }
 }
 
-pub struct SubAttributesAccess<'a, 'r, R: Read + 'r> {
+pub struct SubAttributesAccess<'a, R: Read> {
     deserializer: &'a Deserializer<R>,
-    bytes_start: &'a BytesStart<'r>,
+    attributes: &'a [OwnedAttribute],
     attribute_index: usize,
     write_attribute_to: &'a mut usize,
 }
 
-impl<R: Read> Drop for SubAttributesAccess<'_, '_, R> {
+impl<R: Read> Drop for SubAttributesAccess<'_, R> {
     fn drop(&mut self) {
         *self.write_attribute_to = self.attribute_index;
     }
 }
 
-fn next_attribute<'a, 'de, T: Deserialize<'de>, R: Read>(
-    deserializer: &'a Deserializer<R>,
-    bytes_start: &'a BytesStart<'_>,
+fn next_attribute<'a, 'de, T: Deserialize<'de>>(
+    attributes: &[OwnedAttribute],
     attribute_index: &'a mut usize,
 ) -> Result<Option<T>, Error> {
     let (attribute, key) = loop {
-        let Some(attribute) = bytes_start.attributes().nth(*attribute_index) else {
+        let Some(attribute) = attributes.get(*attribute_index) else {
             return Ok(None);
         };
 
-        let attribute = attribute?;
-
-        let key = deserializer.resolve_attribute(&attribute).into_owned();
+        let key = (&attribute.name).into_expanded_name();
 
         const XMLNS_NAMESPACE: XmlNamespace<'static> =
             XmlNamespace::new_dangerous("http://www.w3.org/2000/xmlns/");
@@ -350,10 +333,10 @@ fn next_attribute<'a, 'de, T: Deserialize<'de>, R: Read>(
         break (attribute, key);
     };
 
-    let value = String::from_utf8(attribute.value.into_owned())
-        .expect("attribute value should be valid utf8");
-
-    let deserializer = AttributeDeserializer { name: key, value };
+    let deserializer = AttributeDeserializer {
+        name: key,
+        value: attribute.value.clone(),
+    };
 
     let res = T::deserialize(deserializer)?;
 
@@ -363,11 +346,11 @@ fn next_attribute<'a, 'de, T: Deserialize<'de>, R: Read>(
     Ok(Some(res))
 }
 
-impl<'de, R: Read> de::AttributesAccess<'de> for SubAttributesAccess<'_, 'de, R> {
+impl<'de, R: Read + 'de> de::AttributesAccess<'de> for SubAttributesAccess<'_, R> {
     type Error = Error;
 
     type SubAccess<'a>
-        = SubAttributesAccess<'a, 'de, R>
+        = SubAttributesAccess<'a, R>
     where
         Self: 'a;
 
@@ -376,8 +359,8 @@ impl<'de, R: Read> de::AttributesAccess<'de> for SubAttributesAccess<'_, 'de, R>
         T: Deserialize<'de>,
     {
         next_attribute(
-            self.deserializer,
-            self.bytes_start,
+            // self.deserializer,
+            self.attributes,
             &mut self.attribute_index,
         )
     }
@@ -385,18 +368,18 @@ impl<'de, R: Read> de::AttributesAccess<'de> for SubAttributesAccess<'_, 'de, R>
     fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
         Ok(Self::SubAccess {
             deserializer: self.deserializer,
-            bytes_start: self.bytes_start,
+            attributes: self.attributes,
             attribute_index: self.attribute_index,
             write_attribute_to: self.write_attribute_to,
         })
     }
 }
 
-impl<'de> de::AttributesAccess<'de> for ElementAccess<'_, 'de> {
+impl<'de, R: Read + 'de> de::AttributesAccess<'de> for ElementAccess<'_, R> {
     type Error = Error;
 
     type SubAccess<'a>
-        = SubAttributesAccess<'a, 'de>
+        = SubAttributesAccess<'a, R>
     where
         Self: 'a;
 
@@ -404,18 +387,12 @@ impl<'de> de::AttributesAccess<'de> for ElementAccess<'_, 'de> {
     where
         T: Deserialize<'de>,
     {
-        next_attribute(
-            self.deserializer
-                .as_ref()
-                .expect("deserializer should be set"),
-            &self.bytes_start,
-            &mut self.attribute_index,
-        )
+        next_attribute(&self.attributes, &mut self.attribute_index)
     }
 
     fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
         Ok(Self::SubAccess {
-            bytes_start: &self.bytes_start,
+            attributes: &self.attributes,
             attribute_index: self.attribute_index,
             write_attribute_to: &mut self.attribute_index,
             deserializer: self
@@ -426,11 +403,11 @@ impl<'de> de::AttributesAccess<'de> for ElementAccess<'_, 'de> {
     }
 }
 
-impl<'a, 'de, R: Read> de::ElementAccess<'de> for ElementAccess<'a, 'de, R> {
+impl<'a, 'de, R: Read + 'de> de::ElementAccess<'de> for ElementAccess<'a, R> {
     type ChildrenAccess = ChildrenAccess<'a, R>;
 
     fn name(&self) -> ExpandedName<'_> {
-        self.deserializer().resolve_bytes_start(&self.bytes_start)
+        (&self.start_name).into_expanded_name()
     }
 
     fn children(mut self) -> Result<Self::ChildrenAccess, Self::Error> {
@@ -443,7 +420,7 @@ impl<'a, 'de, R: Read> de::ElementAccess<'de> for ElementAccess<'a, 'de, R> {
                 .expect("Should not be called after ElementAccess has been consumed");
 
             ChildrenAccess::Filled {
-                expected_end: QName::from_quick_xml(self.bytes_start.name()).into_owned(),
+                expected_end: self.start_name.clone(),
                 start_depth: self.start_depth,
                 deserializer,
             }
@@ -453,7 +430,7 @@ impl<'a, 'de, R: Read> de::ElementAccess<'de> for ElementAccess<'a, 'de, R> {
 
 pub enum ChildrenAccess<'a, R: Read> {
     Filled {
-        expected_end: QName<'static>,
+        expected_end: OwnedName,
         deserializer: &'a mut Deserializer<R>,
         start_depth: i16,
     },
@@ -472,7 +449,7 @@ impl<R: Read> Drop for ChildrenAccess<'_, R> {
         };
 
         deserializer
-            .read_until_element_end(&expected_end.into_xmlity(), *start_depth)
+            .read_until_element_end(&expected_end, *start_depth)
             .unwrap();
     }
 }
@@ -505,11 +482,11 @@ impl<'r, R: Read + 'r> de::SeqAccess<'r> for ChildrenAccess<'_, R> {
         let current_depth = deserializer.current_depth;
 
         if let Some(XmlEvent::EndElement { name: end_name }) = deserializer.peek_event() {
-            if end_name.into_xmlity() != *expected_end && current_depth == *start_depth {
+            if end_name != expected_end && current_depth == *start_depth {
                 return Err(Error::custom(format!(
                     "Expected end of element {}, found end of element {}",
                     expected_end,
-                    end_name.into_xmlity()
+                    end_name.into_qname()
                 )));
             }
 
@@ -541,11 +518,11 @@ impl<'r, R: Read + 'r> de::SeqAccess<'r> for ChildrenAccess<'_, R> {
         let current_depth = deserializer.current_depth;
 
         if let Some(XmlEvent::EndElement { name: end_name }) = deserializer.peek_event() {
-            if *expected_end != end_name.into_xmlity() && current_depth == *start_depth {
+            if *expected_end != *end_name && current_depth == *start_depth {
                 return Err(Error::custom(format!(
                     "Expected end of element {}, found end of element {}",
                     expected_end,
-                    end_name.into_xmlity()
+                    end_name.into_qname()
                 )));
             }
 
@@ -706,6 +683,7 @@ impl<'r, R: Read + 'r> xmlity::Deserializer<'r> for &mut Deserializer<R> {
                     visitor,
                     ElementAccess {
                         start_name: name,
+                        attributes,
                         start_depth: self.current_depth,
                         deserializer: Some(self),
                         empty: false,
