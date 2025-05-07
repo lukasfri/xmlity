@@ -3,9 +3,15 @@ use std::borrow::Cow;
 use quote::{quote, ToTokens};
 use syn::{parse_quote, DataStruct, DeriveInput, Generics, Ident, Stmt};
 
-use crate::{options::structs::roots::RootGroupOpts, DeriveError, DeriveMacro};
+use crate::{options::records::roots::RootGroupOpts, DeriveError, DeriveMacro};
 
-use super::builders::{SerializationGroupBuilder, SerializationGroupBuilderExt};
+use super::{
+    builders::{SerializationGroupBuilder, SerializationGroupBuilderExt},
+    common::{
+        attribute_group_field_serializer, attribute_group_fields, element_group_field_serializer,
+        element_group_fields, fields,
+    },
+};
 
 #[allow(unused)]
 pub struct DeriveSerializationGroupStruct<'a> {
@@ -24,9 +30,10 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         &self,
         element_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let serialize_attributes_implementation = super::attribute_group_field_serializer(
+        let serialize_attributes_implementation = attribute_group_field_serializer(
             quote! { #element_access_ident},
-            crate::ser::attribute_group_fields(crate::ser::fields(self.ast)?)?,
+            attribute_group_fields(fields(self.ast)?)?,
+            |field_ident| parse_quote!(&self.#field_ident),
         )?;
 
         Ok(parse_quote! {
@@ -39,9 +46,10 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         &self,
         children_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let serialize_children_implementation = super::element_group_field_serializer(
+        let serialize_children_implementation = element_group_field_serializer(
             quote! { #children_access_ident},
-            crate::ser::element_group_fields(crate::ser::fields(self.ast)?)?,
+            element_group_fields(fields(self.ast)?)?,
+            |field_ident| parse_quote!(&self.#field_ident),
         )?;
 
         Ok(parse_quote! {
@@ -65,7 +73,7 @@ enum SerializationGroupOption {
 
 impl SerializationGroupOption {
     pub fn parse(ast: &DeriveInput) -> Result<Self, DeriveError> {
-        let group_opts = RootGroupOpts::parse(ast)?.unwrap_or_default();
+        let group_opts = RootGroupOpts::parse(&ast.attrs)?.unwrap_or_default();
 
         Ok(SerializationGroupOption::Group(group_opts))
     }

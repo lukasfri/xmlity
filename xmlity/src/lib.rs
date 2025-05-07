@@ -111,6 +111,11 @@ impl<'a> ExpandedName<'a> {
         }
     }
 
+    /// Converts this [`ExpandedName`] into its parts.
+    pub fn into_parts(self) -> (LocalName<'a>, Option<XmlNamespace<'a>>) {
+        (self.local_name, self.namespace)
+    }
+
     /// Converts this [`ExpandedName`] into an owned version.
     pub fn into_owned(self) -> ExpandedName<'static> {
         ExpandedName::new(
@@ -170,6 +175,11 @@ impl<'a> QName<'a> {
             prefix: prefix.into(),
             local_name: local_name.into(),
         }
+    }
+
+    /// Converts this [`QName`] into its parts.
+    pub fn into_parts(self) -> (Option<Prefix<'a>>, LocalName<'a>) {
+        (self.prefix, self.local_name)
     }
 
     /// Converts this [`QName`] into being owned.

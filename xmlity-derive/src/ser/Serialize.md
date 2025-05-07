@@ -232,6 +232,33 @@ Note {
 
 The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type should be serialized as a sequence of values, where each field is serialized as a value.
 
+#### Root options
+
+<table style="width:100%;">
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody style="vertical-align:top;">
+<!--=================================================-->
+<tr>
+<th>
+value
+</th>
+<td>
+<code>String</code>
+</td>
+<td>
+If the type is a unit struct, this attribute can be used to specify a text value to be serialized.
+</td>
+</tr>
+<!--=================================================-->
+</tbody>
+</table>
+
 #### Examples
 
 ##### Struct containing a sequence of elements and text
@@ -297,7 +324,7 @@ NamesAndText {
 
 ### Serialize as one of several types - enums with `#[xvalue(...)]` on the root of a type or no root attribute
 
-The `#[xvalue(...)]` attribute can be applied to the root of an enum to specify that the type should be serialized as a one of several types. Unit variants can also be used to specify that the variant should be serialized as some specific content.
+The `#[xvalue(...)]` attribute can be applied to the root of an enum to specify that the type should be serialized as a one of several types.
 
 #### Root options
 
@@ -340,32 +367,7 @@ Decides to what form the value should be serialized.
 
 #### Variant options
 
-##### `#[xvalue(...)]`
-
-<table style="width:100%;">
-<thead>
-<tr>
-<th>Name</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody style="vertical-align:top;">
-<!--=================================================-->
-<tr>
-<th>
-value
-</th>
-<td>
-<code>String</code>
-</td>
-<td>
-The value to use for the variant. If not specified, the variant name will be used.
-</td>
-</tr>
-<!--=================================================-->
-</tbody>
-</table>
+Variants have the same options as struct roots, and indeed work the same way.
 
 #### Examples
 

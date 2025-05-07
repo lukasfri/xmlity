@@ -202,7 +202,7 @@ Note {
 
 The `#[xvalue(...)]` attribute can be applied to the root of a type to specify that the type can be deserialized from a text or CDATA node.
 
-#### Options
+#### Root options
 
 <table style="width:100%;">
 <thead>
@@ -216,25 +216,13 @@ The `#[xvalue(...)]` attribute can be applied to the root of a type to specify t
 <!--=================================================-->
 <tr>
 <th>
-rename_all
+value
 </th>
 <td>
-<code>"lowercase"</code>, <code>"UPPERCASE"</code>, <code>"PascalCase"</code>, <code>"camelCase"</code>, <code>"snake_case"</code>, <code>"SCREAMING_SNAKE_CASE"</code>, <code>"kebab-case"</code>, <code>"SCREAMING-KEBAB-CASE"</code>
+<code>String</code>
 </td>
 <td>
-Decides how enums should be deserialized.
-</td>
-</tr>
-<!--=================================================-->
-<tr>
-<th>
-serialization_format
-</th>
-<td>
-<code>text</code>, <code>cdata</code>
-</td>
-<td>
-Decides in what form the value should be deserialized from.
+If the type is a unit struct, this attribute can be used to specify a text value to deserialize from.
 </td>
 </tr>
 <!--=================================================-->
@@ -309,3 +297,36 @@ Element namespace.
 </table>
 
 ### Deserialize as one of several types - enums with `#[xvalue(...)]` on the root of a type or no root attribute
+
+The `#[xvalue(...)]` attribute can be applied to the root of an enum to specify that the type can be deserialized to one of several types.
+
+#### Root options
+
+<table style="width:100%;">
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody style="vertical-align:top;">
+<!--=================================================-->
+<tr>
+<th>
+rename_all
+</th>
+<td>
+<code>"lowercase"</code>, <code>"UPPERCASE"</code>, <code>"PascalCase"</code>, <code>"camelCase"</code>, <code>"snake_case"</code>, <code>"SCREAMING_SNAKE_CASE"</code>, <code>"kebab-case"</code>, <code>"SCREAMING-KEBAB-CASE"</code>
+</td>
+<td>
+Decides what format to use to deserialize the unit variants if they don't have values specified. 
+</td>
+</tr>
+<!--=================================================-->
+</tbody>
+</table>
+
+#### Variant options
+
+Variants have the same options as struct roots, and indeed work the same way.

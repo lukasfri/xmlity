@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.2...xmlity-derive-v0.0.3) - 2025-05-06
+
+### Added
+
+- *(core,quick-xml)* [**breaking**] Changes element serialization API to finish serializing name before attributes ([#62](https://github.com/lukasfri/xmlity/pull/62))
+- *(derive)* Changed structs and enum variants to use common (de)serialization logic ([#54](https://github.com/lukasfri/xmlity/pull/54))
+
+### Other
+
+- *(derive)* Updates docs to provide details on new unified enum API. ([#65](https://github.com/lukasfri/xmlity/pull/65))
+
 ## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.1...xmlity-derive-v0.0.2) - 2025-05-02
 
 ### Added

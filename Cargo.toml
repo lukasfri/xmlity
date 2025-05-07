@@ -3,7 +3,7 @@ resolver = "2"
 members = ["xmlity", "xmlity-derive", "xmlity-quick-xml", "xmlity-xml-rs"]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 rust-version = "1.82.0"
 authors = ["Lukas Friman <lukas@dreamplay.net>"]
@@ -17,6 +17,6 @@ exclude = ["xmlity-book/"]
 thiserror = "^2.0.4"
 pretty_assertions = "^1.4.1"
 rstest = "^0.25.0"
-xmlity-derive = { version = "^0.0.2", path = "./xmlity-derive" }
-xmlity = { version = "^0.0.2", path = "./xmlity" }
-xmlity-quick-xml = { version = "^0.0.2", path = "./xmlity-quick-xml" }
+xmlity-derive = { version = "^0.0.3", path = "./xmlity-derive" }
+xmlity = { version = "^0.0.3", path = "./xmlity" }
+xmlity-quick-xml = { version = "^0.0.3", path = "./xmlity-quick-xml" }

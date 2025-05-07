@@ -13,8 +13,97 @@ use xmlity::{
 
 use crate::{xml_namespace_from_resolve_result, HasQuickXmlAlternative, OwnedQuickName};
 
-use super::Error;
+/// Errors that can occur when using this crate.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// Error from the `quick-xml` crate.
+    #[error("Quick XML error: {0}")]
+    QuickXml(#[from] quick_xml::Error),
+    /// Error from the `quick-xml` crate when handling attributes.
+    #[error("Attribute error: {0}")]
+    AttrError(#[from] quick_xml::events::attributes::AttrError),
+    /// IO errors.
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    /// Unexpected segments that occurred when deserializing.
+    #[error("Unexpected: {0}")]
+    Unexpected(xmlity::de::Unexpected),
+    /// Wrong name when trying to deserialize an element;
+    #[error("Wrong name: expected {expected:?}, got {actual:?}")]
+    WrongName {
+        /// The actual name.
+        actual: Box<ExpandedName<'static>>,
+        /// The expected name.
+        expected: Box<ExpandedName<'static>>,
+    },
+    /// Unknown child.
+    #[error("Unknown child")]
+    UnknownChild,
+    /// Invalid string.
+    #[error("Invalid string")]
+    InvalidString,
+    /// Missing field.
+    #[error("Missing field: {field}")]
+    MissingField {
+        /// The name of the field.
+        field: String,
+    },
+    /// No possible variant.
+    #[error("No possible variant: {ident}")]
+    NoPossibleVariant {
+        /// The name of the enum.
+        ident: String,
+    },
+    /// Missing data.
+    #[error("Missing data")]
+    MissingData,
+    /// Custom errors occuring in [`Deserialize`] implementations.
+    #[error("Custom: {0}")]
+    Custom(String),
+}
 
+impl xmlity::de::Error for Error {
+    fn custom<T: ToString>(msg: T) -> Self {
+        Error::Custom(msg.to_string())
+    }
+
+    fn wrong_name(actual: &ExpandedName<'_>, expected: &ExpandedName<'_>) -> Self {
+        Error::WrongName {
+            actual: Box::new(actual.clone().into_owned()),
+            expected: Box::new(expected.clone().into_owned()),
+        }
+    }
+
+    fn unexpected_visit<T>(unexpected: xmlity::de::Unexpected, _expected: &T) -> Self {
+        Error::Unexpected(unexpected)
+    }
+
+    fn missing_field(field: &str) -> Self {
+        Error::MissingField {
+            field: field.to_string(),
+        }
+    }
+
+    fn no_possible_variant(ident: &str) -> Self {
+        Error::NoPossibleVariant {
+            ident: ident.to_string(),
+        }
+    }
+
+    fn missing_data() -> Self {
+        Error::MissingData
+    }
+
+    fn unknown_child() -> Self {
+        Error::UnknownChild
+    }
+
+    fn invalid_string() -> Self {
+        Error::InvalidString
+    }
+}
+
+/// Deserialize from a string.
 pub fn from_str<'a, T>(s: &'a str) -> Result<T, Error>
 where
     T: Deserialize<'a>,
@@ -23,16 +112,9 @@ where
     T::deserialize(&mut deserializer)
 }
 
-pub enum Peeked<'a> {
-    None,
-    Text,
-    CData,
-    Element {
-        name: QName<'a>,
-        namespace: Option<XmlNamespace<'a>>,
-    },
-}
-
+/// The [`xmlity::Deserializer`] for the `quick-xml` crate.
+///
+/// This currently only supports an underlying reader of type `&[u8]` due to limitations in the `quick-xml` crate.
 #[derive(Debug, Clone)]
 pub struct Deserializer<'i> {
     reader: NsReader<&'i [u8]>,
@@ -53,6 +135,7 @@ impl<'i> From<&'i [u8]> for Deserializer<'i> {
 }
 
 impl<'i> Deserializer<'i> {
+    /// Create a new deserializer from a [`NsReader<&'i [u8]>`].
     pub fn new(reader: NsReader<&'i [u8]>) -> Self {
         Self {
             reader,
@@ -93,7 +176,7 @@ impl<'i> Deserializer<'i> {
         Err(Error::Unexpected(de::Unexpected::Eof))
     }
 
-    pub fn peek_event(&mut self) -> Option<&Event<'i>> {
+    fn peek_event(&mut self) -> Option<&Event<'i>> {
         if self.peeked_event.is_some() {
             return self.peeked_event.as_ref();
         }
@@ -102,7 +185,7 @@ impl<'i> Deserializer<'i> {
         self.peeked_event.as_ref()
     }
 
-    pub fn next_event(&mut self) -> Option<Event<'i>> {
+    fn next_event(&mut self) -> Option<Event<'i>> {
         let event = if self.peeked_event.is_some() {
             self.peeked_event.take()
         } else {
@@ -119,14 +202,14 @@ impl<'i> Deserializer<'i> {
         event
     }
 
-    pub fn create_sub_seq_access<'p>(&'p mut self) -> SubSeqAccess<'p, 'i> {
+    fn create_sub_seq_access<'p>(&'p mut self) -> SubSeqAccess<'p, 'i> {
         SubSeqAccess::Filled {
             current: Some(self.clone()),
             parent: self,
         }
     }
 
-    pub fn try_deserialize<T, E>(
+    fn try_deserialize<T, E>(
         &mut self,
         closure: impl for<'a> FnOnce(&'a mut Deserializer<'i>) -> Result<T, E>,
     ) -> Result<T, E> {
@@ -139,23 +222,23 @@ impl<'i> Deserializer<'i> {
         res
     }
 
-    pub fn expand_name<'a>(&self, qname: QuickName<'a>) -> ExpandedName<'a> {
+    fn expand_name<'a>(&self, qname: QuickName<'a>) -> ExpandedName<'a> {
         let (resolve_result, _) = self.reader.resolve(qname, false);
         let namespace = xml_namespace_from_resolve_result(resolve_result).map(|ns| ns.into_owned());
 
         ExpandedName::new(LocalName::from_quick_xml(qname.local_name()), namespace)
     }
 
-    pub fn resolve_bytes_start<'a>(&self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
+    fn resolve_bytes_start<'a>(&self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
         self.expand_name(bytes_start.name())
     }
 
-    pub fn resolve_attribute<'a>(&self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
+    fn resolve_attribute<'a>(&self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
         self.expand_name(attribute.key)
     }
 }
 
-pub struct ElementAccess<'a, 'r> {
+struct ElementAccess<'a, 'r> {
     deserializer: Option<&'a mut Deserializer<'r>>,
     attribute_index: usize,
     bytes_start: BytesStart<'r>,
@@ -188,7 +271,7 @@ impl<'r> ElementAccess<'_, 'r> {
     }
 }
 
-pub struct AttributeAccess<'a> {
+struct AttributeAccess<'a> {
     name: ExpandedName<'a>,
     value: String,
 }
@@ -259,7 +342,7 @@ impl<'a> xmlity::Deserializer<'a> for AttributeDeserializer<'a> {
     }
 }
 
-pub struct SubAttributesAccess<'a, 'r> {
+struct SubAttributesAccess<'a, 'r> {
     deserializer: &'a Deserializer<'r>,
     bytes_start: &'a BytesStart<'r>,
     attribute_index: usize,
@@ -398,7 +481,7 @@ impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
     }
 }
 
-pub enum ChildrenAccess<'a, 'r> {
+enum ChildrenAccess<'a, 'r> {
     Filled {
         expected_end: QName<'static>,
         deserializer: &'a mut Deserializer<'r>,
@@ -517,12 +600,12 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
     }
 }
 
-pub struct SeqAccess<'a, 'r> {
+struct SeqAccess<'a, 'r> {
     deserializer: &'a mut Deserializer<'r>,
 }
 
 #[allow(clippy::large_enum_variant)]
-pub enum SubSeqAccess<'p, 'r> {
+enum SubSeqAccess<'p, 'r> {
     Filled {
         current: Option<Deserializer<'r>>,
         parent: &'p mut Deserializer<'r>,
