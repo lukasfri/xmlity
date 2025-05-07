@@ -295,6 +295,19 @@ impl<'a> XmlNamespace<'a> {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The namespace for XML namespace declarations.
+    pub const XMLNS: XmlNamespace<'static> =
+        XmlNamespace::new_dangerous("http://www.w3.org/2000/xmlns/");
+    /// The namespace for built-in XML attributes.
+    pub const XML: XmlNamespace<'static> =
+        XmlNamespace::new_dangerous("http://www.w3.org/XML/1998/namespace");
+    /// The namespace for XHTML.
+    pub const XHTML: XmlNamespace<'static> =
+        XmlNamespace::new_dangerous("http://www.w3.org/1999/xhtml");
+    /// The namespace for XML Schema Instance.
+    pub const XSI: XmlNamespace<'static> =
+        XmlNamespace::new_dangerous("http://www.w3.org/2001/XMLSchema-instance");
 }
 
 /// # XML Prefix
