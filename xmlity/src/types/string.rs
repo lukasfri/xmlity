@@ -23,11 +23,11 @@ impl<T> Default for FromTrimmedTextVisitor<T> {
     }
 }
 
-impl<'de, T: Deserialize<'de>> Visitor<'de> for FromTrimmedTextVisitor<T>
+impl<'de, T> Visitor<'de> for FromTrimmedTextVisitor<T>
 where
     T: FromStr,
 {
-    type Value = T;
+    type Value = Trim<T>;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "a string")
     }
@@ -39,6 +39,7 @@ where
         v.as_str()
             .trim()
             .parse()
+            .map(Trim)
             .map_err(|_| E::custom("invalid value"))
     }
 }
@@ -47,11 +48,9 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Trim<T>(pub T);
 
-impl<'de, T: Deserialize<'de> + FromStr> Deserialize<'de> for Trim<T> {
+impl<'de, T: FromStr> Deserialize<'de> for Trim<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer
-            .deserialize_any(FromTrimmedTextVisitor::default())
-            .map(Trim)
+        deserializer.deserialize_any(FromTrimmedTextVisitor::default())
     }
 }
 

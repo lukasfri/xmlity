@@ -144,6 +144,7 @@ impl SerializeBuilder for DeriveEnum<'_> {
                 let mut variant_opts = records::roots::SerializeRootOpts::parse(&variant.attrs)?;
                 if let SerializeRootOpts::Value(records::roots::RootValueOpts {
                     value: value @ None,
+                    ..
                 }) = &mut variant_opts
                 {
                     let ident_value = self
@@ -165,6 +166,7 @@ impl SerializeBuilder for DeriveEnum<'_> {
 
                     variant_opts = SerializeRootOpts::Value(records::roots::RootValueOpts {
                         value: Some(ident_value),
+                        ..Default::default()
                     });
                 }
 

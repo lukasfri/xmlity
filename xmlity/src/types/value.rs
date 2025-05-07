@@ -156,7 +156,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             where
                 S: de::SeqAccess<'v>,
             {
-                IteratorVisitor::new()
+                IteratorVisitor::default()
                     .visit_seq(sequence)
                     .map(XmlValue::Seq)
             }
@@ -1505,7 +1505,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for XmlSeq<T> {
     where
         D: crate::de::Deserializer<'de>,
     {
-        deserializer.deserialize_seq(IteratorVisitor::new())
+        deserializer.deserialize_seq(IteratorVisitor::default())
     }
 }
 

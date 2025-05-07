@@ -151,17 +151,10 @@ impl<'i> Deserializer<'i> {
     }
 
     fn read_event(&mut self) -> Result<Option<Event<'i>>, Error> {
-        while let Ok(event) = self.reader.read_event() {
-            match event {
-                Event::Eof => return Ok(None),
-                Event::Text(text) if text.deref().trim_ascii().is_empty() => {
-                    continue;
-                }
-                event => return Ok(Some(event)),
-            }
+        match self.reader.read_event()? {
+            Event::Eof => Ok(None),
+            event => Ok(Some(event)),
         }
-
-        Ok(None)
     }
 
     fn read_until_element_end(

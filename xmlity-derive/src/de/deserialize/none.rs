@@ -117,8 +117,15 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
+        ignore_whitespace: bool,
     ) -> DeriveResult<Vec<Stmt>> {
-        let visit = SeqVisitLoop::new(access_ident, allow_unknown_children, order, fields);
+        let visit = SeqVisitLoop::new(
+            access_ident,
+            allow_unknown_children,
+            order,
+            fields,
+            ignore_whitespace,
+        );
 
         let field_storage = visit.field_storage();
         let access_loop = visit.access_loop()?;
@@ -274,12 +281,19 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             })
         });
 
+        let ignore_whitespace = self
+            .options
+            .as_ref()
+            .and_then(|a| a.ignore_whitespace)
+            .unwrap_or(true);
+
         let children_loop = if element_group_fields.clone().next().is_some() {
             Self::seq_access(
                 access_ident,
                 element_group_fields,
                 false,
                 ElementOrder::Loose,
+                ignore_whitespace,
             )?
         } else {
             Vec::new()
@@ -429,6 +443,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                     let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
                     if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
                         value: value @ None,
+                        ..
                     }) = &mut variant_opts {
                         let ident_value = self.value_opts
                             .as_ref()
@@ -448,6 +463,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
 
                         variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
                             value: Some(ident_value),
+                            ..Default::default()
                         });
                     }
 

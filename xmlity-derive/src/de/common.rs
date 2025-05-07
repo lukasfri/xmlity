@@ -34,6 +34,7 @@ pub struct SeqVisitLoop<
     allow_unknown_children: bool,
     order: ElementOrder,
     fields: F,
+    ignore_whitespace: bool,
 }
 
 impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone>
@@ -44,12 +45,14 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
         allow_unknown_children: bool,
         order: ElementOrder,
         fields: F,
+        ignore_whitespace: bool,
     ) -> Self {
         Self {
             seq_access_ident,
             allow_unknown_children,
             order,
             fields,
+            ignore_whitespace,
         }
     }
 
@@ -63,6 +66,7 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
             allow_unknown_children,
             order,
             fields,
+            ignore_whitespace,
         } = self;
 
         let pop_error = matches!(order, ElementOrder::Loose);
@@ -80,6 +84,16 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
             parse_quote! {},
             pop_error,
         )?;
+
+        let ignore_whitespace_expression: Vec<Stmt> = if *ignore_whitespace {
+            parse_quote! {
+                if let Ok(Some(_)) = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoreWhitespace>(&mut #access_ident) {
+                    continue;
+                }
+            }
+        } else {
+            parse_quote! {}
+        };
 
         match order {
             ElementOrder::Loose => field_visits.into_iter().zip(fields.clone()).map(|(field_visit, field)| {
@@ -106,6 +120,7 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
 
                 Ok(parse_quote! {
                     loop {
+                        #(#ignore_whitespace_expression)*
                         #field_visit
                         #(#skip_unknown)*
                     }
@@ -134,6 +149,7 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
 
                 Ok(parse_quote! {
                     loop {
+                        #(#ignore_whitespace_expression)*
                         #(#field_visits)*
                         #(#skip_unknown)*
                     }

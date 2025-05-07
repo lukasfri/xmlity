@@ -341,6 +341,46 @@ impl<S: AsRef<str>> Serialize for CData<S> {
 
 /// A type that ignores that uses the value that visits it, but results in nothing. Useful for skipping over values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IgnoreWhitespace;
+
+impl<'de> Deserialize<'de> for IgnoreWhitespace {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct __Visitor<'v> {
+            marker: ::core::marker::PhantomData<IgnoreWhitespace>,
+            lifetime: ::core::marker::PhantomData<&'v ()>,
+        }
+
+        impl<'v> crate::de::Visitor<'v> for __Visitor<'v> {
+            type Value = IgnoreWhitespace;
+
+            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                formatter.write_str("ignored any value")
+            }
+
+            fn visit_text<E, V: XmlText>(self, text: V) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                if text.as_str().trim().is_empty() {
+                    Ok(IgnoreWhitespace)
+                } else {
+                    Err(E::custom("expected whitespace"))
+                }
+            }
+        }
+
+        deserializer.deserialize_any(__Visitor {
+            lifetime: ::core::marker::PhantomData,
+            marker: ::core::marker::PhantomData,
+        })
+    }
+}
+
+/// A type that ignores that uses the value that visits it, but results in nothing. Useful for skipping over values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IgnoredAny;
 
 impl<'de> Deserialize<'de> for IgnoredAny {
