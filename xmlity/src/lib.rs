@@ -124,6 +124,14 @@ impl<'a> ExpandedName<'a> {
         )
     }
 
+    /// Returns this [`ExpandedName`] as a reference.
+    pub fn as_ref(&self) -> ExpandedName<'_> {
+        ExpandedName::new(
+            self.local_name.as_ref(),
+            self.namespace.as_ref().map(|n| n.as_ref()),
+        )
+    }
+
     /// Returns the local name of this [`ExpandedName`].
     pub fn local_name(&self) -> &LocalName<'_> {
         &self.local_name
@@ -187,6 +195,14 @@ impl<'a> QName<'a> {
         QName {
             prefix: self.prefix.map(|prefix| prefix.into_owned()),
             local_name: self.local_name.into_owned(),
+        }
+    }
+
+    /// Returns this [`QName`] as a reference.
+    pub fn as_ref(&self) -> QName<'_> {
+        QName {
+            prefix: self.prefix.as_ref().map(|prefix| prefix.as_ref()),
+            local_name: self.local_name.as_ref(),
         }
     }
 
@@ -270,6 +286,11 @@ impl<'a> XmlNamespace<'a> {
         XmlNamespace(Cow::Owned(self.0.into_owned()))
     }
 
+    /// Returns this [`XmlNamespace`] as a reference.
+    pub fn as_ref(&self) -> XmlNamespace<'_> {
+        XmlNamespace(Cow::Borrowed(&self.0))
+    }
+
     /// Returns this [`XmlNamespace`] as a string slice.
     pub fn as_str(&self) -> &str {
         &self.0
@@ -310,6 +331,11 @@ impl<'a> Prefix<'a> {
     /// Converts this [`Prefix`] into an owned version.
     pub fn into_owned(self) -> Prefix<'static> {
         Prefix(Cow::Owned(self.0.into_owned()))
+    }
+
+    /// Returns this [`Prefix`] as a reference.
+    pub fn as_ref(&self) -> Prefix<'_> {
+        Prefix(Cow::Borrowed(&self.0))
     }
 
     /// Returns this [`Prefix`] as a string slice.
@@ -393,6 +419,11 @@ impl<'a> LocalName<'a> {
     /// Converts this [`LocalName`] into an owned version.
     pub fn into_owned(self) -> LocalName<'static> {
         LocalName(Cow::Owned(self.0.into_owned()))
+    }
+
+    /// Returns this [`LocalName`] as a reference.
+    pub fn as_ref(&self) -> LocalName<'_> {
+        LocalName(Cow::Borrowed(&self.0))
     }
 }
 
