@@ -6,6 +6,7 @@ pub mod generics;
 pub mod inline_attribute_declarations;
 pub mod inline_declarations;
 pub mod mixed;
+pub mod namespace_access;
 pub mod namespace_expr;
 pub mod single_namespace;
 pub mod strict_order;

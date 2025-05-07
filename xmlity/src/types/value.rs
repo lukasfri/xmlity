@@ -12,13 +12,13 @@ use core::{
 use std::{fmt::Formatter, iter, ops::Deref};
 
 use crate::{
-    de::{self, AttributesAccess, ElementAccess, SeqAccess, Visitor},
+    de::{self, AttributesAccess, ElementAccess, NamespaceContext, SeqAccess, Visitor},
     ser::{
         self, IncludePrefix, SerializeAttributeAccess, SerializeAttributes, SerializeElement,
         SerializeElementAttributes, SerializeSeq,
     },
     AttributeSerializer, Deserialize, Deserializer, ExpandedName, Prefix, Serialize,
-    SerializeAttribute, Serializer,
+    SerializeAttribute, Serializer, XmlNamespace,
 };
 
 use super::iterator::IteratorVisitor;
@@ -35,7 +35,7 @@ pub enum XmlValue {
     /// A sequence of XML values.
     Seq(XmlSeq<XmlValue>),
     /// A processing instruction.
-    PI(XmlPI),
+    PI(XmlProcessingInstruction),
     /// A declaration.
     Decl(XmlDecl),
     /// A comment.
@@ -71,8 +71,8 @@ impl From<XmlSeq<XmlValue>> for XmlValue {
     }
 }
 
-impl From<XmlPI> for XmlValue {
-    fn from(value: XmlPI) -> Self {
+impl From<XmlProcessingInstruction> for XmlValue {
+    fn from(value: XmlProcessingInstruction) -> Self {
         XmlValue::PI(value)
     }
 }
@@ -161,39 +161,40 @@ impl<'de> Deserialize<'de> for XmlValue {
                     .map(XmlValue::Seq)
             }
 
-            fn visit_pi<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+            fn visit_pi<E, V>(self, value: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
+                V: de::XmlProcessingInstruction,
             {
-                XmlPIVisitor::new().visit_pi(value).map(XmlValue::PI)
+                XmlProcessingInstructionVisitor::new()
+                    .visit_pi(value)
+                    .map(XmlValue::PI)
             }
 
-            fn visit_decl<E, V: AsRef<[u8]>>(
-                self,
-                version: V,
-                encoding: Option<V>,
-                standalone: Option<V>,
-            ) -> Result<Self::Value, E>
+            fn visit_decl<E, V>(self, declaration: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
+                V: de::XmlDeclaration,
             {
                 XmlDeclVisitor::new()
-                    .visit_decl(version, encoding, standalone)
+                    .visit_decl(declaration)
                     .map(XmlValue::Decl)
             }
 
-            fn visit_comment<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+            fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
+                V: de::XmlComment,
             {
                 XmlCommentVisitor::new()
-                    .visit_comment(value)
+                    .visit_comment(comment)
                     .map(XmlValue::Comment)
             }
 
-            fn visit_doctype<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+            fn visit_doctype<E, V>(self, value: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
+                V: de::XmlDoctype,
             {
                 XmlDoctypeVisitor::new()
                     .visit_doctype(value)
@@ -252,9 +253,11 @@ impl<'s> Serializer for &'s mut &mut XmlSeq<XmlValue> {
         Ok(self)
     }
 
-    fn serialize_pi<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.values
-            .push(XmlValue::PI(XmlPI(text.as_ref().to_vec())));
+    fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error> {
+        self.values.push(XmlValue::PI(XmlProcessingInstruction {
+            target: target.as_ref().to_vec(),
+            content: content.as_ref().to_vec(),
+        }));
         Ok(())
     }
 
@@ -335,8 +338,11 @@ impl<'s> Serializer for &'s mut XmlValue {
         Ok(())
     }
 
-    fn serialize_pi<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
-        *self = XmlValue::PI(XmlPI(text.as_ref().to_vec()));
+    fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error> {
+        *self = XmlValue::PI(XmlProcessingInstruction {
+            target: target.as_ref().to_vec(),
+            content: content.as_ref().to_vec(),
+        });
         Ok(())
     }
 
@@ -462,7 +468,18 @@ impl<'de> Deserialize<'de> for XmlText {
     }
 }
 
+impl NamespaceContext for () {
+    fn resolve_prefix(&self, _prefix: Prefix<'_>) -> Option<XmlNamespace<'_>> {
+        None
+    }
+}
+
 impl de::XmlText for &XmlText {
+    type NamespaceContext<'a>
+        = ()
+    where
+        Self: 'a;
+
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
@@ -470,6 +487,8 @@ impl de::XmlText for &XmlText {
     fn as_str(&self) -> std::borrow::Cow<'_, str> {
         std::borrow::Cow::Borrowed(std::str::from_utf8(&self.0).unwrap())
     }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
 impl<'de> Deserializer<'de> for &'de XmlText {
@@ -546,6 +565,11 @@ impl<'de> Deserialize<'de> for XmlCData {
 }
 
 impl de::XmlCData for &XmlCData {
+    type NamespaceContext<'a>
+        = ()
+    where
+        Self: 'a;
+
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
@@ -553,6 +577,8 @@ impl de::XmlCData for &XmlCData {
     fn as_str(&self) -> std::borrow::Cow<'_, str> {
         std::borrow::Cow::Borrowed(std::str::from_utf8(&self.0).unwrap())
     }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
 impl<'de> Deserializer<'de> for &'de XmlCData {
@@ -582,7 +608,7 @@ pub enum XmlChild {
     /// An element node.
     Element(XmlElement),
     /// A processing instruction node.
-    PI(XmlPI),
+    PI(XmlProcessingInstruction),
     /// A comment node.
     Comment(XmlComment),
     /// Nothing.
@@ -608,8 +634,8 @@ impl From<XmlElement> for XmlChild {
     }
 }
 
-impl From<XmlPI> for XmlChild {
-    fn from(value: XmlPI) -> Self {
+impl From<XmlProcessingInstruction> for XmlChild {
+    fn from(value: XmlProcessingInstruction) -> Self {
         XmlChild::PI(value)
     }
 }
@@ -682,16 +708,20 @@ impl<'v> crate::de::Visitor<'v> for XmlChildVisitor<'v> {
             .map(XmlChild::Element)
     }
 
-    fn visit_pi<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_pi<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
+        V: de::XmlProcessingInstruction,
     {
-        XmlPIVisitor::new().visit_pi(value).map(XmlChild::PI)
+        XmlProcessingInstructionVisitor::new()
+            .visit_pi(value)
+            .map(XmlChild::PI)
     }
 
-    fn visit_comment<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_comment<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
+        V: de::XmlComment,
     {
         XmlCommentVisitor::new()
             .visit_comment(value)
@@ -745,9 +775,11 @@ impl<'s> Serializer for &'s mut &mut XmlSeq<XmlChild> {
         Ok(self)
     }
 
-    fn serialize_pi<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.values
-            .push(XmlChild::PI(XmlPI(text.as_ref().to_vec())));
+    fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error> {
+        self.values.push(XmlChild::PI(XmlProcessingInstruction {
+            target: target.as_ref().to_vec(),
+            content: content.as_ref().to_vec(),
+        }));
         Ok(())
     }
 
@@ -1084,6 +1116,10 @@ impl<'de> AttributesAccess<'de> for XmlElementAccess<'de, '_> {
 
 impl<'de> ElementAccess<'de> for XmlElementAccess<'de, '_> {
     type ChildrenAccess = XmlSeqAccess<'de, 'static, XmlChild>;
+    type NamespaceContext<'a>
+        = ()
+    where
+        Self: 'a;
 
     fn name(&self) -> ExpandedName<'_> {
         self.element.name.clone()
@@ -1096,6 +1132,8 @@ impl<'de> ElementAccess<'de> for XmlElementAccess<'de, '_> {
             write_index_to: None,
         })
     }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
 impl<'de> Deserializer<'de> for &'de XmlElement {
@@ -1183,6 +1221,10 @@ impl<'v> crate::de::Visitor<'v> for XmlAttributeVisitor<'v> {
 
 impl<'a> de::AttributeAccess<'a> for &'a XmlAttribute {
     type Error = XmlValueDeserializerError;
+    type NamespaceContext<'b>
+        = ()
+    where
+        Self: 'b;
 
     fn name(&self) -> ExpandedName<'_> {
         self.name.clone()
@@ -1191,6 +1233,8 @@ impl<'a> de::AttributeAccess<'a> for &'a XmlAttribute {
     fn value(&self) -> &str {
         &self.value
     }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
 impl<'de> crate::de::Deserialize<'de> for XmlAttribute {
@@ -1536,30 +1580,52 @@ impl<'de> Deserializer<'de> for &'de XmlSeq<XmlChild> {
 /// A processing instruction.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
-pub struct XmlPI(pub Vec<u8>);
+pub struct XmlProcessingInstruction {
+    target: Vec<u8>,
+    content: Vec<u8>,
+}
 
-impl XmlPI {
+impl XmlProcessingInstruction {
     /// Creates a new processing instruction.
-    pub fn new<T: Into<Vec<u8>>>(data: T) -> Self {
-        Self(data.into())
+    pub fn new<T: Into<Vec<u8>>, U: Into<Vec<u8>>>(target: T, content: U) -> Self {
+        Self {
+            target: target.into(),
+            content: content.into(),
+        }
     }
 }
 
-impl Serialize for XmlPI {
+impl de::XmlProcessingInstruction for &XmlProcessingInstruction {
+    type NamespaceContext<'a>
+        = ()
+    where
+        Self: 'a;
+
+    fn content(&self) -> &[u8] {
+        self.content.as_slice()
+    }
+
+    fn target(&self) -> &[u8] {
+        self.target.as_slice()
+    }
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+}
+
+impl Serialize for XmlProcessingInstruction {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: crate::ser::Serializer,
     {
-        serializer.serialize_pi(&self.0)
+        serializer.serialize_pi(&self.target, &self.content)
     }
 }
 
-struct XmlPIVisitor<'v> {
-    marker: ::core::marker::PhantomData<XmlPI>,
+struct XmlProcessingInstructionVisitor<'v> {
+    marker: ::core::marker::PhantomData<XmlProcessingInstruction>,
     lifetime: ::core::marker::PhantomData<&'v ()>,
 }
 
-impl XmlPIVisitor<'_> {
+impl XmlProcessingInstructionVisitor<'_> {
     fn new() -> Self {
         Self {
             marker: ::core::marker::PhantomData,
@@ -1568,37 +1634,41 @@ impl XmlPIVisitor<'_> {
     }
 }
 
-impl<'v> crate::de::Visitor<'v> for XmlPIVisitor<'v> {
-    type Value = XmlPI;
+impl<'v> crate::de::Visitor<'v> for XmlProcessingInstructionVisitor<'v> {
+    type Value = XmlProcessingInstruction;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a comment")
     }
 
-    fn visit_pi<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_pi<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
+        V: de::XmlProcessingInstruction,
     {
-        Ok(XmlPI(value.as_ref().to_vec()))
+        Ok(XmlProcessingInstruction {
+            target: value.target().to_vec(),
+            content: value.content().to_vec(),
+        })
     }
 }
 
-impl<'de> Deserialize<'de> for XmlPI {
+impl<'de> Deserialize<'de> for XmlProcessingInstruction {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_any(XmlPIVisitor::new())
+        deserializer.deserialize_any(XmlProcessingInstructionVisitor::new())
     }
 }
 
-impl<'de> Deserializer<'de> for &'de XmlPI {
+impl<'de> Deserializer<'de> for &'de XmlProcessingInstruction {
     type Error = XmlValueDeserializerError;
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_pi(&self.0)
+        visitor.visit_pi(self)
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -1632,6 +1702,27 @@ impl XmlDecl {
     }
 }
 
+impl de::XmlDeclaration for &XmlDecl {
+    type NamespaceContext<'a>
+        = ()
+    where
+        Self: 'a;
+
+    fn version(&self) -> &[u8] {
+        self.version.as_bytes()
+    }
+
+    fn encoding(&self) -> Option<&[u8]> {
+        self.encoding.as_deref().map(|e| e.as_bytes())
+    }
+
+    fn standalone(&self) -> Option<&[u8]> {
+        self.standalone.as_deref().map(|s| s.as_bytes())
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+}
+
 impl Serialize for XmlDecl {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_decl(
@@ -1662,19 +1753,19 @@ impl<'v> crate::de::Visitor<'v> for XmlDeclVisitor<'v> {
         formatter.write_str("a declaration")
     }
 
-    fn visit_decl<E, V: AsRef<[u8]>>(
-        self,
-        version: V,
-        encoding: Option<V>,
-        standalone: Option<V>,
-    ) -> Result<Self::Value, E>
+    fn visit_decl<E, V>(self, declaration: V) -> Result<Self::Value, E>
     where
         E: de::Error,
+        V: de::XmlDeclaration,
     {
         Ok(XmlDecl {
-            version: String::from_utf8_lossy(version.as_ref()).to_string(),
-            encoding: encoding.map(|e| String::from_utf8_lossy(e.as_ref()).to_string()),
-            standalone: standalone.map(|e| String::from_utf8_lossy(e.as_ref()).to_string()),
+            version: String::from_utf8_lossy(declaration.version()).to_string(),
+            encoding: declaration
+                .encoding()
+                .map(|e| String::from_utf8_lossy(e).to_string()),
+            standalone: declaration
+                .standalone()
+                .map(|e| String::from_utf8_lossy(e).to_string()),
         })
     }
 }
@@ -1694,11 +1785,7 @@ impl<'de> Deserializer<'de> for &'de XmlDecl {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_decl(
-            &self.version,
-            self.encoding.as_ref(),
-            self.standalone.as_ref(),
-        )
+        visitor.visit_decl(self)
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -1719,6 +1806,17 @@ impl XmlComment {
     pub fn new<T: Into<Vec<u8>>>(comment: T) -> Self {
         Self(comment.into())
     }
+}
+
+impl de::XmlComment for &XmlComment {
+    type NamespaceContext<'a>
+        = ()
+    where
+        Self: 'a;
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
 impl Serialize for XmlComment {
@@ -1751,11 +1849,12 @@ impl<'v> crate::de::Visitor<'v> for XmlCommentVisitor<'v> {
         formatter.write_str("a comment")
     }
 
-    fn visit_comment<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
     where
         E: de::Error,
+        V: de::XmlComment,
     {
-        Ok(XmlComment(value.as_ref().to_vec()))
+        Ok(XmlComment(comment.as_bytes().to_vec()))
     }
 }
 
@@ -1774,7 +1873,7 @@ impl<'de> Deserializer<'de> for &'de XmlComment {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_comment(&self.0)
+        visitor.visit_comment(self)
     }
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -1794,6 +1893,19 @@ impl XmlDoctype {
     pub fn new<T: Into<Vec<u8>>>(value: T) -> Self {
         Self(value.into())
     }
+}
+
+impl de::XmlDoctype for &XmlDoctype {
+    type NamespaceContext<'a>
+        = ()
+    where
+        Self: 'a;
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
 impl Serialize for XmlDoctype {
@@ -1826,11 +1938,12 @@ impl<'v> crate::de::Visitor<'v> for XmlDoctypeVisitor<'v> {
         formatter.write_str("a comment")
     }
 
-    fn visit_doctype<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_doctype<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
+        V: de::XmlDoctype,
     {
-        Ok(XmlDoctype(value.as_ref().to_vec()))
+        Ok(XmlDoctype(value.as_bytes().to_vec()))
     }
 }
 
@@ -1850,7 +1963,7 @@ impl<'de> Deserializer<'de> for &'de XmlDoctype {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_doctype(&self.0)
+        visitor.visit_doctype(self)
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>

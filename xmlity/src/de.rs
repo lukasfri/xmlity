@@ -6,7 +6,7 @@ use std::{
     fmt::{self, Debug, Display},
 };
 
-use crate::ExpandedName;
+use crate::{ExpandedName, Prefix, XmlNamespace};
 
 /// A trait for errors that can be returned by a [`Deserializer`].
 pub trait Error: Sized + StdError {
@@ -79,6 +79,12 @@ pub enum Unexpected {
     None,
 }
 
+/// Trait that lets you access the namespaces declared on an XML node.
+pub trait NamespaceContext {
+    /// Resolve a prefix to a namespace.
+    fn resolve_prefix(&self, prefix: Prefix<'_>) -> Option<XmlNamespace<'_>>;
+}
+
 /// Trait that lets you access the attributes of an XML node.
 pub trait AttributesAccess<'de> {
     /// The error type for this attributes access.
@@ -121,11 +127,19 @@ pub trait ElementAccess<'de>: AttributesAccess<'de> {
     /// The type of the children accessor returned by [`ElementAccess::children`].
     type ChildrenAccess: SeqAccess<'de, Error = Self::Error>;
 
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
     /// Returns the name of the element.
     fn name(&self) -> ExpandedName<'_>;
 
     /// Returns an accessor for the element's children.
     fn children(self) -> Result<Self::ChildrenAccess, Self::Error>;
+
+    /// Returns the namespace context for this attribute.
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
 }
 
 /// An extension trait for [`ElementAccess`] that provides additional methods.
@@ -149,11 +163,19 @@ pub trait AttributeAccess<'de> {
     /// The error type for this attribute access.
     type Error: Error;
 
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
     /// Returns the name of the attribute.
     fn name(&self) -> ExpandedName<'_>;
 
     /// Returns the value of the attribute.
     fn value(&self) -> &str;
+
+    /// Returns the namespace context for this attribute.
+    fn namespace_context<'a>(&'a self) -> Self::NamespaceContext<'a>;
 }
 
 /// An extension trait for [`AttributeAccess`] that provides additional methods.
@@ -224,53 +246,101 @@ impl<'de, T: SeqAccess<'de>> SeqAccess<'de> for &mut T {
 
 /// Trait for XML text.
 pub trait XmlText {
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
     /// Returns the byte representation of the text.
     fn as_bytes(&self) -> &[u8];
+
     /// Returns the string representation of the text.
     fn as_str(&self) -> Cow<'_, str>;
+
+    /// Returns the namespace context of the text.
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
 }
 
 /// Trait for XML CDATA.
 pub trait XmlCData {
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
     /// Returns the byte representation of the CDATA.
     fn as_bytes(&self) -> &[u8];
+
     /// Returns the string representation of the CDATA.
     fn as_str(&self) -> Cow<'_, str>;
+
+    /// Returns the namespace context of the CDATA.
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
 }
 
-impl XmlText for &str {
-    fn as_bytes(&self) -> &[u8] {
-        str::as_bytes(self)
-    }
-    fn as_str(&self) -> Cow<'_, str> {
-        Cow::Borrowed(self)
-    }
+/// Trait for XML processing instructions.
+pub trait XmlProcessingInstruction {
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
+    /// Returns the content of the PI.
+    fn content(&self) -> &[u8];
+
+    /// Returns the target of the PI.
+    fn target(&self) -> &[u8];
+
+    /// Returns the namespace context of the PI.
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
 }
 
-impl XmlText for &[u8] {
-    fn as_bytes(&self) -> &[u8] {
-        self
-    }
-    fn as_str(&self) -> Cow<'_, str> {
-        String::from_utf8_lossy(self)
-    }
-}
-impl XmlCData for &str {
-    fn as_bytes(&self) -> &[u8] {
-        str::as_bytes(self)
-    }
-    fn as_str(&self) -> Cow<'_, str> {
-        Cow::Borrowed(self)
-    }
+/// Trait for XML declarations.
+pub trait XmlDeclaration {
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
+    /// Returns the version value of the declaration.
+    fn version(&self) -> &[u8];
+
+    /// Returns the encoding value of the declaration.
+    fn encoding(&self) -> Option<&[u8]>;
+
+    /// Returns the standalone value of the declaration.
+    fn standalone(&self) -> Option<&[u8]>;
+
+    /// Returns the namespace context of the declaration.
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
 }
 
-impl XmlCData for &[u8] {
-    fn as_bytes(&self) -> &[u8] {
-        self
-    }
-    fn as_str(&self) -> Cow<'_, str> {
-        String::from_utf8_lossy(self)
-    }
+/// Trait for XML comments.
+pub trait XmlComment {
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
+    /// Returns the byte representation of the comment.
+    fn as_bytes(&self) -> &[u8];
+
+    /// Returns the namespace context of the comment.
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+}
+
+/// Trait for XML doctypes.
+pub trait XmlDoctype {
+    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
+    type NamespaceContext<'a>: NamespaceContext + 'a
+    where
+        Self: 'a;
+
+    /// Returns the byte representation of the doctype.
+    fn as_bytes(&self) -> &[u8];
+
+    /// Returns the namespace context of the doctype.
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
 }
 
 /// Visitor trait that lets you define how to handle different types of XML nodes.
@@ -330,45 +400,42 @@ pub trait Visitor<'de>: Sized {
     }
 
     /// Visits an XML PI node.
-    fn visit_pi<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_pi<E, V>(self, pi: V) -> Result<Self::Value, E>
     where
         E: Error,
+        V: XmlProcessingInstruction,
     {
-        let _ = value;
+        let _ = pi;
         Err(Error::unexpected_visit(Unexpected::PI, &self))
     }
 
     /// Visits a declaration.
-    fn visit_decl<E, V: AsRef<[u8]>>(
-        self,
-        version: V,
-        encoding: Option<V>,
-        standalone: Option<V>,
-    ) -> Result<Self::Value, E>
+    fn visit_decl<E, V>(self, declaration: V) -> Result<Self::Value, E>
     where
         E: Error,
+        V: XmlDeclaration,
     {
-        let _ = version;
-        let _ = encoding;
-        let _ = standalone;
+        let _ = declaration;
         Err(Error::unexpected_visit(Unexpected::Decl, &self))
     }
 
     /// Visits a comment.
-    fn visit_comment<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
     where
         E: Error,
+        V: XmlComment,
     {
-        let _ = value;
+        let _ = comment;
         Err(Error::unexpected_visit(Unexpected::Comment, &self))
     }
 
     /// Visits a doctype declaration.
-    fn visit_doctype<E, V: AsRef<[u8]>>(self, value: V) -> Result<Self::Value, E>
+    fn visit_doctype<E, V>(self, doctype: V) -> Result<Self::Value, E>
     where
         E: Error,
+        V: XmlDoctype,
     {
-        let _ = value;
+        let _ = doctype;
         Err(Error::unexpected_visit(Unexpected::DocType, &self))
     }
 

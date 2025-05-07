@@ -52,40 +52,23 @@ macro_rules! define_test {
     // Main implementation of the macro
     (@impl $name: ident, [$(,)*$(($value:expr, $serialize_xml:expr, $deserialize_xml:expr)),*]) => {
         mod $name {
-            #[allow(unused_imports)]
-            use super::*;
-            #[rstest::rstest]
-            $(
-                #[case($value, $serialize_xml)]
-            )*
-            fn serialize<T: xmlity::Serialize + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] to: T, #[case] expected: U) {
-                let actual = $crate::utils::quick_xml_serialize_test(to).unwrap();
+            $crate::define_serialize_test!(serialize, [$(($value, $serialize_xml)),*]);
 
-                pretty_assertions::assert_eq!(actual, expected.as_ref());
-            }
 
-            #[rstest::rstest]
-            $(
-                #[case($value, $deserialize_xml)]
-            )*
-            fn deserialize<T: xmlity::DeserializeOwned + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] expected: T, #[case] xml: U) {
-                let actual: T = $crate::utils::quick_xml_deserialize_test(xml.as_ref()).unwrap();
-
-                pretty_assertions::assert_eq!(actual, expected);
-            }
+            $crate::define_deserialize_test!(deserialize, [$(($value, $deserialize_xml)),*]);
         }
     };
-    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $serialize_xml2:expr, $deserialize_xml2:expr)]) => {
-        $crate::define_test!(@impl $name, [$($existing)*, ($value2, $serialize_xml2, $deserialize_xml2)]);
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $serialize_xml2:expr, $deserialize_xml2:expr)]) => {
+        $crate::define_test!(@impl $name, [$($existing)*, ($value, $serialize_xml2, $deserialize_xml2)]);
     };
-    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $xml:expr)]) => {
-        $crate::define_test!(@impl $name, [$($existing)*, ($value2, $xml, $xml)]);
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $xml:expr)]) => {
+        $crate::define_test!(@impl $name, [$($existing)*, ($value, $xml, $xml)]);
     };
-    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $serialize_xml2:expr, $deserialize_xml2:expr), $($tail:tt)*]) => {
-        $crate::define_test!(@internal $name, [$($existing)*, ($value2, $serialize_xml2, $deserialize_xml2)], [$($tail)*]);
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $serialize_xml2:expr, $deserialize_xml2:expr), $($tail:tt)*]) => {
+        $crate::define_test!(@internal $name, [$($existing)*, ($value, $serialize_xml2, $deserialize_xml2)], [$($tail)*]);
     };
-    (@internal $name: ident, [$($existing:tt)*], [($value2:expr, $xml:expr), $($tail:tt)*]) => {
-        $crate::define_test!(@internal $name, [$($existing)*, ($value2, $xml, $xml)], [$($tail)*]);
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $xml:expr), $($tail:tt)*]) => {
+        $crate::define_test!(@internal $name, [$($existing)*, ($value, $xml, $xml)], [$($tail)*]);
     };
     ($name: ident, [$($tail:tt)*]) => {
         $crate::define_test!(@internal $name, [], [$($tail)*]);
@@ -93,4 +76,56 @@ macro_rules! define_test {
     // ($name: ident, []) => {
     //     $crate::define_test!($name, [], []);
     // };
+}
+
+#[macro_export]
+macro_rules! define_serialize_test {
+    // Main implementation of the macro
+    (@impl $name: ident, [$(,)*$(($value:expr, $xml:expr)),*]) => {
+        #[allow(unused_imports)]
+        use super::*;
+        #[rstest::rstest]
+        $(
+            #[case($value, $xml)]
+        )*
+        fn serialize<T: xmlity::Serialize + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] to: T, #[case] expected: U) {
+            let actual = $crate::utils::quick_xml_serialize_test(to).unwrap();
+
+            pretty_assertions::assert_eq!(actual, expected.as_ref());
+        }
+    };
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $xml:expr)]) => {
+        $crate::define_serialize_test!(@impl $name, [$($existing)*, ($value, $xml)]);
+    };
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $xml:expr), $($tail:tt)*]) => {
+        $crate::define_serialize_test!(@internal $name, [$($existing)*, ($value,$xml)], [$($tail)*]);
+    };
+    ($name: ident, [$($tail:tt)*]) => {
+        $crate::define_serialize_test!(@internal $name, [], [$($tail)*]);
+    };
+}
+
+#[macro_export]
+macro_rules! define_deserialize_test {
+    // Main implementation of the macro
+    (@impl $name: ident, [$(,)*$(($value:expr, $xml:expr)),*]) => {
+        #[rstest::rstest]
+        $(
+            #[case($value, $xml)]
+        )*
+        fn $name<T: xmlity::DeserializeOwned + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] expected: T, #[case] xml: U) {
+            let actual: T = $crate::utils::quick_xml_deserialize_test(xml.as_ref()).unwrap();
+
+            pretty_assertions::assert_eq!(actual, expected);
+        }
+    };
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $xml:expr)]) => {
+        $crate::define_deserialize_test!(@impl $name, [$($existing)*, ($value, $xml)]);
+    };
+    (@internal $name: ident, [$($existing:tt)*], [($value:expr, $xml:expr), $($tail:tt)*]) => {
+        $crate::define_deserialize_test!(@internal $name, [$($existing)*, ($value,$xml)], [$($tail)*]);
+    };
+    ($name: ident, [$($tail:tt)*]) => {
+        $crate::define_deserialize_test!(@internal $name, [], [$($tail)*]);
+    };
 }

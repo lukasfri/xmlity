@@ -4,12 +4,15 @@ use core::fmt::{self, Debug};
 use std::{marker::PhantomData, str::FromStr};
 
 use crate::{
-    de::{self, Visitor, XmlCData, XmlText},
+    de::{
+        self, Visitor, XmlCData, XmlComment, XmlDeclaration, XmlDoctype, XmlProcessingInstruction,
+        XmlText,
+    },
     types::value::XmlDecl,
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use super::value::{XmlComment, XmlDoctype, XmlPI};
+use super::value::{self};
 
 /// This utility type represents an XML root document.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -85,27 +88,27 @@ pub enum XmlRootTop<T> {
     /// An element of the XML document.
     Value(T),
     /// A comment in the XML document.
-    Comment(XmlComment),
+    Comment(value::XmlComment),
     /// A processing instructions in the XML document.
-    PI(XmlPI),
+    PI(value::XmlProcessingInstruction),
     /// A doctype declarations in the XML document.
-    Doctype(XmlDoctype),
+    Doctype(value::XmlDoctype),
 }
 
-impl<T> From<XmlComment> for XmlRootTop<T> {
-    fn from(value: XmlComment) -> Self {
+impl<T> From<value::XmlComment> for XmlRootTop<T> {
+    fn from(value: value::XmlComment) -> Self {
         XmlRootTop::Comment(value)
     }
 }
 
-impl<T> From<XmlPI> for XmlRootTop<T> {
-    fn from(value: XmlPI) -> Self {
+impl<T> From<value::XmlProcessingInstruction> for XmlRootTop<T> {
+    fn from(value: value::XmlProcessingInstruction) -> Self {
         XmlRootTop::PI(value)
     }
 }
 
-impl<T> From<XmlDoctype> for XmlRootTop<T> {
-    fn from(value: XmlDoctype) -> Self {
+impl<T> From<value::XmlDoctype> for XmlRootTop<T> {
+    fn from(value: value::XmlDoctype) -> Self {
         XmlRootTop::Doctype(value)
     }
 }
@@ -156,17 +159,19 @@ impl<'__deserialize, T: Deserialize<'__deserialize>> Deserialize<'__deserialize>
                     return ::core::result::Result::Ok(XmlRootTop::Value(_v));
                 }
                 if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) =
-                    crate::de::SeqAccess::next_element::<XmlComment>(&mut __sequence)
+                    crate::de::SeqAccess::next_element::<value::XmlComment>(&mut __sequence)
                 {
                     return ::core::result::Result::Ok(XmlRootTop::Comment(_v));
                 }
                 if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) =
-                    crate::de::SeqAccess::next_element::<XmlPI>(&mut __sequence)
+                    crate::de::SeqAccess::next_element::<value::XmlProcessingInstruction>(
+                        &mut __sequence,
+                    )
                 {
                     return ::core::result::Result::Ok(XmlRootTop::PI(_v));
                 }
                 if let ::core::result::Result::Ok(::core::option::Option::Some(_v)) =
-                    crate::de::SeqAccess::next_element::<XmlDoctype>(&mut __sequence)
+                    crate::de::SeqAccess::next_element::<value::XmlDoctype>(&mut __sequence)
                 {
                     return ::core::result::Result::Ok(XmlRootTop::Doctype(_v));
                 }
@@ -218,56 +223,62 @@ impl<T> XmlRoot<T> {
     }
 
     /// Adds a comment to the XML document.
-    pub fn with_comment<U: Into<XmlComment>>(mut self, comment: U) -> Self {
-        let comment: XmlComment = comment.into();
+    pub fn with_comment<U: Into<value::XmlComment>>(mut self, comment: U) -> Self {
+        let comment: value::XmlComment = comment.into();
         self.elements.push(comment.into());
         self
     }
 
     /// Adds multiple attributes to the element.
-    pub fn with_comments<U: Into<XmlComment>, I: IntoIterator<Item = U>>(
+    pub fn with_comments<U: Into<value::XmlComment>, I: IntoIterator<Item = U>>(
         mut self,
         comments: I,
     ) -> Self {
         self.elements.extend(
             comments
                 .into_iter()
-                .map(Into::<XmlComment>::into)
+                .map(Into::<value::XmlComment>::into)
                 .map(Into::into),
         );
         self
     }
 
     /// Adds a processing instruction to the XML document.
-    pub fn with_pi<U: Into<XmlPI>>(mut self, pi: U) -> Self {
-        let pi: XmlPI = pi.into();
+    pub fn with_pi<U: Into<value::XmlProcessingInstruction>>(mut self, pi: U) -> Self {
+        let pi: value::XmlProcessingInstruction = pi.into();
         self.elements.push(pi.into());
         self
     }
 
     /// Adds multiple processing instructions to the XML document.
-    pub fn with_pis<U: Into<XmlPI>, I: IntoIterator<Item = U>>(mut self, pis: I) -> Self {
-        self.elements
-            .extend(pis.into_iter().map(Into::<XmlPI>::into).map(Into::into));
+    pub fn with_pis<U: Into<value::XmlProcessingInstruction>, I: IntoIterator<Item = U>>(
+        mut self,
+        pis: I,
+    ) -> Self {
+        self.elements.extend(
+            pis.into_iter()
+                .map(Into::<value::XmlProcessingInstruction>::into)
+                .map(Into::into),
+        );
         self
     }
 
     /// Adds a doctype declaration to the XML document.
-    pub fn with_doctype<U: Into<XmlDoctype>>(mut self, doctype: U) -> Self {
-        let doctype: XmlDoctype = doctype.into();
+    pub fn with_doctype<U: Into<value::XmlDoctype>>(mut self, doctype: U) -> Self {
+        let doctype: value::XmlDoctype = doctype.into();
         self.elements.push(doctype.into());
         self
     }
 
     /// Adds multiple doctype declarations to the XML document.
-    pub fn with_doctypes<U: Into<XmlDoctype>, I: IntoIterator<Item = U>>(
+    pub fn with_doctypes<U: Into<value::XmlDoctype>, I: IntoIterator<Item = U>>(
         mut self,
         doctypes: I,
     ) -> Self {
         self.elements.extend(
             doctypes
                 .into_iter()
-                .map(Into::<XmlDoctype>::into)
+                .map(Into::<value::XmlDoctype>::into)
                 .map(Into::into),
         );
         self
@@ -384,33 +395,28 @@ impl<'de> Deserialize<'de> for IgnoredAny {
                 Ok(IgnoredAny)
             }
 
-            fn visit_pi<E, V: AsRef<[u8]>>(self, _value: V) -> Result<Self::Value, E>
+            fn visit_pi<E, V: XmlProcessingInstruction>(self, _pi: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(IgnoredAny)
             }
 
-            fn visit_decl<E, V: AsRef<[u8]>>(
-                self,
-                _version: V,
-                _encoding: Option<V>,
-                _standalone: Option<V>,
-            ) -> Result<Self::Value, E>
+            fn visit_decl<E, V: XmlDeclaration>(self, _declaration: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(IgnoredAny)
             }
 
-            fn visit_comment<E, V: AsRef<[u8]>>(self, _value: V) -> Result<Self::Value, E>
+            fn visit_comment<E, V: XmlComment>(self, _comment: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(IgnoredAny)
             }
 
-            fn visit_doctype<E, V: AsRef<[u8]>>(self, _value: V) -> Result<Self::Value, E>
+            fn visit_doctype<E, V: XmlDoctype>(self, _doctype: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
