@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use quick_xml::{
-    events::{attributes::Attribute, BytesStart, Event},
+    events::{attributes::Attribute, BytesEnd, BytesStart, Event},
     name::QName as QuickName,
     NsReader,
 };
@@ -69,8 +69,8 @@ impl xmlity::de::Error for Error {
 
     fn wrong_name(actual: &ExpandedName<'_>, expected: &ExpandedName<'_>) -> Self {
         Error::WrongName {
-            actual: Box::new(actual.clone().into_owned()),
-            expected: Box::new(expected.clone().into_owned()),
+            actual: Box::new(actual.as_ref().into_owned()),
+            expected: Box::new(expected.as_ref().into_owned()),
         }
     }
 
@@ -148,7 +148,7 @@ impl<'i> Deserializer<'i> {
         while let Ok(event) = self.reader.read_event() {
             match event {
                 Event::Eof => return Ok(None),
-                Event::Text(text) if text.clone().into_inner().trim_ascii().is_empty() => {
+                Event::Text(text) if text.deref().trim_ascii().is_empty() => {
                     continue;
                 }
                 event => return Ok(Some(event)),
@@ -158,10 +158,14 @@ impl<'i> Deserializer<'i> {
         Ok(None)
     }
 
-    fn read_until_element_end(&mut self, name: &QuickName, depth: i16) -> Result<(), Error> {
+    fn read_until_element_end(
+        &mut self,
+        name: quick_xml::name::QName,
+        depth: i16,
+    ) -> Result<(), Error> {
         while let Some(event) = self.peek_event() {
             let correct_name = match event {
-                Event::End(ref e) if e.name() == *name => true,
+                Event::End(ref e) if e.name() == name => true,
                 Event::Eof => return Err(Error::Unexpected(Unexpected::Eof)),
                 _ => false,
             };
@@ -222,26 +226,26 @@ impl<'i> Deserializer<'i> {
         res
     }
 
-    fn expand_name<'a>(&self, qname: QuickName<'a>) -> ExpandedName<'a> {
+    fn expand_name<'a>(&'a self, qname: QuickName<'a>) -> ExpandedName<'a> {
         let (resolve_result, _) = self.reader.resolve(qname, false);
-        let namespace = xml_namespace_from_resolve_result(resolve_result).map(|ns| ns.into_owned());
+        let namespace = xml_namespace_from_resolve_result(resolve_result);
 
         ExpandedName::new(LocalName::from_quick_xml(qname.local_name()), namespace)
     }
 
-    fn resolve_bytes_start<'a>(&self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
+    fn resolve_bytes_start<'a>(&'a self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
         self.expand_name(bytes_start.name())
     }
 
-    fn resolve_attribute<'a>(&self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
+    fn resolve_attribute<'a>(&'a self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
         self.expand_name(attribute.key)
     }
 }
 
-struct ElementAccess<'a, 'r> {
-    deserializer: Option<&'a mut Deserializer<'r>>,
+struct ElementAccess<'a, 'de> {
+    deserializer: Option<&'a mut Deserializer<'de>>,
     attribute_index: usize,
-    bytes_start: BytesStart<'r>,
+    bytes_start: Option<BytesStart<'de>>,
     start_depth: i16,
     empty: bool,
 }
@@ -265,7 +269,13 @@ impl<'r> ElementAccess<'_, 'r> {
         }
 
         if let Some(deserializer) = self.deserializer.as_mut() {
-            deserializer.read_until_element_end(&self.bytes_start.name(), self.start_depth)?;
+            deserializer.read_until_element_end(
+                self.bytes_start
+                    .as_ref()
+                    .expect("Should be some if deserializer is some")
+                    .name(),
+                self.start_depth,
+            )?;
         }
         Ok(())
     }
@@ -273,18 +283,18 @@ impl<'r> ElementAccess<'_, 'r> {
 
 struct AttributeAccess<'a> {
     name: ExpandedName<'a>,
-    value: String,
+    value: &'a str,
 }
 
-impl<'a> de::AttributeAccess<'a> for AttributeAccess<'a> {
+impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_> {
     type Error = Error;
 
     fn name(&self) -> ExpandedName<'_> {
-        self.name.clone()
+        self.name.as_ref()
     }
 
     fn value(&self) -> &str {
-        self.value.as_str()
+        self.value
     }
 }
 
@@ -318,15 +328,15 @@ impl<'de> de::SeqAccess<'de> for EmptySeqAccess {
 
 struct AttributeDeserializer<'a> {
     name: ExpandedName<'a>,
-    value: String,
+    value: &'a str,
 }
 
-impl<'a> xmlity::Deserializer<'a> for AttributeDeserializer<'a> {
+impl<'de> xmlity::Deserializer<'de> for AttributeDeserializer<'_> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
-        V: Visitor<'a>,
+        V: Visitor<'de>,
     {
         visitor.visit_attribute(AttributeAccess {
             name: self.name,
@@ -336,7 +346,7 @@ impl<'a> xmlity::Deserializer<'a> for AttributeDeserializer<'a> {
 
     fn deserialize_seq<V>(self, _: V) -> Result<V::Value, Self::Error>
     where
-        V: Visitor<'a>,
+        V: Visitor<'de>,
     {
         Err(Self::Error::Unexpected(de::Unexpected::Seq))
     }
@@ -360,37 +370,30 @@ fn next_attribute<'a, 'de, T: Deserialize<'de>>(
     bytes_start: &'a BytesStart<'_>,
     attribute_index: &'a mut usize,
 ) -> Result<Option<T>, Error> {
-    let (attribute, key) = loop {
-        let Some(attribute) = bytes_start.attributes().nth(*attribute_index) else {
-            return Ok(None);
-        };
-
+    while let Some(attribute) = bytes_start.attributes().nth(*attribute_index) {
         let attribute = attribute?;
 
-        let key = deserializer.resolve_attribute(&attribute).into_owned();
+        let key = deserializer.resolve_attribute(&attribute);
 
-        const XMLNS_NAMESPACE: XmlNamespace<'static> =
-            XmlNamespace::new_dangerous("http://www.w3.org/2000/xmlns/");
-
-        if key.namespace() == Some(&XMLNS_NAMESPACE) {
+        if key.namespace() == Some(&XmlNamespace::XMLNS) {
             *attribute_index += 1;
             continue;
         }
 
-        break (attribute, key);
-    };
+        let value =
+            std::str::from_utf8(&attribute.value).expect("attribute value should be valid utf8");
 
-    let value = String::from_utf8(attribute.value.into_owned())
-        .expect("attribute value should be valid utf8");
+        let deserializer = AttributeDeserializer { name: key, value };
 
-    let deserializer = AttributeDeserializer { name: key, value };
+        let res = T::deserialize(deserializer)?;
 
-    let res = T::deserialize(deserializer)?;
+        // Only increment the index if the deserialization was successful
+        *attribute_index += 1;
 
-    // Only increment the index if the deserialization was successful
-    *attribute_index += 1;
+        return Ok(Some(res));
+    }
 
-    Ok(Some(res))
+    Ok(None)
 }
 
 impl<'de> de::AttributesAccess<'de> for SubAttributesAccess<'_, 'de> {
@@ -438,14 +441,19 @@ impl<'de> de::AttributesAccess<'de> for ElementAccess<'_, 'de> {
             self.deserializer
                 .as_ref()
                 .expect("deserializer should be set"),
-            &self.bytes_start,
+            self.bytes_start
+                .as_ref()
+                .expect("bytes_start should be set"),
             &mut self.attribute_index,
         )
     }
 
     fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
         Ok(Self::SubAccess {
-            bytes_start: &self.bytes_start,
+            bytes_start: self
+                .bytes_start
+                .as_ref()
+                .expect("Should not be called after ElementAccess has been consumed"),
             attribute_index: self.attribute_index,
             write_attribute_to: &mut self.attribute_index,
             deserializer: self
@@ -460,7 +468,11 @@ impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
     type ChildrenAccess = ChildrenAccess<'a, 'de>;
 
     fn name(&self) -> ExpandedName<'_> {
-        self.deserializer().resolve_bytes_start(&self.bytes_start)
+        self.deserializer().resolve_bytes_start(
+            self.bytes_start
+                .as_ref()
+                .expect("bytes_start should be set"),
+        )
     }
 
     fn children(mut self) -> Result<Self::ChildrenAccess, Self::Error> {
@@ -473,7 +485,10 @@ impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
                 .expect("Should not be called after ElementAccess has been consumed");
 
             ChildrenAccess::Filled {
-                expected_end: QName::from_quick_xml(self.bytes_start.name()).into_owned(),
+                expected_end: self
+                    .bytes_start
+                    .take()
+                    .expect("Should not be called after ElementAccess has been consumed"),
                 start_depth: self.start_depth,
                 deserializer,
             }
@@ -481,10 +496,10 @@ impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
     }
 }
 
-enum ChildrenAccess<'a, 'r> {
+enum ChildrenAccess<'a, 'de> {
     Filled {
-        expected_end: QName<'static>,
-        deserializer: &'a mut Deserializer<'r>,
+        expected_end: BytesStart<'de>,
+        deserializer: &'a mut Deserializer<'de>,
         start_depth: i16,
     },
     Empty,
@@ -502,8 +517,26 @@ impl Drop for ChildrenAccess<'_, '_> {
         };
 
         deserializer
-            .read_until_element_end(&OwnedQuickName::new(expected_end).as_ref(), *start_depth)
+            .read_until_element_end(expected_end.name(), *start_depth)
             .unwrap();
+    }
+}
+
+impl ChildrenAccess<'_, '_> {
+    fn check_end<T>(
+        expected_end: &BytesStart,
+        bytes_end: &BytesEnd,
+        current_depth: i16,
+        start_depth: i16,
+    ) -> Result<Option<T>, Error> {
+        if expected_end.name() != bytes_end.name() && current_depth == start_depth {
+            return Err(Error::custom(format!(
+                "Expected end of element {}, found end of element {}",
+                QName::from_quick_xml(expected_end.name()),
+                QName::from_quick_xml(bytes_end.name())
+            )));
+        }
+        Ok(None)
     }
 }
 
@@ -535,17 +568,7 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
         let current_depth = deserializer.current_depth;
 
         if let Some(Event::End(bytes_end)) = deserializer.peek_event() {
-            if OwnedQuickName::new(expected_end).as_ref() != bytes_end.name()
-                && current_depth == *start_depth
-            {
-                return Err(Error::custom(format!(
-                    "Expected end of element {}, found end of element {}",
-                    expected_end,
-                    QName::from_quick_xml(bytes_end.name())
-                )));
-            }
-
-            return Ok(None);
+            return Self::check_end(expected_end, bytes_end, current_depth, *start_depth);
         }
 
         deserializer
@@ -573,17 +596,7 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
         let current_depth = deserializer.current_depth;
 
         if let Some(Event::End(bytes_end)) = deserializer.peek_event() {
-            if OwnedQuickName::new(expected_end).as_ref() != bytes_end.name()
-                && current_depth == *start_depth
-            {
-                return Err(Error::custom(format!(
-                    "Expected end of element {}, found end of element {}",
-                    expected_end,
-                    QName::from_quick_xml(bytes_end.name())
-                )));
-            }
-
-            return Ok(None);
+            return Self::check_end(expected_end, bytes_end, current_depth, *start_depth);
         }
 
         deserializer
@@ -737,7 +750,7 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
                 let value = Visitor::visit_element(
                     visitor,
                     ElementAccess {
-                        bytes_start,
+                        bytes_start: Some(bytes_start),
                         start_depth: self.current_depth,
                         deserializer: Some(self),
                         empty: false,
@@ -761,7 +774,7 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
             }
             Event::End(_bytes_end) => Err(Error::custom("Unexpected end element")),
             Event::Empty(bytes_start) => visitor.visit_element(ElementAccess {
-                bytes_start: bytes_start.into_owned().clone(),
+                bytes_start: Some(bytes_start),
                 start_depth: self.current_depth,
                 deserializer: Some(self),
                 empty: true,
