@@ -78,9 +78,9 @@ impl<'de> Deserialize<'de> for bool {
             fn visit_cdata<E, V>(self, v: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
-                V: de::XmlCData,
+                V: de::XmlCData<'v>,
             {
-                Self::from_xml_str(v.as_str().deref()).ok_or_else(|| E::custom("invalid value"))
+                Self::from_xml_str(v.as_str()).ok_or_else(|| E::custom("invalid value"))
             }
         }
 

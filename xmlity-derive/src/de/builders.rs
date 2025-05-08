@@ -241,7 +241,7 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
             fn visit_cdata<#error_type, #access_type>(self, #access_ident: #access_type) -> ::core::result::Result<Self::Value, #error_type>
             where
                 #error_type: ::xmlity::de::Error,
-                #access_type: ::xmlity::de::XmlCData,
+                #access_type: ::xmlity::de::XmlCData<#visitor_lifetime>,
             {
                 #(#body)*
             }

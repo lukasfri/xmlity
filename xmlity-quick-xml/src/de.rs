@@ -295,7 +295,7 @@ struct AttributeAccess<'a> {
     deserializer: &'a Deserializer<'a>,
 }
 
-impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_> {
+impl de::AttributeAccess<'_> for AttributeAccess<'_> {
     type Error = Error;
 
     type NamespaceContext<'b>
@@ -311,7 +311,7 @@ impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_> {
         self.value
     }
 
-    fn namespace_context<'a>(&'a self) -> Self::NamespaceContext<'a> {
+    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
         self.deserializer
     }
 }
@@ -807,18 +807,29 @@ impl<'de> XmlText<'de> for DataWithD<'_, BytesText<'de>> {
     }
 }
 
-impl XmlCData for DataWithD<'_, BytesCData<'_>> {
+impl<'de> XmlCData<'de> for DataWithD<'_, BytesCData<'de>> {
     type NamespaceContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
 
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        self.data.into_inner()
+    }
+
     fn as_bytes(&self) -> &[u8] {
         self.data.deref()
     }
 
-    fn as_str(&self) -> Cow<'_, str> {
-        Cow::Borrowed(std::str::from_utf8(self.data.deref()).unwrap())
+    fn into_string(self) -> Cow<'de, str> {
+        match self.data.into_inner() {
+            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes).unwrap()),
+            Cow::Owned(bytes) => Cow::Owned(std::string::String::from_utf8(bytes).unwrap()),
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(self.data.deref()).unwrap()
     }
 
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {
@@ -826,11 +837,15 @@ impl XmlCData for DataWithD<'_, BytesCData<'_>> {
     }
 }
 
-impl XmlComment for DataWithD<'_, BytesText<'_>> {
+impl<'de> XmlComment<'de> for DataWithD<'_, BytesText<'de>> {
     type NamespaceContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
+
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        self.data.into_inner()
+    }
 
     fn as_bytes(&self) -> &[u8] {
         self.data.deref()
@@ -909,11 +924,15 @@ impl XmlProcessingInstruction for DataWithD<'_, BytesPI<'_>> {
     }
 }
 
-impl XmlDoctype for DataWithD<'_, BytesText<'_>> {
+impl<'de> XmlDoctype<'de> for DataWithD<'_, BytesText<'de>> {
     type NamespaceContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
+
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        self.data.into_inner()
+    }
 
     fn as_bytes(&self) -> &[u8] {
         self.data.deref()

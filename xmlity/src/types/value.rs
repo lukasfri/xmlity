@@ -150,7 +150,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             fn visit_cdata<E, V>(self, value: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
-                V: de::XmlCData,
+                V: de::XmlCData<'v>,
             {
                 XmlCDataVisitor::new()
                     .visit_cdata(value)
@@ -198,7 +198,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
-                V: de::XmlComment,
+                V: de::XmlComment<'v>,
             {
                 XmlCommentVisitor::new()
                     .visit_comment(comment)
@@ -208,7 +208,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             fn visit_doctype<E, V>(self, value: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
-                V: de::XmlDoctype,
+                V: de::XmlDoctype<'v>,
             {
                 XmlDoctypeVisitor::new()
                     .visit_doctype(value)
@@ -618,7 +618,7 @@ impl<'de> Visitor<'de> for XmlCDataVisitor<'de> {
     fn visit_cdata<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
-        V: de::XmlCData,
+        V: de::XmlCData<'de>,
     {
         Ok(XmlCData(value.as_bytes().to_owned()))
     }
@@ -633,18 +633,26 @@ impl<'de> Deserialize<'de> for XmlCData {
     }
 }
 
-impl de::XmlCData for &XmlCData {
+impl<'de> de::XmlCData<'de> for &'de XmlCData {
     type NamespaceContext<'a>
         = ()
     where
         Self: 'a;
 
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        Cow::Borrowed(&self.0)
+    }
+
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
-    fn as_str(&self) -> Cow<'_, str> {
+    fn into_string(self) -> Cow<'de, str> {
         Cow::Borrowed(std::str::from_utf8(&self.0).unwrap())
+    }
+
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.0).unwrap()
     }
 
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
@@ -761,7 +769,7 @@ impl<'v> crate::de::Visitor<'v> for XmlChildVisitor<'v> {
     fn visit_cdata<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
-        V: de::XmlCData,
+        V: de::XmlCData<'v>,
     {
         XmlCDataVisitor::new()
             .visit_cdata(value)
@@ -790,7 +798,7 @@ impl<'v> crate::de::Visitor<'v> for XmlChildVisitor<'v> {
     fn visit_comment<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
-        V: de::XmlComment,
+        V: de::XmlComment<'v>,
     {
         XmlCommentVisitor::new()
             .visit_comment(value)
@@ -1877,14 +1885,20 @@ impl XmlComment {
     }
 }
 
-impl de::XmlComment for &XmlComment {
+impl<'de> de::XmlComment<'de> for &'de XmlComment {
     type NamespaceContext<'a>
         = ()
     where
         Self: 'a;
+
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        Cow::Borrowed(self.0.as_slice())
+    }
+
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
+
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
@@ -1921,7 +1935,7 @@ impl<'v> crate::de::Visitor<'v> for XmlCommentVisitor<'v> {
     fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
     where
         E: de::Error,
-        V: de::XmlComment,
+        V: de::XmlComment<'v>,
     {
         Ok(XmlComment(comment.as_bytes().to_vec()))
     }
@@ -1964,11 +1978,15 @@ impl XmlDoctype {
     }
 }
 
-impl de::XmlDoctype for &XmlDoctype {
+impl<'de> de::XmlDoctype<'de> for &'de XmlDoctype {
     type NamespaceContext<'a>
         = ()
     where
         Self: 'a;
+
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        Cow::Borrowed(self.0.as_slice())
+    }
 
     fn as_bytes(&self) -> &[u8] {
         &self.0
@@ -2010,7 +2028,7 @@ impl<'v> crate::de::Visitor<'v> for XmlDoctypeVisitor<'v> {
     fn visit_doctype<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
-        V: de::XmlDoctype,
+        V: de::XmlDoctype<'v>,
     {
         Ok(XmlDoctype(value.as_bytes().to_vec()))
     }

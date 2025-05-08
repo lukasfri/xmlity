@@ -318,7 +318,7 @@ pub struct SerializeElement<'s, W: Write> {
     preferred_prefix: Option<Prefix<'static>>,
 }
 
-impl<'s, W: Write> SerializeElement<'s, W> {
+impl<W: Write> SerializeElement<'_, W> {
     fn resolve_name_or_declare<'a>(
         name: ExpandedName<'a>,
         preferred_prefix: Option<&Prefix<'a>>,
@@ -374,7 +374,7 @@ impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
     }
 }
 
-impl<'t, W: Write> ser::AttributeSerializer for &mut SerializeElementAttributes<'t, W> {
+impl<W: Write> ser::AttributeSerializer for &mut SerializeElementAttributes<'_, W> {
     type Error = Error;
 
     type Ok = ();

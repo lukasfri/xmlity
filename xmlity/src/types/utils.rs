@@ -313,7 +313,7 @@ where
         write!(formatter, "a string")
     }
 
-    fn visit_cdata<E, V: XmlCData>(self, v: V) -> Result<Self::Value, E>
+    fn visit_cdata<E, V: XmlCData<'de>>(self, v: V) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
@@ -461,7 +461,7 @@ impl<'de> Deserialize<'de> for IgnoredAny {
                 Ok(IgnoredAny)
             }
 
-            fn visit_cdata<E, V: XmlCData>(self, _value: V) -> Result<Self::Value, E>
+            fn visit_cdata<E, V: XmlCData<'v>>(self, _value: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
@@ -496,14 +496,14 @@ impl<'de> Deserialize<'de> for IgnoredAny {
                 Ok(IgnoredAny)
             }
 
-            fn visit_comment<E, V: XmlComment>(self, _comment: V) -> Result<Self::Value, E>
+            fn visit_comment<E, V: XmlComment<'v>>(self, _comment: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(IgnoredAny)
             }
 
-            fn visit_doctype<E, V: XmlDoctype>(self, _doctype: V) -> Result<Self::Value, E>
+            fn visit_doctype<E, V: XmlDoctype<'v>>(self, _doctype: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {

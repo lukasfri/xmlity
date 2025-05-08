@@ -175,7 +175,7 @@ pub trait AttributeAccess<'de> {
     fn value(&self) -> &str;
 
     /// Returns the namespace context for this attribute.
-    fn namespace_context<'a>(&'a self) -> Self::NamespaceContext<'a>;
+    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
 }
 
 /// An extension trait for [`AttributeAccess`] that provides additional methods.
@@ -251,13 +251,13 @@ pub trait XmlText<'de> {
     where
         Self: 'a;
 
-    /// Returns the byte representation of the text.
+    /// Returns the owned byte representation of the text.
     fn into_bytes(self) -> Cow<'de, [u8]>;
 
     /// Returns the byte representation of the text.
     fn as_bytes(&self) -> &[u8];
 
-    /// Returns the string representation of the text.
+    /// Returns the owned string representation of the text.
     fn into_string(self) -> Cow<'de, str>;
 
     /// Returns the string representation of the text.
@@ -268,17 +268,23 @@ pub trait XmlText<'de> {
 }
 
 /// Trait for XML CDATA.
-pub trait XmlCData {
+pub trait XmlCData<'de> {
     /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
     type NamespaceContext<'a>: NamespaceContext + 'a
     where
         Self: 'a;
 
+    /// Returns the owned byte representation of the CDATA.
+    fn into_bytes(self) -> Cow<'de, [u8]>;
+
     /// Returns the byte representation of the CDATA.
     fn as_bytes(&self) -> &[u8];
 
+    /// Returns the owned string representation of the CDATA.
+    fn into_string(self) -> Cow<'de, str>;
+
     /// Returns the string representation of the CDATA.
-    fn as_str(&self) -> Cow<'_, str>;
+    fn as_str(&self) -> &str;
 
     /// Returns the namespace context of the CDATA.
     fn namespace_context(&self) -> Self::NamespaceContext<'_>;
@@ -291,11 +297,11 @@ pub trait XmlProcessingInstruction {
     where
         Self: 'a;
 
-    /// Returns the content of the PI.
-    fn content(&self) -> &[u8];
-
     /// Returns the target of the PI.
     fn target(&self) -> &[u8];
+
+    /// Returns the content of the PI.
+    fn content(&self) -> &[u8];
 
     /// Returns the namespace context of the PI.
     fn namespace_context(&self) -> Self::NamespaceContext<'_>;
@@ -322,11 +328,14 @@ pub trait XmlDeclaration {
 }
 
 /// Trait for XML comments.
-pub trait XmlComment {
+pub trait XmlComment<'de> {
     /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
     type NamespaceContext<'a>: NamespaceContext + 'a
     where
         Self: 'a;
+
+    /// Returns the owned byte representation of the comment.
+    fn into_bytes(self) -> Cow<'de, [u8]>;
 
     /// Returns the byte representation of the comment.
     fn as_bytes(&self) -> &[u8];
@@ -336,11 +345,14 @@ pub trait XmlComment {
 }
 
 /// Trait for XML doctypes.
-pub trait XmlDoctype {
+pub trait XmlDoctype<'de> {
     /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
     type NamespaceContext<'a>: NamespaceContext + 'a
     where
         Self: 'a;
+
+    /// Returns the owned byte representation of the doctype.
+    fn into_bytes(self) -> Cow<'de, [u8]>;
 
     /// Returns the byte representation of the doctype.
     fn as_bytes(&self) -> &[u8];
@@ -371,7 +383,7 @@ pub trait Visitor<'de>: Sized {
     fn visit_cdata<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlCData,
+        V: XmlCData<'de>,
     {
         let _ = value;
         Err(Error::unexpected_visit(Unexpected::CData, &self))
@@ -429,7 +441,7 @@ pub trait Visitor<'de>: Sized {
     fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlComment,
+        V: XmlComment<'de>,
     {
         let _ = comment;
         Err(Error::unexpected_visit(Unexpected::Comment, &self))
@@ -439,7 +451,7 @@ pub trait Visitor<'de>: Sized {
     fn visit_doctype<E, V>(self, doctype: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlDoctype,
+        V: XmlDoctype<'de>,
     {
         let _ = doctype;
         Err(Error::unexpected_visit(Unexpected::DocType, &self))

@@ -125,7 +125,7 @@ where
     fn visit_cdata<E, V>(self, v: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlCData,
+        V: XmlCData<'de>,
     {
         FromCDataVisitor::default().visit_cdata(v)
     }
