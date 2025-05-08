@@ -17,7 +17,7 @@ impl<'de> Deserialize<'de> for InternalReference {
             fn visit_text<E, V>(self, value: V) -> Result<Self::Value, E>
             where
                 E: xmlity::de::Error,
-                V: xmlity::de::XmlText,
+                V: xmlity::de::XmlText<'de>,
             {
                 let prefix = Prefix::new(value.as_str()).map_err(|e| {
                     E::custom(format!("Internal reference is not valid prefix: {e:?}"))

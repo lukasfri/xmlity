@@ -87,7 +87,7 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
 
         let ignore_whitespace_expression: Vec<Stmt> = if *ignore_whitespace {
             parse_quote! {
-                if let Ok(Some(_)) = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoreWhitespace>(&mut #access_ident) {
+                if let Ok(Some(_)) = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::Whitespace>(&mut #access_ident) {
                     continue;
                 }
             }

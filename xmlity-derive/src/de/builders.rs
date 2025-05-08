@@ -215,7 +215,7 @@ impl<T: VisitorBuilder> VisitorBuilderExt for T {
             fn visit_text<#error_type, #access_type>(self, #access_ident: #access_type) -> ::core::result::Result<Self::Value, #error_type>
             where
                 #error_type: ::xmlity::de::Error,
-                #access_type: ::xmlity::de::XmlText,
+                #access_type: ::xmlity::de::XmlText<#visitor_lifetime>,
             {
                 #(#body)*
             }

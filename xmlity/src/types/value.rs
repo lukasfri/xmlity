@@ -9,7 +9,7 @@ use core::{
     fmt::{self, Debug},
     str,
 };
-use std::{fmt::Formatter, iter, ops::Deref};
+use std::{borrow::Cow, fmt::Formatter, iter, ops::Deref};
 
 use crate::{
     de::{self, AttributesAccess, ElementAccess, NamespaceContext, SeqAccess, Visitor},
@@ -22,6 +22,20 @@ use crate::{
 };
 
 use super::iterator::IteratorVisitor;
+
+/// Creates any `T` implementing [`Deserialize`] from an [`XmlValue`]
+pub fn from_value<'de, T: Deserialize<'de>>(
+    value: &'de XmlValue,
+) -> Result<T, XmlValueDeserializerError> {
+    T::deserialize_seq(value)
+}
+
+/// Creates an [`XmlValue`] from any `T` implementing [`Serialize`].
+pub fn to_value<T: Serialize>(input: &T) -> Result<XmlValue, XmlValueSerializerError> {
+    let mut value = XmlValue::None;
+    input.serialize(&mut value)?;
+    Ok(value)
+}
 
 /// A value that can be serialized or deserialized as XML, and a type which other types can deserialize from/serialize into.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -128,7 +142,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             fn visit_text<E, V>(self, value: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
-                V: de::XmlText,
+                V: de::XmlText<'v>,
             {
                 XmlTextVisitor::new().visit_text(value).map(XmlValue::Text)
             }
@@ -156,7 +170,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             where
                 S: de::SeqAccess<'v>,
             {
-                IteratorVisitor::default()
+                IteratorVisitor::<_, XmlSeq<XmlValue>>::default()
                     .visit_seq(sequence)
                     .map(XmlValue::Seq)
             }
@@ -453,9 +467,9 @@ impl<'v> crate::de::Visitor<'v> for XmlTextVisitor<'v> {
     fn visit_text<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
-        V: de::XmlText,
+        V: de::XmlText<'v>,
     {
-        Ok(XmlText(value.as_bytes().to_owned()))
+        Ok(XmlText(value.into_bytes().into()))
     }
 }
 
@@ -474,21 +488,76 @@ impl NamespaceContext for () {
     }
 }
 
-impl de::XmlText for &XmlText {
+impl<'de> de::XmlText<'de> for &'de XmlText {
     type NamespaceContext<'a>
         = ()
     where
         Self: 'a;
 
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        Cow::Borrowed(&self.0)
+    }
+
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
-    fn as_str(&self) -> std::borrow::Cow<'_, str> {
-        std::borrow::Cow::Borrowed(std::str::from_utf8(&self.0).unwrap())
+    fn into_string(self) -> Cow<'de, str> {
+        Cow::Borrowed(std::str::from_utf8(&self.0).unwrap())
+    }
+
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.0).unwrap()
     }
 
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+}
+
+impl<'de> de::SeqAccess<'de> for Option<&'de XmlText> {
+    type Error = XmlValueDeserializerError;
+
+    type SubAccess<'g>
+        = Self
+    where
+        Self: 'g;
+
+    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'de>,
+    {
+        let Some(text) = self.take() else {
+            return Ok(None);
+        };
+
+        match T::deserialize(text) {
+            Ok(value) => Ok(Some(value)),
+            Err(_) => {
+                *self = Some(text);
+                Ok(None)
+            }
+        }
+    }
+
+    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'de>,
+    {
+        let Some(text) = self.take() else {
+            return Ok(None);
+        };
+
+        match T::deserialize_seq(text) {
+            Ok(value) => Ok(Some(value)),
+            Err(_) => {
+                *self = Some(text);
+                Ok(None)
+            }
+        }
+    }
+
+    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
+        Ok(*self)
+    }
 }
 
 impl<'de> Deserializer<'de> for &'de XmlText {
@@ -504,7 +573,7 @@ impl<'de> Deserializer<'de> for &'de XmlText {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        visitor.visit_seq(Some(self))
     }
 }
 
@@ -574,8 +643,8 @@ impl de::XmlCData for &XmlCData {
         &self.0
     }
 
-    fn as_str(&self) -> std::borrow::Cow<'_, str> {
-        std::borrow::Cow::Borrowed(std::str::from_utf8(&self.0).unwrap())
+    fn as_str(&self) -> Cow<'_, str> {
+        Cow::Borrowed(std::str::from_utf8(&self.0).unwrap())
     }
 
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
@@ -684,7 +753,7 @@ impl<'v> crate::de::Visitor<'v> for XmlChildVisitor<'v> {
     fn visit_text<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: de::Error,
-        V: de::XmlText,
+        V: de::XmlText<'v>,
     {
         XmlTextVisitor::new().visit_text(value).map(XmlChild::Text)
     }
@@ -1505,7 +1574,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for XmlSeq<T> {
     where
         D: crate::de::Deserializer<'de>,
     {
-        deserializer.deserialize_seq(IteratorVisitor::default())
+        deserializer.deserialize_seq(IteratorVisitor::<_, Self>::default())
     }
 }
 

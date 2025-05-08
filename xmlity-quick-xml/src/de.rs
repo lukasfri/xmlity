@@ -777,18 +777,29 @@ impl<'a, T> DataWithD<'a, T> {
     }
 }
 
-impl XmlText for DataWithD<'_, BytesText<'_>> {
+impl<'de> XmlText<'de> for DataWithD<'_, BytesText<'de>> {
     type NamespaceContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
 
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        self.data.into_inner()
+    }
+
     fn as_bytes(&self) -> &[u8] {
         self.data.deref()
     }
 
-    fn as_str(&self) -> Cow<'_, str> {
-        Cow::Borrowed(std::str::from_utf8(self.data.deref()).unwrap())
+    fn into_string(self) -> Cow<'de, str> {
+        match self.data.into_inner() {
+            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes).unwrap()),
+            Cow::Owned(bytes) => Cow::Owned(std::string::String::from_utf8(bytes).unwrap()),
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(self.data.deref()).unwrap()
     }
 
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {

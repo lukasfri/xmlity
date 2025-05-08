@@ -245,17 +245,23 @@ impl<'de, T: SeqAccess<'de>> SeqAccess<'de> for &mut T {
 }
 
 /// Trait for XML text.
-pub trait XmlText {
+pub trait XmlText<'de> {
     /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
     type NamespaceContext<'a>: NamespaceContext + 'a
     where
         Self: 'a;
 
     /// Returns the byte representation of the text.
+    fn into_bytes(self) -> Cow<'de, [u8]>;
+
+    /// Returns the byte representation of the text.
     fn as_bytes(&self) -> &[u8];
 
     /// Returns the string representation of the text.
-    fn as_str(&self) -> Cow<'_, str>;
+    fn into_string(self) -> Cow<'de, str>;
+
+    /// Returns the string representation of the text.
+    fn as_str(&self) -> &str;
 
     /// Returns the namespace context of the text.
     fn namespace_context(&self) -> Self::NamespaceContext<'_>;
@@ -355,7 +361,7 @@ pub trait Visitor<'de>: Sized {
     fn visit_text<E, V>(self, value: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlText,
+        V: XmlText<'de>,
     {
         let _ = value;
         Err(Error::unexpected_visit(Unexpected::Text, &self))

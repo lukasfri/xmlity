@@ -34,9 +34,9 @@ where
     fn visit_text<E, V>(self, v: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlText,
+        V: XmlText<'de>,
     {
-        v.as_str()
+        v.into_string()
             .trim()
             .parse()
             .map(Trim)
@@ -85,9 +85,11 @@ where
     fn visit_text<E, V>(self, v: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlText,
+        V: XmlText<'de>,
     {
-        v.as_str().parse().map_err(|_| E::custom("invalid value"))
+        v.into_string()
+            .parse()
+            .map_err(|_| E::custom("invalid value"))
     }
 }
 
@@ -116,7 +118,7 @@ where
     fn visit_text<E, V>(self, v: V) -> Result<Self::Value, E>
     where
         E: Error,
-        V: XmlText,
+        V: XmlText<'de>,
     {
         FromTextVisitor::default().visit_text(v)
     }

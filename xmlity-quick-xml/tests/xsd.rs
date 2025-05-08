@@ -264,7 +264,8 @@ fn empty_schema() -> XmlRoot<Schema> {
 
 #[test]
 fn empty_schema_deserialize() {
-    let actual: XmlRoot<Schema> = quick_xml_deserialize_test(&clean_string(EMPTY_SCHEMA)).unwrap();
+    let actual: XmlRoot<Schema> =
+        quick_xml_deserialize_test(&clean_string(EMPTY_SCHEMA.trim())).unwrap();
     let expected = empty_schema();
     assert_eq!(actual, expected);
 }
@@ -289,7 +290,7 @@ fn schema_with_single_annotation() -> XmlRoot<Schema> {
 #[test]
 fn schema_with_single_annotation_deserialize() {
     let actual: XmlRoot<Schema> =
-        quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ANNOTATION).unwrap();
+        quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ANNOTATION.trim()).unwrap();
     let expected = schema_with_single_annotation();
     assert_eq!(actual, expected);
 }
@@ -311,7 +312,7 @@ fn schema_with_single_annotation_no_decl() -> Schema {
 #[test]
 fn schema_with_single_annotation_no_decl_deserialize() {
     let actual: Schema =
-        quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ANNOTATION_WITHOUT_DECL).unwrap();
+        quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ANNOTATION_WITHOUT_DECL.trim()).unwrap();
     let expected = schema_with_single_annotation_no_decl();
     assert_eq!(actual, expected);
 }
@@ -319,7 +320,7 @@ fn schema_with_single_annotation_no_decl_deserialize() {
 #[test]
 fn ignored_any_deserialize() {
     let actual: IgnoredAny =
-        quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ANNOTATION_WITHOUT_DECL).unwrap();
+        quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ANNOTATION_WITHOUT_DECL.trim()).unwrap();
     assert_eq!(actual, IgnoredAny);
 }
 
@@ -339,7 +340,7 @@ fn single_attribute() -> Attribute {
 
 #[test]
 fn single_attribute_deserialize() {
-    let actual: Attribute = quick_xml_deserialize_test(SINGLE_ATTRIBUTE).unwrap();
+    let actual: Attribute = quick_xml_deserialize_test(SINGLE_ATTRIBUTE.trim()).unwrap();
     let expected = single_attribute();
     assert_eq!(actual, expected);
 }
@@ -529,7 +530,7 @@ fn single_content() -> ComplexContent {
 
 #[test]
 fn single_content_deserialize() {
-    let actual: ComplexContent = quick_xml_deserialize_test(SINGLE_CONTENT).unwrap();
+    let actual: ComplexContent = quick_xml_deserialize_test(SINGLE_CONTENT.trim()).unwrap();
     let expected = single_content();
     assert_eq!(actual, expected);
 }
@@ -679,7 +680,7 @@ fn single_element() -> Element {
 
 #[test]
 fn single_element_deserialize() {
-    let actual: Element = quick_xml_deserialize_test(SINGLE_ELEMENT).unwrap();
+    let actual: Element = quick_xml_deserialize_test(SINGLE_ELEMENT.trim()).unwrap();
     let expected = single_element();
     assert_eq!(actual, expected);
 }
@@ -766,7 +767,8 @@ fn schema_with_single_element() -> XmlRoot<Schema> {
 
 #[test]
 fn schema_with_single_element_deserialize() {
-    let actual: XmlRoot<Schema> = quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ELEMENT).unwrap();
+    let actual: XmlRoot<Schema> =
+        quick_xml_deserialize_test(SCHEMA_WITH_SINGLE_ELEMENT.trim()).unwrap();
     let expected = schema_with_single_element();
     assert_eq!(actual, expected);
 }

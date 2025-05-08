@@ -1,7 +1,7 @@
 //! This module contains some utility types and visitors that can be reused.
 
 use core::fmt::{self, Debug};
-use std::{marker::PhantomData, str::FromStr};
+use std::{borrow::Cow, marker::PhantomData, str::FromStr};
 
 use crate::{
     de::{
@@ -340,32 +340,32 @@ impl<S: AsRef<str>> Serialize for CData<S> {
 }
 
 /// A type that ignores that uses the value that visits it, but results in nothing. Useful for skipping over values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct IgnoreWhitespace;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Whitespace<'a>(pub std::borrow::Cow<'a, str>);
 
-impl<'de> Deserialize<'de> for IgnoreWhitespace {
+impl<'de> Deserialize<'de> for Whitespace<'de> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         struct __Visitor<'v> {
-            marker: ::core::marker::PhantomData<IgnoreWhitespace>,
             lifetime: ::core::marker::PhantomData<&'v ()>,
         }
 
         impl<'v> crate::de::Visitor<'v> for __Visitor<'v> {
-            type Value = IgnoreWhitespace;
+            type Value = Whitespace<'v>;
 
             fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 formatter.write_str("ignored any value")
             }
 
-            fn visit_text<E, V: XmlText>(self, text: V) -> Result<Self::Value, E>
+            fn visit_text<E, V: XmlText<'v>>(self, text: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                if text.as_str().trim().is_empty() {
-                    Ok(IgnoreWhitespace)
+                let text = text.into_string();
+                if text.trim().is_empty() {
+                    Ok(Whitespace(text))
                 } else {
                     Err(E::custom("expected whitespace"))
                 }
@@ -373,6 +373,53 @@ impl<'de> Deserialize<'de> for IgnoreWhitespace {
         }
 
         deserializer.deserialize_any(__Visitor {
+            lifetime: ::core::marker::PhantomData,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Utility type for a type that can either be whitespace or a specific value
+pub enum ValueOrWhitespace<'a, T> {
+    /// Whitespace
+    Whitespace(Cow<'a, str>),
+    /// Value
+    Value(T),
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for ValueOrWhitespace<'de, T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct __Visitor<'v, T> {
+            marker: ::core::marker::PhantomData<T>,
+            lifetime: ::core::marker::PhantomData<&'v ()>,
+        }
+
+        impl<'v, T: Deserialize<'v>> crate::de::Visitor<'v> for __Visitor<'v, T> {
+            type Value = ValueOrWhitespace<'v, T>;
+
+            fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                formatter.write_str("ignored any value")
+            }
+
+            fn visit_seq<S>(self, mut sequence: S) -> Result<Self::Value, S::Error>
+            where
+                S: de::SeqAccess<'v>,
+            {
+                if let Ok(Some(text)) = sequence.next_element::<Whitespace>() {
+                    Ok(ValueOrWhitespace::Whitespace(text.0))
+                } else {
+                    sequence
+                        .next_element_seq::<T>()?
+                        .ok_or_else(de::Error::missing_data)
+                        .map(ValueOrWhitespace::Value)
+                }
+            }
+        }
+
+        deserializer.deserialize_seq(__Visitor {
             lifetime: ::core::marker::PhantomData,
             marker: ::core::marker::PhantomData,
         })
@@ -407,7 +454,7 @@ impl<'de> Deserialize<'de> for IgnoredAny {
                 Ok(IgnoredAny)
             }
 
-            fn visit_text<E, V: XmlText>(self, _value: V) -> Result<Self::Value, E>
+            fn visit_text<E, V: XmlText<'v>>(self, _value: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
