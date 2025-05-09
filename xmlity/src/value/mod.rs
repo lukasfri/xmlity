@@ -20,12 +20,20 @@ use crate::{
 
 mod deserialize;
 mod deserializer;
+mod deserializer_owned;
 mod serialize;
 mod serializer;
 
 /// Creates any `T` implementing [`Deserialize`] from an [`XmlValue`]
 pub fn from_value<'de, T: crate::Deserialize<'de>>(
     value: &'de XmlValue,
+) -> Result<T, XmlValueDeserializerError> {
+    T::deserialize_seq(value)
+}
+
+/// Creates any `T` implementing [`Deserialize`] from an owned [`XmlValue`]
+pub fn from_value_owned<T: crate::DeserializeOwned>(
+    value: XmlValue,
 ) -> Result<T, XmlValueDeserializerError> {
     T::deserialize_seq(value)
 }
