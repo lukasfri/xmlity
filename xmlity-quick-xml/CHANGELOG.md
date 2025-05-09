@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.3...xmlity-quick-xml-v0.0.4) - 2025-05-09
+
+### Added
+
+- *(core)* [**breaking**] Refactored XmlValue, made it a top-level export. ([#75](https://github.com/lukasfri/xmlity/pull/75))
+- *(derive,quick-xml)* [**breaking**] Rework data access to be lifetime-dependent. Adds whitespace configuration. ([#73](https://github.com/lukasfri/xmlity/pull/73))
+- *(core)* [**breaking**] Reworked content access and namespaace access during deserialization ([#72](https://github.com/lukasfri/xmlity/pull/72))
+
+### Other
+
+- *(quick-xml)* Added `yaserde` to benchmarks. ([#70](https://github.com/lukasfri/xmlity/pull/70))
+- *(quick-xml)* Optimizations to `quick-xml` Deserializer. ([#67](https://github.com/lukasfri/xmlity/pull/67))
+
 ## [0.0.3](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.2...xmlity-quick-xml-v0.0.3) - 2025-05-06
 
 ### Added
