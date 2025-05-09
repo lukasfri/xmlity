@@ -8,11 +8,11 @@ use utils::{clean_string, quick_xml_deserialize_test};
 
 use std::fs;
 
-use xmlity::types::{
-    utils::{IgnoredAny, XmlRoot},
+use xmlity::{
+    types::utils::{IgnoredAny, XmlRoot},
     value::{XmlComment, XmlDecl, XmlDoctype},
+    Deserialize, Serialize, SerializeAttribute,
 };
-use xmlity::{Deserialize, Serialize, SerializeAttribute};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[xelement(name = "sequence", namespace = "http://www.w3.org/2001/XMLSchema")]

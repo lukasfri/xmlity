@@ -1,10 +1,7 @@
 //! Tests for basic functionality. These tests are the most basic and do not include any attributes. They are simply used to test the default behavior of the library.
 use pretty_assertions::assert_eq;
 
-use xmlity::{
-    types::{utils::CData, value::XmlSeq},
-    Deserialize, Serialize, XmlValue,
-};
+use xmlity::{types::utils::CData, value::XmlSeq, Deserialize, Serialize, XmlValue};
 
 fn simple_value_struct_xml() -> XmlSeq<XmlValue> {
     xmlity::xml!("Test1"<![CDATA["Test2"]]>"Test3")

@@ -8,11 +8,9 @@ use crate::{
         self, Visitor, XmlCData, XmlComment, XmlDeclaration, XmlDoctype, XmlProcessingInstruction,
         XmlText,
     },
-    types::value::XmlDecl,
+    value::{self, XmlDecl},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-
-use super::value::{self};
 
 /// This utility type represents an XML root document.
 #[derive(Debug, PartialEq, Eq, Clone)]
