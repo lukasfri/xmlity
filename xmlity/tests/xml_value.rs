@@ -2,7 +2,7 @@
 use pretty_assertions::assert_eq;
 
 use xmlity::{
-    types::value::{XmlChild, XmlElement, XmlText, XmlValue},
+    value::{XmlChild, XmlElement, XmlText, XmlValue},
     Deserialize, ExpandedName, LocalName, Serialize,
 };
 

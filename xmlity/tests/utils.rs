@@ -1,10 +1,8 @@
 use rstest::rstest;
 use std::{borrow::Cow, fmt::Debug};
 use xmlity::{
-    types::{
-        utils::{ValueOrWhitespace, Whitespace},
-        value::from_value,
-    },
+    types::utils::{ValueOrWhitespace, Whitespace},
+    value::from_value,
     xml, DeserializeOwned, XmlValue,
 };
 

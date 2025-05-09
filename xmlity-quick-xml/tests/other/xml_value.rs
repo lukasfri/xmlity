@@ -1,7 +1,7 @@
 use crate::{define_test, utils::clean_string};
 
 use xmlity::{
-    types::value::{XmlAttribute, XmlChild, XmlDecl, XmlElement, XmlText, XmlValue},
+    value::{XmlAttribute, XmlChild, XmlDecl, XmlElement, XmlText, XmlValue},
     ExpandedName, LocalName, XmlNamespace,
 };
 

@@ -24,7 +24,8 @@ pub mod ser;
 pub use ser::{AttributeSerializer, SerializationGroup, Serialize, SerializeAttribute, Serializer};
 mod macros;
 pub mod types;
-pub use types::value::XmlValue;
+pub mod value;
+pub use value::XmlValue;
 
 #[cfg(feature = "derive")]
 extern crate xmlity_derive;

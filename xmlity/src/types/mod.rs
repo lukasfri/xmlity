@@ -9,4 +9,3 @@ mod smart;
 pub mod string;
 mod tuples;
 pub mod utils;
-pub mod value;

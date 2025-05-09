@@ -1,7 +1,7 @@
 use rstest::rstest;
 use std::str::FromStr;
 use xmlity::{
-    types::value::{
+    value::{
         XmlAttribute, XmlCData, XmlChild, XmlComment, XmlElement, XmlProcessingInstruction, XmlSeq,
         XmlText, XmlValue,
     },
