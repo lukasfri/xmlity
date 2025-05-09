@@ -247,10 +247,17 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: bool,
         order: ElementOrder,
+        ignore_whitespace: bool,
     ) -> DeriveResult<Vec<Stmt>> {
         let access_ident = Ident::new("__children", element_access_ident.span());
 
-        let visit = SeqVisitLoop::new(&access_ident, allow_unknown_children, order, fields);
+        let visit = SeqVisitLoop::new(
+            &access_ident,
+            allow_unknown_children,
+            order,
+            fields,
+            ignore_whitespace,
+        );
 
         let field_storage = visit.field_storage();
         let access_loop = visit.access_loop()?;
@@ -362,11 +369,14 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
         };
 
         let children_loop = if element_group_fields.clone().next().is_some() {
+            let ignore_whitespace = self.opts.ignore_whitespace.unwrap_or(true);
+
             Self::element_access(
                 element_access_ident,
                 element_group_fields,
                 *allow_unknown_children,
                 *children_order,
+                ignore_whitespace,
             )?
         } else {
             Vec::new()

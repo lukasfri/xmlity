@@ -187,6 +187,9 @@ pub mod records {
             #[darling(default)]
             /// Deserialize only
             pub children_order: ElementOrder,
+            #[darling(default)]
+            /// Deserialize only
+            pub ignore_whitespace: Option<bool>,
         }
 
         impl RootElementOpts {
@@ -265,10 +268,13 @@ pub mod records {
             }
         }
 
-        #[derive(FromAttributes)]
+        #[derive(Default, FromAttributes)]
         #[darling(attributes(xvalue))]
         pub struct RootValueOpts {
             pub value: Option<String>,
+            #[darling(default)]
+            /// Deserialize only
+            pub ignore_whitespace: Option<bool>,
         }
 
         impl RootValueOpts {

@@ -9,12 +9,60 @@ use crate::{Serialize, Serializer};
 use core::fmt;
 use std::iter::FromIterator;
 
-/// This visitor allows for deserializing an iterator of elements, which can be useful for deserializing sequences of elements into a collection/single value.
-pub struct IteratorVisitor<T, V: FromIterator<T>> {
-    _marker: PhantomData<(T, V)>,
+use super::utils::ValueOrWhitespace;
+
+/// This trait is used to decide how [`IteratorVisitor`] will deserialize a type.
+pub trait IteratorVisitorMiddleware<T> {
+    /// The output of the middleware.
+    type Output;
+
+    /// Takes in the item iterator and results in the [`IteratorVisitorMiddleware::Output`] type.
+    fn transform<I>(iter: I) -> Self::Output
+    where
+        I: IntoIterator<Item = T>;
 }
 
-impl<T, V: FromIterator<T>> IteratorVisitor<T, V> {
+impl<T, F: FromIterator<T>> IteratorVisitorMiddleware<T> for F {
+    type Output = F;
+    fn transform<I>(iter: I) -> Self::Output
+    where
+        I: IntoIterator<Item = T>,
+    {
+        F::from_iter(iter)
+    }
+}
+
+struct NoWhitespaceIter<T, O> {
+    _marker: PhantomData<(T, O)>,
+    result: O,
+}
+
+impl<'de, T: Deserialize<'de>, O: FromIterator<T>> FromIterator<ValueOrWhitespace<'de, T>>
+    for NoWhitespaceIter<T, O>
+{
+    fn from_iter<I: IntoIterator<Item = ValueOrWhitespace<'de, T>>>(iter: I) -> Self {
+        Self {
+            _marker: PhantomData,
+            result: O::from_iter(iter.into_iter().filter_map(|a| match a {
+                ValueOrWhitespace::Whitespace(_) => None,
+                ValueOrWhitespace::Value(a) => Some(a),
+            })),
+        }
+    }
+}
+
+impl<'de, T: Deserialize<'de>, O: FromIterator<T>> Deserialize<'de> for NoWhitespaceIter<T, O> {
+    fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
+        reader.deserialize_seq(IteratorVisitor::<_, Self>::default())
+    }
+}
+
+/// This visitor allows for deserializing an iterator of elements, which can be useful for deserializing sequences of elements into a collection/single value.
+pub struct IteratorVisitor<T, M> {
+    _marker: PhantomData<(T, M)>,
+}
+
+impl<T, M: IteratorVisitorMiddleware<T>> IteratorVisitor<T, M> {
     /// Creates a new [`IteratorVisitor`].
     pub fn new() -> Self {
         Self {
@@ -23,18 +71,19 @@ impl<T, V: FromIterator<T>> IteratorVisitor<T, V> {
     }
 }
 
-impl<T, V: FromIterator<T>> Default for IteratorVisitor<T, V> {
+impl<T, M: IteratorVisitorMiddleware<T>> Default for IteratorVisitor<T, M> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'de, T, V> Visitor<'de> for IteratorVisitor<T, V>
+impl<'de, T, M> Visitor<'de> for IteratorVisitor<T, M>
 where
     T: Deserialize<'de>,
-    V: FromIterator<T> + Deserialize<'de>,
+    M: IteratorVisitorMiddleware<T>,
+    M::Output: de::Deserialize<'de>,
 {
-    type Value = V;
+    type Value = M::Output;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "a sequence of elements")
@@ -44,7 +93,9 @@ where
     where
         S: SeqAccess<'de>,
     {
-        Ok(std::iter::from_fn(|| seq.next_element_seq::<T>().ok().flatten()).collect::<V>())
+        Ok(M::transform(std::iter::from_fn(|| {
+            seq.next_element_seq::<T>().ok().flatten()
+        })))
     }
 }
 
@@ -61,47 +112,6 @@ where
     seq.end()
 }
 
-/// This visitor allows for deserializing an iterator of elements up to a certain limit, which can be useful for deserializing sequences of elements into an array/fixed-size list.
-///
-/// For now, this visitor is pub(crate) because it's yet to be decided whether it could be replaced by a more general solution.
-pub(crate) struct LimitIteratorVisitor<T, V: FromIterator<T>> {
-    _marker: PhantomData<(T, V)>,
-    limit: usize,
-}
-
-impl<T, V: FromIterator<T>> LimitIteratorVisitor<T, V> {
-    /// Creates a new [`IteratorVisitor`].
-    pub fn new(limit: usize) -> Self {
-        Self {
-            _marker: PhantomData,
-            limit,
-        }
-    }
-}
-
-impl<'de, T, V> Visitor<'de> for LimitIteratorVisitor<T, V>
-where
-    T: Deserialize<'de>,
-    V: FromIterator<T> + Deserialize<'de>,
-{
-    type Value = V;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "a sequence of elements")
-    }
-
-    fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
-    where
-        S: SeqAccess<'de>,
-    {
-        Ok(
-            std::iter::from_fn(|| seq.next_element_seq::<T>().ok().flatten())
-                .take(self.limit)
-                .collect::<V>(),
-        )
-    }
-}
-
 impl<T: Serialize> Serialize for &[T] {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut seq = serializer.serialize_seq()?;
@@ -116,9 +126,39 @@ impl<T: Serialize> Serialize for &[T] {
 // Array
 impl<'de, const N: usize, T: Deserialize<'de>> Deserialize<'de> for [T; N] {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        let vec: Vec<T> = reader.deserialize_seq(LimitIteratorVisitor::new(N))?;
+        struct LimitFromIter<const N: usize, T, O> {
+            _marker: PhantomData<(T, O)>,
+            result: O,
+        }
 
-        vec.try_into().map_err(|_| de::Error::missing_data())
+        impl<'de, const N: usize, T: Deserialize<'de>, O: FromIterator<T>> FromIterator<T>
+            for LimitFromIter<N, T, O>
+        {
+            fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+                Self {
+                    _marker: PhantomData,
+                    result: O::from_iter(iter.into_iter().take(N)),
+                }
+            }
+        }
+
+        impl<'de, const N: usize, T: Deserialize<'de>, O: FromIterator<T>> Deserialize<'de>
+            for LimitFromIter<N, T, O>
+        {
+            fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
+                reader.deserialize_seq(IteratorVisitor::<_, Self>::default())
+            }
+        }
+
+        let vec = reader.deserialize_seq(IteratorVisitor::<
+            ValueOrWhitespace<T>,
+            NoWhitespaceIter<T, LimitFromIter<N, T, Vec<T>>>,
+        >::new())?;
+
+        vec.result
+            .result
+            .try_into()
+            .map_err(|_| de::Error::missing_data())
     }
 }
 
@@ -131,7 +171,9 @@ impl<const N: usize, T: Serialize> Serialize for [T; N] {
 // Vec
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Vec<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_seq(IteratorVisitor::new())
+        reader
+            .deserialize_seq(IteratorVisitor::<_, NoWhitespaceIter<_, Self>>::default())
+            .map(|a| a.result)
     }
 }
 
@@ -144,7 +186,9 @@ impl<T: Serialize> Serialize for Vec<T> {
 // VecDeque
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for VecDeque<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_seq(IteratorVisitor::new())
+        reader
+            .deserialize_seq(IteratorVisitor::<_, NoWhitespaceIter<_, Self>>::default())
+            .map(|a| a.result)
     }
 }
 
@@ -157,39 +201,45 @@ impl<T: Serialize> Serialize for VecDeque<T> {
 // LinkedList
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for LinkedList<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_seq(IteratorVisitor::new())
+        reader
+            .deserialize_seq(IteratorVisitor::<_, NoWhitespaceIter<_, Self>>::default())
+            .map(|a| a.result)
     }
 }
 
 impl<T: Serialize> Serialize for LinkedList<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.iter().collect::<Vec<_>>().serialize(serializer)
+        serialize_seq(self.iter(), serializer)
     }
 }
 
 // HashSet
 impl<'de, T: Deserialize<'de> + Eq + std::hash::Hash> Deserialize<'de> for HashSet<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_seq(IteratorVisitor::new())
+        reader
+            .deserialize_seq(IteratorVisitor::<_, NoWhitespaceIter<_, Self>>::default())
+            .map(|a| a.result)
     }
 }
 
 impl<T: Serialize> Serialize for HashSet<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.iter().collect::<Vec<_>>().serialize(serializer)
+        serialize_seq(self.iter(), serializer)
     }
 }
 
 // BTreeSet
 impl<'de, T: Deserialize<'de> + Ord> Deserialize<'de> for BTreeSet<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_seq(IteratorVisitor::new())
+        reader
+            .deserialize_seq(IteratorVisitor::<_, NoWhitespaceIter<_, Self>>::default())
+            .map(|a| a.result)
     }
 }
 
 impl<T: Serialize> Serialize for BTreeSet<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.iter().collect::<Vec<_>>().serialize(serializer)
+        serialize_seq(self.iter(), serializer)
     }
 }
 
@@ -198,7 +248,9 @@ impl<'de, K: Deserialize<'de> + Eq + std::hash::Hash, V: Deserialize<'de>> Deser
     for HashMap<K, V>
 {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        reader.deserialize_seq(IteratorVisitor::<(K, V), _>::new())
+        reader
+            .deserialize_seq(IteratorVisitor::<_, NoWhitespaceIter<_, Self>>::default())
+            .map(|a| a.result)
     }
 }
 

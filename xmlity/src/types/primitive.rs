@@ -61,7 +61,7 @@ impl<'de> Deserialize<'de> for bool {
             }
         }
 
-        impl de::Visitor<'_> for BoolVisitor {
+        impl<'v> de::Visitor<'v> for BoolVisitor {
             type Value = bool;
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write!(formatter, "a string")
@@ -70,16 +70,17 @@ impl<'de> Deserialize<'de> for bool {
             fn visit_text<E, V>(self, v: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
-                V: de::XmlText,
+                V: de::XmlText<'v>,
             {
-                Self::from_xml_str(v.as_str().deref()).ok_or_else(|| E::custom("invalid value"))
+                Self::from_xml_str(v.into_string().deref())
+                    .ok_or_else(|| E::custom("invalid value"))
             }
             fn visit_cdata<E, V>(self, v: V) -> Result<Self::Value, E>
             where
                 E: de::Error,
-                V: de::XmlCData,
+                V: de::XmlCData<'v>,
             {
-                Self::from_xml_str(v.as_str().deref()).ok_or_else(|| E::custom("invalid value"))
+                Self::from_xml_str(v.as_str()).ok_or_else(|| E::custom("invalid value"))
             }
         }
 

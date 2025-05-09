@@ -290,7 +290,7 @@ fn simple_3d_list_test_value() -> BreakfastMenu {
 
 #[rstest]
 #[case::default_ns(
-    SIMPLE_3D_DEFAULT_NS_LIST_TEST_XML,
+    SIMPLE_3D_DEFAULT_NS_LIST_TEST_XML.trim(),
     Some("http://my.namespace.example.com/this/is/a/namespace")
 )]
 #[case::no_default_ns(SIMPLE_3D_NS_LIST_TEST_XML, None)]
@@ -305,8 +305,8 @@ fn simple_3d_struct_serialize(#[case] xml: &str, #[case] default_ns: Option<&'st
 }
 
 #[rstest]
-#[case::default_ns(SIMPLE_3D_DEFAULT_NS_LIST_TEST_XML)]
-#[case::no_default_ns(SIMPLE_3D_NS_LIST_TEST_XML)]
+#[case::default_ns(SIMPLE_3D_DEFAULT_NS_LIST_TEST_XML.trim())]
+#[case::no_default_ns(SIMPLE_3D_NS_LIST_TEST_XML.trim())]
 fn simple_3d_struct_deserialize(#[case] xml: &str) {
     let actual: BreakfastMenu = quick_xml_deserialize_test(xml).unwrap();
     let expected = simple_3d_list_test_value();
