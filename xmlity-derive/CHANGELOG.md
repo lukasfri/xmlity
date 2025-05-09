@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.3...xmlity-derive-v0.0.4) - 2025-05-09
+
+### Added
+
+- *(derive,quick-xml)* [**breaking**] Rework data access to be lifetime-dependent. Adds whitespace configuration. ([#73](https://github.com/lukasfri/xmlity/pull/73))
+
 ## [0.0.3](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.2...xmlity-derive-v0.0.3) - 2025-05-06
 
 ### Added

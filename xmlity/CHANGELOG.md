@@ -7,24 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.4](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.3...xmlity-v0.0.4) - 2025-05-09
+
+### Added
+
+- _(core)_ [**breaking**] Refactored XmlValue, made it a top-level export. ([#75](https://github.com/lukasfri/xmlity/pull/75))
+- _(derive,quick-xml)_ [**breaking**] Rework data access to be lifetime-dependent. Adds whitespace configuration. ([#73](https://github.com/lukasfri/xmlity/pull/73))
+- _(core)_ [**breaking**] Reworked content access and namespace access during deserialization ([#72](https://github.com/lukasfri/xmlity/pull/72))
+- _(core)_ Improvements to API including `as_ref` and namespace consts ([#66](https://github.com/lukasfri/xmlity/pull/66))
+
 ## [0.0.3](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.2...xmlity-v0.0.3) - 2025-05-06
 
 ### Added
 
-- *(core,quick-xml)* [**breaking**] Changes element serialization API to finish serializing name before attributes ([#62](https://github.com/lukasfri/xmlity/pull/62))
-- *(core)* Adds implementations for `std` datatypes ([#58](https://github.com/lukasfri/xmlity/pull/58))
-- *(core)* Adds `into_parts` methods to split `ExpandedName` and `QName`. ([#61](https://github.com/lukasfri/xmlity/pull/61))
+- _(core,quick-xml)_ [**breaking**] Changes element serialization API to finish serializing name before attributes ([#62](https://github.com/lukasfri/xmlity/pull/62))
+- _(core)_ Adds implementations for `std` datatypes ([#58](https://github.com/lukasfri/xmlity/pull/58))
+- _(core)_ Adds `into_parts` methods to split `ExpandedName` and `QName`. ([#61](https://github.com/lukasfri/xmlity/pull/61))
 
 ## [0.0.2](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.1...xmlity-v0.0.2) - 2025-05-02
 
 ### Added
 
-- *(core)* [**breaking**] Removed `SerializeChildren` in favour of `SerializeSeq`. ([#47](https://github.com/lukasfri/xmlity/pull/47))
+- _(core)_ [**breaking**] Removed `SerializeChildren` in favour of `SerializeSeq`. ([#47](https://github.com/lukasfri/xmlity/pull/47))
 
 ### Fixed
 
-- *(core)* Changed XmlRoot to serialize correctly as sequence. ([#28](https://github.com/lukasfri/xmlity/pull/28))
-- *(core)* [**breaking**] Fixes incorrect function signatures for "dangerous" methods. ([#27](https://github.com/lukasfri/xmlity/pull/27))
+- _(core)_ Changed XmlRoot to serialize correctly as sequence. ([#28](https://github.com/lukasfri/xmlity/pull/28))
+- _(core)_ [**breaking**] Fixes incorrect function signatures for "dangerous" methods. ([#27](https://github.com/lukasfri/xmlity/pull/27))
 
 ### Other
 
@@ -35,12 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- *(docs)* Improved documentation on derive macros. ([#7](https://github.com/lukasfri/xmlity/pull/7))
-- *(types)* [**breaking**] Reworks XmlRoot to be more correct ([#14](https://github.com/lukasfri/xmlity/pull/14))
-- *(derive)* [**breaking**] Add derive for (non-element) structs to be serialized as a sequence ([#18](https://github.com/lukasfri/xmlity/pull/18))
-- *(core)* Add serialize impl for bool and (de)serialize for Box<T> ([#15](https://github.com/lukasfri/xmlity/pull/15))
-- *(core)* Adds more implementations for Rust primitives. ([#13](https://github.com/lukasfri/xmlity/pull/13))
-- *(docs)* READMEs: Improvements to main, added missing and added tests ([#6](https://github.com/lukasfri/xmlity/pull/6))
+- _(docs)_ Improved documentation on derive macros. ([#7](https://github.com/lukasfri/xmlity/pull/7))
+- _(types)_ [**breaking**] Reworks XmlRoot to be more correct ([#14](https://github.com/lukasfri/xmlity/pull/14))
+- _(derive)_ [**breaking**] Add derive for (non-element) structs to be serialized as a sequence ([#18](https://github.com/lukasfri/xmlity/pull/18))
+- _(core)_ Add serialize impl for bool and (de)serialize for Box<T> ([#15](https://github.com/lukasfri/xmlity/pull/15))
+- _(core)_ Adds more implementations for Rust primitives. ([#13](https://github.com/lukasfri/xmlity/pull/13))
+- _(docs)_ READMEs: Improvements to main, added missing and added tests ([#6](https://github.com/lukasfri/xmlity/pull/6))
 
 ### Other
 
