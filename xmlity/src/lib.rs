@@ -14,8 +14,8 @@
 //! The library includes derive macros for [`Serialize`], [`SerializeAttribute`], [`Deserialize`], [`SerializationGroup`] and [`DeserializationGroup`] which can be enabled with the `derive` feature. The macros can be used to create nearly any kind of XML structure you want. If there is something it cannot do, please open an issue or a pull request.
 //!
 //! The macro [`xml`] can be used to create [`XmlValues`](`XmlValue`) in a more ergonomic way. It is also possible to create [`XmlValues`](`XmlValue`) manually, but it is quite verbose.
-use core::str;
-use std::fmt::Display;
+use core::{fmt, str};
+use fmt::Display;
 use std::{borrow::Cow, str::FromStr};
 
 pub mod de;
@@ -150,7 +150,7 @@ impl<'a> ExpandedName<'a> {
 }
 
 impl Display for ExpandedName<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.local_name.fmt(f)
     }
 }
@@ -219,7 +219,7 @@ impl<'a> QName<'a> {
 }
 
 impl Display for QName<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(prefix) = &self.prefix.as_ref().filter(|prefix| !prefix.is_default()) {
             write!(f, "{}:{}", prefix, self.local_name)
         } else {
@@ -259,14 +259,6 @@ pub struct XmlNamespace<'a>(Cow<'a, str>);
 /// An error that can occur when parsing a [`XmlNamespace`].
 #[derive(Debug, thiserror::Error)]
 pub enum XmlNamespaceParseError {}
-
-impl FromStr for XmlNamespace<'static> {
-    type Err = XmlNamespaceParseError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value.to_owned())
-    }
-}
 
 impl<'a> XmlNamespace<'a> {
     /// Creates a new [`XmlNamespace`] from a string.
@@ -309,6 +301,20 @@ impl<'a> XmlNamespace<'a> {
     /// The namespace for XML Schema Instance.
     pub const XSI: XmlNamespace<'static> =
         XmlNamespace::new_dangerous("http://www.w3.org/2001/XMLSchema-instance");
+}
+
+impl FromStr for XmlNamespace<'static> {
+    type Err = XmlNamespaceParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value.to_owned())
+    }
+}
+
+impl Display for XmlNamespace<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 /// # XML Prefix
@@ -392,7 +398,7 @@ impl FromStr for Prefix<'static> {
 }
 
 impl Display for Prefix<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
@@ -449,7 +455,7 @@ impl FromStr for LocalName<'_> {
 }
 
 impl Display for LocalName<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
