@@ -94,6 +94,7 @@ pub fn element_group_field_serializer(
                   preferred_prefix: opts.preferred_prefix,
                   enforce_prefix: opts.enforce_prefix,
                   item_type: &var_field.field_type,
+                  group: opts.group,
               };
 
               let definition = wrapper.struct_definition();
@@ -146,6 +147,7 @@ pub fn seq_field_serializer(
                   preferred_prefix: opts.preferred_prefix,
                   enforce_prefix: opts.enforce_prefix,
                   item_type: &var_field.field_type,
+                  group: opts.group,
               };
 
               let definition = wrapper.struct_definition();

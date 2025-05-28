@@ -1,6 +1,6 @@
 use crate::define_test;
 
-use xmlity::{Deserialize, Serialize};
+use xmlity::{DeserializationGroup, Deserialize, SerializationGroup, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "c")]
@@ -168,4 +168,50 @@ define_test!(
         ),
         (J::U("A".to_string()), r#"A"#)
     ]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "k")]
+pub struct K {
+    #[xelement(name = "l", optional, default)]
+    pub b: Option<String>,
+}
+
+define_test!(
+    element_with_optional_child,
+    [
+        (
+            K {
+                b: Some("A".to_string())
+            },
+            "<k><l>A</l></k>"
+        ),
+        (K { b: None }, "<k></k>", "<k/>"),
+        (K { b: None }, "<k/>", "<k/>")
+    ]
+);
+
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+pub struct N {
+    #[xelement(name = "o")]
+    pub o: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "M")]
+pub struct M {
+    #[xelement(name = "n", group, default)]
+    pub n: N,
+}
+
+define_test!(
+    element_with_group_child,
+    [(
+        M {
+            n: N {
+                o: Some("A".to_string())
+            }
+        },
+        "<M><n><o>A</o></n></M>"
+    )]
 );

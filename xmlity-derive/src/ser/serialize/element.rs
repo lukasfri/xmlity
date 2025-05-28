@@ -9,6 +9,7 @@ use crate::common::Prefix;
 use crate::common::RecordInput;
 use crate::common::StructTypeWithFields;
 use crate::options::records;
+use crate::options::records::fields::GroupOpts;
 use crate::options::records::fields::{ChildOpts, FieldOpts, ValueOpts};
 use crate::options::WithExpandedNameExt;
 use crate::options::{Extendable, FieldWithOpts};
@@ -29,6 +30,7 @@ pub struct SingleChildSerializeElementBuilder<'a> {
     pub preferred_prefix: Option<Prefix<'static>>,
     pub enforce_prefix: bool,
     pub item_type: &'a syn::Type,
+    pub group: bool,
 }
 
 impl SingleChildSerializeElementBuilder<'_> {
@@ -85,10 +87,14 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
             fields: StructTypeWithFields::Named(vec![FieldWithOpts {
                 field_ident: self.value_access_ident(),
                 field_type: self.item_type.clone(),
-                options: FieldOpts::Value(ChildOpts::Value(ValueOpts {
-                    default: false,
-                    extendable: Extendable::None,
-                })),
+                options: if self.group {
+                    FieldOpts::Group(GroupOpts {})
+                } else {
+                    FieldOpts::Value(ChildOpts::Value(ValueOpts {
+                        default: false,
+                        extendable: Extendable::None,
+                    }))
+                },
             }]),
             sub_path_ident: None,
             fallable_deconstruction: false,

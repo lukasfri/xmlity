@@ -377,6 +377,10 @@ pub mod records {
             pub preferred_prefix: Option<Prefix<'static>>,
             #[darling(default)]
             pub enforce_prefix: bool,
+            #[darling(default)]
+            pub optional: bool,
+            #[darling(default)]
+            pub group: bool,
         }
 
         impl WithExpandedName for ElementOpts {
@@ -465,6 +469,7 @@ pub mod records {
         #[derive(Clone)]
         pub struct AttributeDeferredOpts {
             pub default: bool,
+            pub optional: bool,
         }
 
         #[derive(Clone)]
@@ -475,6 +480,7 @@ pub mod records {
             pub namespace_expr: Option<Expr>,
             pub preferred_prefix: Option<Prefix<'static>>,
             pub enforce_prefix: bool,
+            pub optional: bool,
         }
 
         impl WithExpandedName for AttributeDeclaredOpts {
@@ -501,7 +507,7 @@ pub mod records {
         impl AttributeOpts {
             pub fn should_unwrap_default(&self) -> bool {
                 match self {
-                    AttributeOpts::Deferred(AttributeDeferredOpts { default }) => *default,
+                    AttributeOpts::Deferred(AttributeDeferredOpts { default, .. }) => *default,
                     AttributeOpts::Declared(AttributeDeclaredOpts { default, .. }) => *default,
                 }
             }
@@ -533,6 +539,8 @@ pub mod records {
                     pub preferred_prefix: Option<Prefix<'static>>,
                     #[darling(default)]
                     pub enforce_prefix: Option<bool>,
+                    #[darling(default)]
+                    pub optional: bool,
                 }
 
                 let raw = FieldAttributeRawOpts::from_attributes(&[attribute])
@@ -544,38 +552,25 @@ pub mod records {
                 };
 
                 if raw.deferred {
-                    if raw.name.is_some() {
-                        return Err(DeriveError::custom(
-                            "name can not be set if deferred is set",
-                        ));
-                    }
+                    let unallowed_fields = [
+                        (raw.name.is_some(), "name"),
+                        (raw.namespace.is_some(), "namespace"),
+                        (raw.namespace_expr.is_some(), "namespace_expr"),
+                        (raw.preferred_prefix.is_some(), "preferred_prefix"),
+                        (raw.enforce_prefix.is_some(), "enforce_prefix"),
+                    ];
 
-                    if raw.namespace.is_some() {
-                        return Err(DeriveError::custom(
-                            "namespace can not be set if deferred is set",
-                        ));
-                    }
-
-                    if raw.namespace_expr.is_some() {
-                        return Err(DeriveError::custom(
-                            "namespace_expr can not be set if deferred is set",
-                        ));
-                    }
-
-                    if raw.preferred_prefix.is_some() {
-                        return Err(DeriveError::custom(
-                            "preferred_prefix can not be set if deferred is set",
-                        ));
-                    }
-
-                    if raw.enforce_prefix.is_some() {
-                        return Err(DeriveError::custom(
-                            "enforce_prefix can not be set if deferred is set",
-                        ));
+                    for (unallowed, field) in unallowed_fields {
+                        if unallowed {
+                            return Err(DeriveError::custom(format!(
+                                "{field} can not be set if deferred is set"
+                            )));
+                        }
                     }
 
                     Ok(Some(Self::Deferred(AttributeDeferredOpts {
                         default: raw.default,
+                        optional: raw.optional,
                     })))
                 } else {
                     Ok(Some(Self::Declared(AttributeDeclaredOpts {
@@ -585,6 +580,7 @@ pub mod records {
                         namespace_expr: raw.namespace_expr,
                         preferred_prefix: raw.preferred_prefix,
                         enforce_prefix: raw.enforce_prefix.unwrap_or(false),
+                        optional: raw.optional,
                     })))
                 }
             }
