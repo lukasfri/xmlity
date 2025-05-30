@@ -16,7 +16,7 @@ use crate::{
             fields::{FieldOpts, FieldValueGroupOpts},
             roots::DeserializeRootOpts,
         },
-        ElementOrder, FieldWithOpts,
+        AllowUnknown, ElementOrder, FieldWithOpts,
     },
     DeriveError, DeriveResult,
 };
@@ -81,9 +81,9 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
             element_fields.into_iter()
             .map::<(_, Expr), _>(|FieldWithOpts {  field_ident, options, .. }| {
                 let builder_field_ident = field_ident.to_named_ident();
-                let expression = if options.should_unwrap_default() {
+                let expression = if let Some(default_or_else) = options.default_or_else() {
                     parse_quote! {
-                        ::core::option::Option::unwrap_or_default(#builder_field_ident)
+                        ::core::option::Option::unwrap_or_else(#builder_field_ident, #default_or_else)
                     }
                 } else {
                     parse_quote! {
@@ -115,7 +115,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
     pub fn seq_access(
         access_ident: &Ident,
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
-        allow_unknown_children: bool,
+        allow_unknown_children: AllowUnknown,
         order: ElementOrder,
         ignore_whitespace: bool,
     ) -> DeriveResult<Vec<Stmt>> {
@@ -287,11 +287,17 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             .and_then(|a| a.ignore_whitespace)
             .unwrap_or(true);
 
+        let allow_unknown_children = self
+            .options
+            .as_ref()
+            .map(|a| a.allow_unknown)
+            .unwrap_or_default();
+
         let children_loop = if element_group_fields.clone().next().is_some() {
             Self::seq_access(
                 access_ident,
                 element_group_fields,
-                false,
+                allow_unknown_children,
                 ElementOrder::Loose,
                 ignore_whitespace,
             )?

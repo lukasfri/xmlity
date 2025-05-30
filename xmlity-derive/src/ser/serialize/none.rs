@@ -15,7 +15,7 @@ use crate::{
     },
     ser::{
         builders::{SerializeBuilder, SerializeBuilderExt},
-        common::{element_fields, seq_field_serializer},
+        common::{element_fields, element_fields_serializer},
     },
     DeriveError,
 };
@@ -81,8 +81,14 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeValueBui
             self.input.fallable_deconstruction,
         );
 
-        let value_fields =
-            seq_field_serializer(quote! {#seq_access_ident}, element_fields(fields)?)?;
+        let value_fields = element_fields_serializer(
+            quote! {&mut #seq_access_ident},
+            element_fields(fields)?,
+            |field_ident| {
+                let ident_name = field_ident.to_named_ident();
+                parse_quote!(#ident_name)
+            },
+        )?;
 
         Ok(parse_quote! {
             #(#value_deconstructor)*

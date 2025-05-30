@@ -1,4 +1,7 @@
-use std::{borrow::Cow, ops::Deref};
+use std::{
+    borrow::Cow,
+    ops::{Deref, Not},
+};
 
 use proc_macro2::Span;
 use syn::{parse_quote, Ident, Lifetime, LifetimeParam, Stmt, Type};
@@ -40,15 +43,11 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeAttributeBuilder<'a, T>
             ..
         } = self.opts;
 
-        let required_expanded_name = if *deserialize_any_name {
-            None
-        } else {
-            Some(
-                self.opts
-                    .expanded_name(ident.to_string().as_str())
-                    .into_owned(),
-            )
-        };
+        let required_expanded_name = deserialize_any_name.not().then(|| {
+            self.opts
+                .expanded_name(ident.to_string().as_str())
+                .into_owned()
+        });
 
         let struct_type = match &fields {
             StructTypeWithFields::Named(fields_named) if fields_named.len() != 1 => {

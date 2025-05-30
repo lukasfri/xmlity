@@ -13,21 +13,14 @@ use crate::{
     },
     de::{
         builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-        common::{
-            all_attributes_done_expr, attribute_done_expr, builder_attribute_field_visitor,
-            SeqVisitLoop,
-        },
+        common::{builder_attribute_field_visitor, SeqVisitLoop},
     },
     options::{
-        records::{
-            self,
-            fields::{
-                AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
-                GroupOpts,
-            },
-            roots::RootElementOpts,
+        records::fields::{
+            AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
+            GroupOpts,
         },
-        ElementOrder, FieldWithOpts, WithExpandedNameExt,
+        AllowUnknown, ElementOrder, FieldWithOpts,
     },
     DeriveError, DeriveResult,
 };
@@ -36,27 +29,15 @@ use super::RecordInput;
 
 pub struct RecordDeserializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub input: &'a RecordInput<'a, T>,
-    pub opts: &'a records::roots::RootElementOpts,
+    pub ignore_whitespace: bool,
+    pub required_expanded_name: Option<ExpandedName<'static>>,
+    pub allow_unknown_attributes: AllowUnknown,
+    pub allow_unknown_children: AllowUnknown,
+    pub children_order: ElementOrder,
+    pub attribute_order: ElementOrder,
 }
 
 impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
-    pub fn new(input: &'a RecordInput<'a, T>, opts: &'a RootElementOpts) -> Self {
-        Self { input, opts }
-    }
-
-    pub fn required_expanded_name(&self) -> Option<ExpandedName<'_>> {
-        let expanded_name = self
-            .opts
-            .expanded_name(&self.input.impl_for_ident.to_string())
-            .into_owned();
-
-        if self.opts.deserialize_any_name {
-            None
-        } else {
-            Some(expanded_name)
-        }
-    }
-
     pub fn field_decl(
         element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
         attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
@@ -117,18 +98,18 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
         let local_value_expressions_constructors = attribute_fields.into_iter()
             .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
                 a.field_ident,
-                a.options.should_unwrap_default()
+                a.options.default_or_else()
             ))
             .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
                 a.field_ident,
-                a.options.should_unwrap_default()
+                a.options.default_or_else()
             )))
-            .map::<(_, Expr), _>(|(field_ident, default_unwrap)| {
+            .map::<(_, Expr), _>(|(field_ident, default_or_else)| {
                 let builder_field_ident = field_ident.to_named_ident();
 
-                let expression = if default_unwrap {
+                let expression = if let Some(default_or_else) = default_or_else {
                     parse_quote! {
-                        ::core::option::Option::unwrap_or_default(#builder_field_ident)
+                        ::core::option::Option::unwrap_or_else(#builder_field_ident, #default_or_else)
                     }
                 } else {
                     parse_quote! {
@@ -161,7 +142,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
         access_ident: &Ident,
         span: proc_macro2::Span,
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>> + Clone,
-        allow_unknown_attributes: bool,
+        allow_unknown_attributes: AllowUnknown,
         order: ElementOrder,
     ) -> DeriveResult<Vec<Stmt>> {
         let field_visits = builder_attribute_field_visitor(
@@ -181,71 +162,63 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
             },
         )?;
 
+        let skip_unknown: Vec<Stmt> = match allow_unknown_attributes {
+            AllowUnknown::Any => {
+                let skip_ident = Ident::new("__skip", span);
+                parse_quote! {
+                    let #skip_ident = ::xmlity::de::AttributesAccess::next_attribute::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
+                    if ::core::option::Option::is_none(&#skip_ident) {
+                        break;
+                    }
+                    continue;
+                }
+            }
+            AllowUnknown::AtEnd => {
+                //Ignore whatever is left
+                parse_quote! {
+                    break;
+                }
+            }
+            AllowUnknown::None => {
+                //Check that nothing is left
+                let skip_ident = Ident::new("__skip", span);
+                parse_quote! {
+                    let #skip_ident = ::xmlity::de::AttributesAccess::next_attribute::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
+                    if ::core::option::Option::is_none(&#skip_ident) {
+                        break;
+                    }
+
+                    return Err(::xmlity::de::Error::unknown_child());
+                }
+            }
+        };
+
         match order {
-            ElementOrder::Loose => field_visits.into_iter().zip(fields).map(|(field_visit, field)| {
-                let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
-                    let skip_ident = Ident::new("__skip", span);
-                    parse_quote! {
-                        let #skip_ident = ::xmlity::de::AttributesAccess::next_attribute::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
-                        if ::core::option::Option::is_none(&#skip_ident) {
-                            break;
+            ElementOrder::Loose => field_visits
+                .into_iter()
+                .zip(fields)
+                .map(|(field_visit, _field)| {
+                    Ok(parse_quote! {
+                        loop {
+                            #field_visit
+                            #(#skip_unknown)*
                         }
-                        continue;
-                    }
-                } else {
-                    let condition = attribute_done_expr(field, quote! {});
-
-                    parse_quote! {
-                        if #condition {
-                            break;
-                        } else {
-                            return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
-                        }
-                    }
-                };
-
-                Ok(parse_quote! {
-                    loop {
-                        #field_visit
-                        #(#skip_unknown)*
-                    }
+                    })
                 })
-            }).collect(),
-            ElementOrder::None => {
-                let skip_unknown: Vec<Stmt> = if allow_unknown_attributes {
-                    let skip_ident = Ident::new("__skip", span);
-                    parse_quote! {
-                        let #skip_ident = ::xmlity::de::AttributesAccess::next_attribute::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
-                        if ::core::option::Option::is_none(&#skip_ident) {
-                            break;
-                        }
-                    }
-                } else {
-                    let all_some_condition = all_attributes_done_expr(fields, quote! {});
-
-                    parse_quote! {
-                        if #all_some_condition {
-                            break;
-                        } else {
-                            return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
-                        }
-                    }
-                };
-
-                Ok(parse_quote! {
-                    loop {
-                        #(#field_visits)*
-                        #(#skip_unknown)*
-                    }
-                })
-            },
+                .collect(),
+            ElementOrder::None => Ok(parse_quote! {
+                loop {
+                    #(#field_visits)*
+                    #(#skip_unknown)*
+                }
+            }),
         }
     }
 
     pub fn element_access(
         element_access_ident: &Ident,
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
-        allow_unknown_children: bool,
+        allow_unknown_children: AllowUnknown,
         order: ElementOrder,
         ignore_whitespace: bool,
     ) -> DeriveResult<Vec<Stmt>> {
@@ -279,20 +252,22 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
         element_access_ident: &Ident,
         access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let Self { input, opts, .. } = self;
+        let Self {
+            input,
+            ignore_whitespace,
+            required_expanded_name,
+            allow_unknown_attributes,
+            allow_unknown_children,
+            attribute_order,
+            children_order,
+            ..
+        } = self;
         let RecordInput {
             impl_for_ident: ident,
             ..
         } = input;
-        let RootElementOpts {
-            allow_unknown_attributes,
-            allow_unknown_children,
-            children_order,
-            attribute_order,
-            ..
-        } = opts;
 
-        let xml_name_identification = self.required_expanded_name().as_ref().map::<Stmt, _>(|qname| {
+        let xml_name_identification = required_expanded_name.as_ref().map::<Stmt, _>(|qname| {
           parse_quote! {
               ::xmlity::de::ElementAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
           }
@@ -369,14 +344,12 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
         };
 
         let children_loop = if element_group_fields.clone().next().is_some() {
-            let ignore_whitespace = self.opts.ignore_whitespace.unwrap_or(true);
-
             Self::element_access(
                 element_access_ident,
                 element_group_fields,
                 *allow_unknown_children,
                 *children_order,
-                ignore_whitespace,
+                *ignore_whitespace,
             )?
         } else {
             Vec::new()

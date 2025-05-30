@@ -85,6 +85,25 @@ impl FromMeta for RenameRule {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum AllowUnknown {
+    Any,
+    #[default]
+    AtEnd,
+    None,
+}
+
+impl FromMeta for AllowUnknown {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        match value {
+            "any" => Ok(AllowUnknown::Any),
+            "at_end" => Ok(AllowUnknown::AtEnd),
+            "none" => Ok(AllowUnknown::None),
+            _ => Err(darling::Error::unknown_value(value)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum Extendable {
     Iterator,
     Single,
@@ -174,10 +193,10 @@ pub mod records {
             pub enforce_prefix: bool,
             #[darling(default)]
             /// Deserialize only
-            pub allow_unknown_children: bool,
+            pub allow_unknown_children: AllowUnknown,
             #[darling(default)]
             /// Deserialize only
-            pub allow_unknown_attributes: bool,
+            pub allow_unknown_attributes: AllowUnknown,
             #[darling(default)]
             /// Deserialize only
             pub deserialize_any_name: bool,
@@ -275,6 +294,9 @@ pub mod records {
             #[darling(default)]
             /// Deserialize only
             pub ignore_whitespace: Option<bool>,
+            #[darling(default)]
+            /// Deserialize only
+            pub allow_unknown: AllowUnknown,
         }
 
         impl RootValueOpts {
@@ -356,6 +378,9 @@ pub mod records {
     }
 
     pub mod fields {
+        use quote::ToTokens;
+        use syn::{parse_quote, Path};
+
         use crate::common::Prefix;
 
         use super::*;
@@ -365,6 +390,8 @@ pub mod records {
         pub struct ElementOpts {
             #[darling(default)]
             pub default: bool,
+            #[darling(default)]
+            pub default_with: Option<Path>,
             #[darling(default)]
             pub extendable: Extendable,
             #[darling(default)]
@@ -377,6 +404,43 @@ pub mod records {
             pub preferred_prefix: Option<Prefix<'static>>,
             #[darling(default)]
             pub enforce_prefix: bool,
+            #[darling(default)]
+            pub optional: bool,
+            #[darling(default)]
+            pub group: bool,
+            #[darling(default)]
+            pub skip_serializing_if: Option<Path>,
+        }
+
+        impl ElementOpts {
+            pub fn default_or_else(&self) -> Option<Expr> {
+                if let Some(default_with) = self.default_with.as_ref() {
+                    Some(parse_quote! {
+                        #default_with
+                    })
+                } else if self.default || self.optional {
+                    Some(parse_quote! {
+                        ::core::default::Default::default
+                    })
+                } else {
+                    None
+                }
+            }
+
+            pub fn skip_serializing_if<T: ToTokens>(&self, access: T) -> Option<Expr> {
+                self.skip_serializing_if
+                    .as_ref()
+                    .map(|skip_serializing_if| {
+                        parse_quote! {
+                            #skip_serializing_if(#access)
+                        }
+                    })
+                    .or(self.optional.then(|| {
+                        parse_quote! {
+                            ::core::option::Option::is_none(#access)
+                        }
+                    }))
+            }
         }
 
         impl WithExpandedName for ElementOpts {
@@ -399,7 +463,37 @@ pub mod records {
             #[darling(default)]
             pub default: bool,
             #[darling(default)]
+            pub default_with: Option<Path>,
+            #[darling(default)]
             pub extendable: Extendable,
+            #[darling(default)]
+            pub skip_serializing_if: Option<Path>,
+        }
+
+        impl ValueOpts {
+            pub fn default_or_else(&self) -> Option<Expr> {
+                if let Some(default_with) = &self.default_with {
+                    Some(parse_quote! {
+                        #default_with
+                    })
+                } else if self.default {
+                    Some(parse_quote! {
+                        ::core::default::Default::default
+                    })
+                } else {
+                    None
+                }
+            }
+
+            pub fn skip_serializing_if<T: ToTokens>(&self, access: T) -> Option<Expr> {
+                self.skip_serializing_if
+                    .as_ref()
+                    .map(|skip_serializing_if| {
+                        parse_quote! {
+                            #skip_serializing_if(#access)
+                        }
+                    })
+            }
         }
 
         #[allow(clippy::large_enum_variant)]
@@ -416,10 +510,31 @@ pub mod records {
         }
 
         impl ChildOpts {
-            pub fn should_unwrap_default(&self) -> bool {
-                match self {
-                    ChildOpts::Value(ValueOpts { default, .. }) => *default,
-                    ChildOpts::Element(ElementOpts { default, .. }) => *default,
+            pub fn default_or_else(&self) -> Option<Expr> {
+                let (default, default_with) = match self {
+                    ChildOpts::Value(ValueOpts {
+                        default,
+                        default_with,
+                        ..
+                    }) => (*default, default_with),
+                    ChildOpts::Element(ElementOpts {
+                        default,
+                        default_with,
+                        optional,
+                        ..
+                    }) => (*default || *optional, default_with),
+                };
+
+                if let Some(default_with) = default_with {
+                    Some(parse_quote! {
+                        #default_with
+                    })
+                } else if default {
+                    Some(parse_quote! {
+                        ::core::default::Default::default
+                    })
+                } else {
+                    None
                 }
             }
 
@@ -465,16 +580,22 @@ pub mod records {
         #[derive(Clone)]
         pub struct AttributeDeferredOpts {
             pub default: bool,
+            pub default_with: Option<Path>,
+            pub skip_serializing_if: Option<Path>,
+            pub optional: bool,
         }
 
         #[derive(Clone)]
         pub struct AttributeDeclaredOpts {
             pub default: bool,
+            pub default_with: Option<Path>,
             pub name: Option<LocalName<'static>>,
             pub namespace: Option<XmlNamespace<'static>>,
             pub namespace_expr: Option<Expr>,
             pub preferred_prefix: Option<Prefix<'static>>,
             pub enforce_prefix: bool,
+            pub skip_serializing_if: Option<Path>,
+            pub optional: bool,
         }
 
         impl WithExpandedName for AttributeDeclaredOpts {
@@ -499,11 +620,61 @@ pub mod records {
         }
 
         impl AttributeOpts {
-            pub fn should_unwrap_default(&self) -> bool {
-                match self {
-                    AttributeOpts::Deferred(AttributeDeferredOpts { default }) => *default,
-                    AttributeOpts::Declared(AttributeDeclaredOpts { default, .. }) => *default,
+            pub fn default_or_else(&self) -> Option<Expr> {
+                let (default, default_with, optional) = match self {
+                    AttributeOpts::Deferred(AttributeDeferredOpts {
+                        default,
+                        default_with,
+                        optional,
+                        ..
+                    }) => (default, default_with, optional),
+                    AttributeOpts::Declared(AttributeDeclaredOpts {
+                        default,
+                        default_with,
+                        optional,
+                        ..
+                    }) => (default, default_with, optional),
+                };
+
+                if let Some(default_with) = default_with {
+                    Some(parse_quote! {
+                        #default_with
+                    })
+                } else if *default || *optional {
+                    Some(parse_quote! {
+                        ::core::default::Default::default
+                    })
+                } else {
+                    None
                 }
+            }
+
+            pub fn skip_serializing_if<T: ToTokens>(&self, access: T) -> Option<Expr> {
+                let (skip_serializing_if, optional) = match self {
+                    AttributeOpts::Deferred(AttributeDeferredOpts {
+                        skip_serializing_if,
+                        optional,
+                        ..
+                    }) => (skip_serializing_if, optional),
+                    AttributeOpts::Declared(AttributeDeclaredOpts {
+                        skip_serializing_if,
+                        optional,
+                        ..
+                    }) => (skip_serializing_if, optional),
+                };
+
+                skip_serializing_if
+                    .as_ref()
+                    .map(|skip_serializing_if| {
+                        parse_quote! {
+                            #skip_serializing_if(#access)
+                        }
+                    })
+                    .or(optional.then(|| {
+                        parse_quote! {
+                            ::core::option::Option::is_none(#access)
+                        }
+                    }))
             }
 
             pub fn from_field(field: &syn::Field) -> Result<Option<Self>, DeriveError> {
@@ -522,6 +693,8 @@ pub mod records {
                     #[darling(default)]
                     pub default: bool,
                     #[darling(default)]
+                    pub default_with: Option<Path>,
+                    #[darling(default)]
                     pub deferred: bool,
                     #[darling(default)]
                     pub name: Option<LocalName<'static>>,
@@ -533,6 +706,10 @@ pub mod records {
                     pub preferred_prefix: Option<Prefix<'static>>,
                     #[darling(default)]
                     pub enforce_prefix: Option<bool>,
+                    #[darling(default)]
+                    pub optional: bool,
+                    #[darling(default)]
+                    pub skip_serializing_if: Option<Path>,
                 }
 
                 let raw = FieldAttributeRawOpts::from_attributes(&[attribute])
@@ -544,47 +721,38 @@ pub mod records {
                 };
 
                 if raw.deferred {
-                    if raw.name.is_some() {
-                        return Err(DeriveError::custom(
-                            "name can not be set if deferred is set",
-                        ));
-                    }
-
-                    if raw.namespace.is_some() {
-                        return Err(DeriveError::custom(
-                            "namespace can not be set if deferred is set",
-                        ));
-                    }
-
-                    if raw.namespace_expr.is_some() {
-                        return Err(DeriveError::custom(
-                            "namespace_expr can not be set if deferred is set",
-                        ));
-                    }
-
-                    if raw.preferred_prefix.is_some() {
-                        return Err(DeriveError::custom(
-                            "preferred_prefix can not be set if deferred is set",
-                        ));
-                    }
-
-                    if raw.enforce_prefix.is_some() {
-                        return Err(DeriveError::custom(
-                            "enforce_prefix can not be set if deferred is set",
-                        ));
+                    let unallowed_fields = [
+                        (raw.name.is_some(), "name"),
+                        (raw.namespace.is_some(), "namespace"),
+                        (raw.namespace_expr.is_some(), "namespace_expr"),
+                        (raw.preferred_prefix.is_some(), "preferred_prefix"),
+                        (raw.enforce_prefix.is_some(), "enforce_prefix"),
+                    ];
+                    if let Some((true, field)) =
+                        unallowed_fields.iter().find(|(unallowed, _)| *unallowed)
+                    {
+                        return Err(DeriveError::custom(format!(
+                            "{field} can not be set if deferred is set"
+                        )));
                     }
 
                     Ok(Some(Self::Deferred(AttributeDeferredOpts {
                         default: raw.default,
+                        default_with: raw.default_with,
+                        skip_serializing_if: raw.skip_serializing_if,
+                        optional: raw.optional,
                     })))
                 } else {
                     Ok(Some(Self::Declared(AttributeDeclaredOpts {
                         default: raw.default,
+                        default_with: raw.default_with,
                         name: raw.name,
                         namespace: raw.namespace,
                         namespace_expr: raw.namespace_expr,
                         preferred_prefix: raw.preferred_prefix,
                         enforce_prefix: raw.enforce_prefix.unwrap_or(false),
+                        skip_serializing_if: raw.skip_serializing_if,
+                        optional: raw.optional,
                     })))
                 }
             }

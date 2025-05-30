@@ -9,14 +9,15 @@ use crate::common::Prefix;
 use crate::common::RecordInput;
 use crate::common::StructTypeWithFields;
 use crate::options::records;
+use crate::options::records::fields::GroupOpts;
 use crate::options::records::fields::{ChildOpts, FieldOpts, ValueOpts};
 use crate::options::WithExpandedNameExt;
 use crate::options::{Extendable, FieldWithOpts};
 use crate::ser::builders::SerializeBuilder;
-use crate::ser::common::attribute_group_field_serializer;
 use crate::ser::common::attribute_group_fields;
-use crate::ser::common::element_group_field_serializer;
+use crate::ser::common::attribute_group_fields_serializer;
 use crate::ser::common::element_group_fields;
+use crate::ser::common::element_group_fields_serializer;
 use crate::{
     common::{ExpandedName, FieldIdent},
     DeriveError,
@@ -25,10 +26,12 @@ use crate::{
 #[allow(clippy::type_complexity)]
 pub struct SingleChildSerializeElementBuilder<'a> {
     pub ident: &'a syn::Ident,
-    pub required_expanded_name: ExpandedName<'static>,
+    pub expanded_name: ExpandedName<'static>,
     pub preferred_prefix: Option<Prefix<'static>>,
     pub enforce_prefix: bool,
     pub item_type: &'a syn::Type,
+    pub group: bool,
+    pub skip_serializing_if: Option<syn::Path>,
 }
 
 impl SingleChildSerializeElementBuilder<'_> {
@@ -85,10 +88,16 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
             fields: StructTypeWithFields::Named(vec![FieldWithOpts {
                 field_ident: self.value_access_ident(),
                 field_type: self.item_type.clone(),
-                options: FieldOpts::Value(ChildOpts::Value(ValueOpts {
-                    default: false,
-                    extendable: Extendable::None,
-                })),
+                options: if self.group {
+                    FieldOpts::Group(GroupOpts {})
+                } else {
+                    FieldOpts::Value(ChildOpts::Value(ValueOpts {
+                        default: false,
+                        default_with: None,
+                        extendable: Extendable::None,
+                        skip_serializing_if: self.skip_serializing_if.clone(),
+                    }))
+                },
             }]),
             sub_path_ident: None,
             fallable_deconstruction: false,
@@ -96,7 +105,7 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
 
         let builder = RecordSerializeElementBuilder {
             input: &input,
-            required_expanded_name: self.required_expanded_name.clone(),
+            expanded_name: self.expanded_name.clone(),
             preferred_prefix: self.preferred_prefix.clone(),
             enforce_prefix: self.enforce_prefix,
         };
@@ -117,13 +126,7 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
 
 #[allow(clippy::type_complexity)]
 pub struct RecordSerializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
-    // pub ident: &'a syn::Ident,
-    // pub generics: &'a syn::Generics,
-    pub required_expanded_name: ExpandedName<'static>,
-    // pub struct_type: StructTypeWithFields<
-    //     Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-    //     Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-    // >,
+    pub expanded_name: ExpandedName<'static>,
     pub preferred_prefix: Option<Prefix<'static>>,
     pub enforce_prefix: bool,
     pub input: &'a RecordInput<'a, T>,
@@ -138,7 +141,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordSerializeElementBuilder<'a, T> {
             input,
             preferred_prefix: opts.preferred_prefix.clone(),
             enforce_prefix: opts.enforce_prefix,
-            required_expanded_name: expanded_name,
+            expanded_name,
         }
     }
 }
@@ -152,7 +155,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
         let Self {
             input,
             enforce_prefix,
-            required_expanded_name,
+            expanded_name,
             preferred_prefix,
             ..
         } = self;
@@ -187,7 +190,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
         let attribute_fields = attribute_group_fields(fields.clone())?;
         let element_fields = element_group_fields(fields)?;
 
-        let attribute_fields = attribute_group_field_serializer(
+        let attribute_fields = attribute_group_fields_serializer(
             quote! {&mut #ser_attributes_ident},
             attribute_fields,
             |field_ident| {
@@ -201,7 +204,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
                 ::xmlity::ser::SerializeElementAttributes::end(#ser_attributes_ident)
             }
         } else {
-            let element_fields = element_group_field_serializer(
+            let element_fields = element_group_fields_serializer(
                 quote! {&mut #ser_children_ident},
                 element_fields,
                 |field_ident| {
@@ -225,7 +228,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
           });
 
         Ok(parse_quote! {
-            let #xml_name_temp_ident = #required_expanded_name;
+            let #xml_name_temp_ident = #expanded_name;
             let mut #ser_element_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
             #(#value_deconstructor)*
             #preferred_prefix_setting
