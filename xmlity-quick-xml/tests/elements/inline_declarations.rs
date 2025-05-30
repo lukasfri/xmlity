@@ -186,8 +186,8 @@ define_test!(
             },
             "<k><l>A</l></k>"
         ),
-        (K { b: None }, "<k></k>", "<k/>"),
-        (K { b: None }, "<k/>", "<k/>")
+        (K { b: None }, "<k/>", "<k></k>"),
+        (K { b: None }, "<k/>")
     ]
 );
 
@@ -200,7 +200,7 @@ pub struct N {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "M")]
 pub struct M {
-    #[xelement(name = "n", group, default)]
+    #[xelement(name = "n", group)]
     pub n: N,
 }
 
@@ -214,4 +214,36 @@ define_test!(
         },
         "<M><n><o>A</o></n></M>"
     )]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "P")]
+pub struct P {
+    #[xattribute(name = "q")]
+    pub q: String,
+}
+
+define_test!(
+    element_with_attribute,
+    [(P { q: "A".to_string() }, "<P q=\"A\"/>")]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "R")]
+pub struct R {
+    #[xattribute(name = "s", optional, default)]
+    pub s: Option<String>,
+}
+
+define_test!(
+    element_with_optional_attribute,
+    [
+        (
+            R {
+                s: Some("A".to_string())
+            },
+            "<R s=\"A\"/>"
+        ),
+        (R { s: None }, "<R/>")
+    ]
 );

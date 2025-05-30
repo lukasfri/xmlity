@@ -3,14 +3,19 @@
 use std::borrow::Cow;
 
 use proc_macro2::Span;
-use syn::{parse_quote, Expr, ExprWhile, Ident, Lifetime, LifetimeParam, Stmt, Type};
+use syn::{parse_quote, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
-    common::{non_bound_generics, ExpandedName},
+    common::{non_bound_generics, ExpandedName, RecordInput, StructTypeWithFields},
     de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-    options::Extendable,
+    options::{
+        records::fields::{ChildOpts, FieldOpts, GroupOpts, ValueOpts},
+        ElementOrder, Extendable, FieldWithOpts,
+    },
     DeriveError,
 };
+
+use super::elements::RecordDeserializeElementBuilder;
 
 pub struct DeserializeSingleChildElementBuilder<'a> {
     pub ident: &'a syn::Ident,
@@ -18,6 +23,8 @@ pub struct DeserializeSingleChildElementBuilder<'a> {
     pub required_expanded_name: Option<ExpandedName<'static>>,
     pub item_type: &'a syn::Type,
     pub extendable: Extendable,
+    pub group: bool,
+    pub default: bool,
 }
 
 impl DeserializeSingleChildElementBuilder<'_> {
@@ -47,68 +54,42 @@ impl VisitorBuilder for DeserializeSingleChildElementBuilder<'_> {
         element_access_ident: &Ident,
         access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let Self {
-            ident,
-            item_type,
-            extendable,
-            required_expanded_name,
-            ..
-        } = self;
+        let ident = self.ident;
 
-        let xml_name_identification = required_expanded_name.as_ref().map::<Stmt, _>(|qname| {
-          parse_quote! {
-              ::xmlity::de::ElementAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
-          }
-      });
-
-        let children_access_ident = Ident::new("__children", element_access_ident.span());
-        let value_access_ident = self.value_access_ident();
-
-        let extendable_loop: Option<ExprWhile> = if matches!(
-            extendable,
-            Extendable::Iterator | Extendable::Single
-        ) {
-            let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
-
-            let extendable_value: Expr = if *extendable == Extendable::Iterator {
-                parse_quote! {
-                    {
-                        let mut #loop_temporary_value_ident = ::core::iter::Iterator::peekable(
-                            ::core::iter::IntoIterator::into_iter(#loop_temporary_value_ident)
-                        );
-
-                        if ::core::option::Option::is_none(&::core::iter::Peekable::peek(&mut #loop_temporary_value_ident)) {
-                            break;
-                        }
-
-                        #loop_temporary_value_ident
-                    }
-                }
-            } else {
-                parse_quote! { [#loop_temporary_value_ident] }
-            };
-            Some(parse_quote! {
-                while let Some(#loop_temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#item_type>(&mut #children_access_ident)? {
-                    ::core::iter::Extend::extend(&mut #value_access_ident, #extendable_value);
-                }
-            })
-        } else {
-            None
+        let input = RecordInput {
+            impl_for_ident: Cow::Borrowed(self.ident),
+            constructor_path: Cow::Owned(parse_quote!(#ident)),
+            result_type: Cow::Borrowed(self.item_type),
+            generics: Cow::Owned(parse_quote!()),
+            wrapper_function: std::convert::identity,
+            record_path: Cow::Owned(parse_quote!(self)),
+            fields: StructTypeWithFields::Named(vec![FieldWithOpts {
+                field_ident: self.value_access_ident(),
+                field_type: self.item_type.clone(),
+                options: if self.group {
+                    FieldOpts::Group(GroupOpts {})
+                } else {
+                    FieldOpts::Value(ChildOpts::Value(ValueOpts {
+                        default: self.default,
+                        extendable: self.extendable,
+                    }))
+                },
+            }]),
+            sub_path_ident: None,
+            fallable_deconstruction: false,
         };
 
-        Ok(Some(parse_quote! {
-            #xml_name_identification
+        let builder = RecordDeserializeElementBuilder {
+            input: &input,
+            ignore_whitespace: false,
+            required_expanded_name: self.required_expanded_name.clone(),
+            allow_unknown_attributes: false,
+            allow_unknown_children: false,
+            children_order: ElementOrder::None,
+            attribute_order: ElementOrder::None,
+        };
 
-            let mut #children_access_ident = ::xmlity::de::ElementAccess::children(#element_access_ident)?;
-
-            let mut #value_access_ident = ::core::option::Option::ok_or_else(::xmlity::de::SeqAccess::next_element_seq::<#item_type>(
-                &mut #children_access_ident,
-            )?, ::xmlity::de::Error::missing_data)?;
-
-            #extendable_loop
-
-           ::core::result::Result::Ok(#ident {#value_access_ident })
-        }))
+        builder.visit_element_fn_body(visitor_lifetime, element_access_ident, access_type)
     }
 
     fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {

@@ -13,7 +13,8 @@ use none::{EnumVisitorBuilder, RecordDeserializeValueBuilder};
 use quote::ToTokens;
 
 use crate::{
-    options::{enums, records},
+    common::ExpandedName,
+    options::{enums, records, WithExpandedName},
     DeriveError, DeriveMacro,
 };
 
@@ -43,10 +44,21 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
     ) -> Result<Vec<syn::Stmt>, DeriveError> {
         use records::roots::DeserializeRootOpts;
         match &self.options {
-            DeserializeRootOpts::Element(opts) => {
-                RecordDeserializeElementBuilder::new(self.input, opts)
-                    .deserialize_fn_body(deserializer_ident, deserialize_lifetime)
+            DeserializeRootOpts::Element(opts) => RecordDeserializeElementBuilder {
+                input: self.input,
+                ignore_whitespace: opts.ignore_whitespace.unwrap_or(true),
+                required_expanded_name: if opts.deserialize_any_name {
+                    None
+                } else {
+                    let local_name = opts.name.as_ref().ok_or_else(||DeriveError::custom("Element `name` must be specified unless `deserialize_any_name` is set to `true`."))?;
+                    Some(ExpandedName::new(local_name.clone(), opts.namespace()).into_owned())
+                },
+                allow_unknown_attributes: opts.allow_unknown_attributes,
+                allow_unknown_children: opts.allow_unknown_children,
+                children_order: opts.children_order,
+                attribute_order: opts.attribute_order,
             }
+            .deserialize_fn_body(deserializer_ident, deserialize_lifetime),
             DeserializeRootOpts::Attribute(opts) => {
                 RecordDeserializeAttributeBuilder::new(self.input, opts)
                     .to_builder()?

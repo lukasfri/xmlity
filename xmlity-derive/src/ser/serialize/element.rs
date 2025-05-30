@@ -26,7 +26,7 @@ use crate::{
 #[allow(clippy::type_complexity)]
 pub struct SingleChildSerializeElementBuilder<'a> {
     pub ident: &'a syn::Ident,
-    pub required_expanded_name: ExpandedName<'static>,
+    pub expanded_name: ExpandedName<'static>,
     pub preferred_prefix: Option<Prefix<'static>>,
     pub enforce_prefix: bool,
     pub item_type: &'a syn::Type,
@@ -102,7 +102,7 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
 
         let builder = RecordSerializeElementBuilder {
             input: &input,
-            required_expanded_name: self.required_expanded_name.clone(),
+            expanded_name: self.expanded_name.clone(),
             preferred_prefix: self.preferred_prefix.clone(),
             enforce_prefix: self.enforce_prefix,
         };
@@ -123,13 +123,7 @@ impl SerializeBuilder for SingleChildSerializeElementBuilder<'_> {
 
 #[allow(clippy::type_complexity)]
 pub struct RecordSerializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
-    // pub ident: &'a syn::Ident,
-    // pub generics: &'a syn::Generics,
-    pub required_expanded_name: ExpandedName<'static>,
-    // pub struct_type: StructTypeWithFields<
-    //     Vec<FieldWithOpts<syn::Ident, FieldOpts>>,
-    //     Vec<FieldWithOpts<syn::Index, FieldOpts>>,
-    // >,
+    pub expanded_name: ExpandedName<'static>,
     pub preferred_prefix: Option<Prefix<'static>>,
     pub enforce_prefix: bool,
     pub input: &'a RecordInput<'a, T>,
@@ -144,7 +138,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordSerializeElementBuilder<'a, T> {
             input,
             preferred_prefix: opts.preferred_prefix.clone(),
             enforce_prefix: opts.enforce_prefix,
-            required_expanded_name: expanded_name,
+            expanded_name,
         }
     }
 }
@@ -158,7 +152,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
         let Self {
             input,
             enforce_prefix,
-            required_expanded_name,
+            expanded_name,
             preferred_prefix,
             ..
         } = self;
@@ -231,7 +225,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
           });
 
         Ok(parse_quote! {
-            let #xml_name_temp_ident = #required_expanded_name;
+            let #xml_name_temp_ident = #expanded_name;
             let mut #ser_element_ident = ::xmlity::Serializer::serialize_element(#serializer_access, &#xml_name_temp_ident)?;
             #(#value_deconstructor)*
             #preferred_prefix_setting

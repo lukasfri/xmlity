@@ -89,7 +89,7 @@ pub fn element_group_field_serializer(
 
               let wrapper = SingleChildSerializeElementBuilder {
                   ident: &wrapper_ident,
-                  required_expanded_name: opts.expanded_name(field_ident.to_named_ident().to_string().as_str())
+                  expanded_name: opts.expanded_name(field_ident.to_named_ident().to_string().as_str())
                   .into_owned(),
                   preferred_prefix: opts.preferred_prefix,
                   enforce_prefix: opts.enforce_prefix,
@@ -142,7 +142,7 @@ pub fn seq_field_serializer(
 
               let wrapper = SingleChildSerializeElementBuilder {
                   ident: &wrapper_ident,
-                  required_expanded_name: opts.expanded_name(field_ident.to_string().as_str())
+                  expanded_name: opts.expanded_name(field_ident.to_string().as_str())
                   .into_owned(),
                   preferred_prefix: opts.preferred_prefix,
                   enforce_prefix: opts.enforce_prefix,

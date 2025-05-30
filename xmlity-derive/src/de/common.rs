@@ -372,7 +372,14 @@ pub fn element_field_deserialize_impl(
     let empty_generics: Generics = parse_quote!();
 
     let wrapper_data = match &options {
-        ChildOpts::Element(opts @ ElementOpts { extendable, .. }) => {
+        ChildOpts::Element(
+            opts @ ElementOpts {
+                extendable,
+                group,
+                default,
+                ..
+            },
+        ) => {
             let builder = DeserializeSingleChildElementBuilder {
                 ident: &wrapper_ident,
                 generics: &empty_generics,
@@ -381,7 +388,9 @@ pub fn element_field_deserialize_impl(
                         .into_owned(),
                 ),
                 item_type: &field_type,
+                default: *default,
                 extendable: *extendable,
+                group: *group,
             };
 
             let deserialize_unwrapper = |ident: &Ident| {

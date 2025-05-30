@@ -19,15 +19,11 @@ use crate::{
         },
     },
     options::{
-        records::{
-            self,
-            fields::{
-                AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
-                GroupOpts,
-            },
-            roots::RootElementOpts,
+        records::fields::{
+            AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
+            GroupOpts,
         },
-        ElementOrder, FieldWithOpts, WithExpandedNameExt,
+        ElementOrder, FieldWithOpts,
     },
     DeriveError, DeriveResult,
 };
@@ -36,27 +32,15 @@ use super::RecordInput;
 
 pub struct RecordDeserializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub input: &'a RecordInput<'a, T>,
-    pub opts: &'a records::roots::RootElementOpts,
+    pub ignore_whitespace: bool,
+    pub required_expanded_name: Option<ExpandedName<'static>>,
+    pub allow_unknown_attributes: bool,
+    pub allow_unknown_children: bool,
+    pub children_order: ElementOrder,
+    pub attribute_order: ElementOrder,
 }
 
 impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
-    pub fn new(input: &'a RecordInput<'a, T>, opts: &'a RootElementOpts) -> Self {
-        Self { input, opts }
-    }
-
-    pub fn required_expanded_name(&self) -> Option<ExpandedName<'_>> {
-        let expanded_name = self
-            .opts
-            .expanded_name(&self.input.impl_for_ident.to_string())
-            .into_owned();
-
-        if self.opts.deserialize_any_name {
-            None
-        } else {
-            Some(expanded_name)
-        }
-    }
-
     pub fn field_decl(
         element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
         attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
@@ -279,20 +263,22 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
         element_access_ident: &Ident,
         access_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let Self { input, opts, .. } = self;
+        let Self {
+            input,
+            ignore_whitespace,
+            required_expanded_name,
+            allow_unknown_attributes,
+            allow_unknown_children,
+            attribute_order,
+            children_order,
+            ..
+        } = self;
         let RecordInput {
             impl_for_ident: ident,
             ..
         } = input;
-        let RootElementOpts {
-            allow_unknown_attributes,
-            allow_unknown_children,
-            children_order,
-            attribute_order,
-            ..
-        } = opts;
 
-        let xml_name_identification = self.required_expanded_name().as_ref().map::<Stmt, _>(|qname| {
+        let xml_name_identification = required_expanded_name.as_ref().map::<Stmt, _>(|qname| {
           parse_quote! {
               ::xmlity::de::ElementAccessExt::ensure_name::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(&#element_access_ident, &#qname)?;
           }
@@ -369,14 +355,12 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
         };
 
         let children_loop = if element_group_fields.clone().next().is_some() {
-            let ignore_whitespace = self.opts.ignore_whitespace.unwrap_or(true);
-
             Self::element_access(
                 element_access_ident,
                 element_group_fields,
                 *allow_unknown_children,
                 *children_order,
-                ignore_whitespace,
+                *ignore_whitespace,
             )?
         } else {
             Vec::new()

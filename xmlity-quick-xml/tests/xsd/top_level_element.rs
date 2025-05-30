@@ -80,6 +80,14 @@ pub mod types {
 #[xelement(name = "element", namespace = "http://www.w3.org/2000/xmlns/")]
 pub struct TopLevelElement(#[xgroup] pub types::TopLevelElement);
 
+#[derive(Debug, Clone, Eq, PartialEq, ::xmlity::Serialize, ::xmlity::Deserialize)]
+#[xelement(name = "annotation", namespace = "http://www.w3.org/2000/xmlns/")]
+pub struct Annotation;
+#[derive(
+    Debug, Clone, Eq, PartialEq, ::xmlity::SerializationGroup, ::xmlity::DeserializationGroup,
+)]
+pub struct AltType {}
+
 #[test]
 fn test_xml() {
     todo!()
