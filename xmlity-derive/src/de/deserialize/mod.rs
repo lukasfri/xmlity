@@ -13,8 +13,7 @@ use none::{EnumVisitorBuilder, RecordDeserializeValueBuilder};
 use quote::ToTokens;
 
 use crate::{
-    common::ExpandedName,
-    options::{enums, records, WithExpandedName},
+    options::{enums, records, WithExpandedNameExt},
     DeriveError, DeriveMacro,
 };
 
@@ -50,8 +49,10 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
                 required_expanded_name: if opts.deserialize_any_name {
                     None
                 } else {
-                    let local_name = opts.name.as_ref().ok_or_else(||DeriveError::custom("Element `name` must be specified unless `deserialize_any_name` is set to `true`."))?;
-                    Some(ExpandedName::new(local_name.clone(), opts.namespace()).into_owned())
+                    Some(
+                        opts.expanded_name(&deserializer_ident.to_string())
+                            .into_owned(),
+                    )
                 },
                 allow_unknown_attributes: opts.allow_unknown_attributes,
                 allow_unknown_children: opts.allow_unknown_children,
