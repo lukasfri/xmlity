@@ -14,10 +14,10 @@ use crate::options::records::fields::{ChildOpts, FieldOpts, ValueOpts};
 use crate::options::WithExpandedNameExt;
 use crate::options::{Extendable, FieldWithOpts};
 use crate::ser::builders::SerializeBuilder;
-use crate::ser::common::attribute_group_fields_serializer;
 use crate::ser::common::attribute_group_fields;
-use crate::ser::common::element_group_fields_serializer;
+use crate::ser::common::attribute_group_fields_serializer;
 use crate::ser::common::element_group_fields;
+use crate::ser::common::element_group_fields_serializer;
 use crate::{
     common::{ExpandedName, FieldIdent},
     DeriveError,
