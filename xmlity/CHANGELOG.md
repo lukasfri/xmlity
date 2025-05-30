@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.4...xmlity-v0.0.5) - 2025-05-30
+
+### Added
+
+- *(core)* [**breaking**] Changes attributes to use XMLity values instead of strings. ([#83](https://github.com/lukasfri/xmlity/pull/83))
+- *(core)* Added missing `Display` trait to `XmlNamespace`. ([#79](https://github.com/lukasfri/xmlity/pull/79))
+
 ## [0.0.4](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.3...xmlity-v0.0.4) - 2025-05-09
 
 ### Added
