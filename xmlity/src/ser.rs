@@ -214,7 +214,7 @@ pub trait SerializeAttributeAccess: Sized {
     ) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize the attribute.
-    fn end<S: AsRef<str>>(self, value: S) -> Result<Self::Ok, Self::Error>;
+    fn end<S: Serialize>(self, value: &S) -> Result<Self::Ok, Self::Error>;
 }
 
 /// A type that can be serialized as an attribute. Since this is a separate trait from [`Serialize`], it is possible to choose between serializing a type as an attribute or as an element.
@@ -245,5 +245,31 @@ pub trait SerializationGroup: Sized {
         let _ = serializer;
 
         Ok(())
+    }
+}
+
+impl<T: SerializationGroup> SerializationGroup for &T {
+    fn serialize_attributes<S: SerializeAttributes>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error> {
+        T::serialize_attributes(*self, serializer)
+    }
+
+    fn serialize_children<S: SerializeSeq>(&self, serializer: &mut S) -> Result<(), S::Error> {
+        T::serialize_children(*self, serializer)
+    }
+}
+
+impl<T: SerializationGroup> SerializationGroup for &mut T {
+    fn serialize_attributes<S: SerializeAttributes>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error> {
+        T::serialize_attributes(*self, serializer)
+    }
+
+    fn serialize_children<S: SerializeSeq>(&self, serializer: &mut S) -> Result<(), S::Error> {
+        T::serialize_children(*self, serializer)
     }
 }

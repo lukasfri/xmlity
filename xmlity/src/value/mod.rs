@@ -126,6 +126,18 @@ impl Debug for XmlText {
     }
 }
 
+impl From<String> for XmlText {
+    fn from(value: String) -> Self {
+        Self(value.into_bytes())
+    }
+}
+
+impl From<&str> for XmlText {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned().into_bytes())
+    }
+}
+
 /// CDATA section.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct XmlCData(pub Vec<u8>);
@@ -254,12 +266,12 @@ pub struct XmlAttribute {
     /// The name of the attribute.
     pub name: ExpandedName<'static>,
     /// The value of the attribute.
-    pub value: String,
+    pub value: XmlText,
 }
 
 impl XmlAttribute {
     /// Creates a new XML attribute.
-    pub fn new<T: Into<ExpandedName<'static>>, U: Into<String>>(name: T, value: U) -> Self {
+    pub fn new<T: Into<ExpandedName<'static>>, U: Into<XmlText>>(name: T, value: U) -> Self {
         Self {
             name: name.into(),
             value: value.into(),

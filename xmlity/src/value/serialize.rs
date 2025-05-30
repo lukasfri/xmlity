@@ -136,6 +136,6 @@ impl SerializeAttribute for XmlAttribute {
     {
         let attr = serializer.serialize_attribute(&self.name)?;
 
-        attr.end(self.value.as_str())
+        attr.end(&self.value)
     }
 }

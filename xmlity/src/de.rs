@@ -163,19 +163,13 @@ pub trait AttributeAccess<'de> {
     /// The error type for this attribute access.
     type Error: Error;
 
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
     /// Returns the name of the attribute.
     fn name(&self) -> ExpandedName<'_>;
 
-    /// Returns the value of the attribute.
-    fn value(&self) -> &str;
-
-    /// Returns the namespace context for this attribute.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    /// Deserializes the value of the attribute.
+    fn value<T>(self) -> Result<T, Self::Error>
+    where
+        T: Deserialize<'de>;
 }
 
 /// An extension trait for [`AttributeAccess`] that provides additional methods.
