@@ -15,14 +15,6 @@ define_test!(
     ]
 );
 
-#[rstest::rstest]
-#[case("<b><c></c></b>")]
-fn wrong_deserialize(#[case] xml: &str) {
-    let actual: Result<B, _> = crate::utils::quick_xml_deserialize_test(xml);
-
-    assert!(actual.is_err());
-}
-
 #[derive(Debug, PartialEq, Serialize, Deserialize, Default)]
 #[xelement(name = "c")]
 pub struct C {

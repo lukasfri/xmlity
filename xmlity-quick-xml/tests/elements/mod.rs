@@ -1,9 +1,11 @@
+pub mod allow_unknown;
 pub mod attribute;
 pub mod basic;
 pub mod default;
 pub mod extendable;
 pub mod generics;
 pub mod inline_attribute_declarations;
+pub mod inline_blend;
 pub mod inline_declarations;
 pub mod mixed;
 pub mod namespace_access;

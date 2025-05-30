@@ -26,7 +26,11 @@ pub fn attribute_field_serializer(
     field_ident_to_expr: impl Fn(&FieldIdent) -> syn::Expr,
     opts: AttributeOpts,
 ) -> DeriveResult<proc_macro2::TokenStream> {
-    let (items, serialize_expr) = match opts {
+    let value_expr = field_ident_to_expr(field_ident);
+
+    let skip_serializing_if_expr = opts.skip_serializing_if(&value_expr);
+
+    let (prefix, serialize_expr) = match opts {
         AttributeOpts::Declared(opts) => {
             let wrapper_ident = Ident::new("__W", Span::call_site());
 
@@ -43,25 +47,39 @@ pub fn attribute_field_serializer(
 
             let definition = wrapper.struct_definition();
             let trait_impl = wrapper.serialize_attribute_trait_impl()?;
-            let value_expr = wrapper.value_expression(&field_ident_to_expr(field_ident));
-            let serialize_expr: Expr = parse_quote!(&#value_expr);
+
+            let serialize_expr = wrapper.value_expression(&value_expr);
+            let wrapped_serialize_expr: Expr = parse_quote!(&#serialize_expr);
 
             (
-                vec![Item::Struct(definition), Item::Impl(trait_impl)],
-                serialize_expr,
+                vec![Item::from(definition), Item::from(trait_impl)],
+                wrapped_serialize_expr,
             )
         }
-        AttributeOpts::Deferred(_) => {
-            let ser_value = field_ident_to_expr(field_ident);
-
-            (vec![], ser_value)
-        }
+        AttributeOpts::Deferred(_opts) => (vec![], value_expr),
     };
 
-    Ok(quote! {{
-        #(#items)*
+    let serialize_attribute_stmt: Stmt = parse_quote!(
         ::xmlity::ser::SerializeAttributes::serialize_attribute(#access_ident, #serialize_expr)?;
-    }})
+    );
+
+    let serialize_attribute_expr = if let Some(skip_serializing_if_expr) = skip_serializing_if_expr
+    {
+        parse_quote! {
+            if !#skip_serializing_if_expr {
+                #serialize_attribute_stmt
+            }
+        }
+    } else {
+        serialize_attribute_stmt
+    };
+
+    Ok(quote! {
+        {
+            #(#prefix)*
+            #serialize_attribute_expr
+        }
+    })
 }
 
 pub fn attribute_group_fields_serializer(
@@ -106,20 +124,19 @@ pub fn element_field_serializer(
     field_ident_to_expr: impl Fn(&FieldIdent) -> syn::Expr,
     opts: ChildOpts,
 ) -> DeriveResult<proc_macro2::TokenStream> {
+    let value_expr = field_ident_to_expr(field_ident);
+
     let (prefix, serialize_expr, skip_serializing_if_expr): (Vec<_>, _, _) = match opts {
         ChildOpts::Value(value_opts) => {
-            let value_expr = field_ident_to_expr(field_ident);
-
-            let skip_serializing_if_expr: Option<syn::Expr> =
-                value_opts.skip_serializing_if.map(|skip_serializing_if| {
-                    parse_quote!(
-                        #skip_serializing_if(&#value_expr)
-                    )
-                });
+            let skip_serializing_if_expr =
+                value_opts.skip_serializing_if::<Expr>(parse_quote!(&#value_expr));
 
             (Vec::new(), value_expr, skip_serializing_if_expr)
         }
         ChildOpts::Element(opts) => {
+            let skip_serializing_if_expr =
+                opts.skip_serializing_if::<Expr>(parse_quote!(&#value_expr));
+
             let wrapper_ident = Ident::new("__W", Span::call_site());
 
             let wrapper = SingleChildSerializeElementBuilder {
@@ -136,22 +153,13 @@ pub fn element_field_serializer(
 
             let definition = wrapper.struct_definition();
             let trait_impl = wrapper.serialize_trait_impl()?;
-            let value_expr = field_ident_to_expr(field_ident);
 
             let serialize_expr = wrapper.value_expression(&value_expr);
-
-            let skip_serializing_if_expr: Option<syn::Expr> =
-                opts.skip_serializing_if.map(|skip_serializing_if| {
-                    parse_quote!(
-                        #skip_serializing_if(&#value_expr)
-                    )
-                });
-
-            let wrapped_value_expr = parse_quote! {&#serialize_expr};
+            let wrapped_serialize_expr = parse_quote! {&#serialize_expr};
 
             (
-                vec![Item::Struct(definition), Item::Impl(trait_impl)],
-                wrapped_value_expr,
+                vec![Item::from(definition), Item::from(trait_impl)],
+                wrapped_serialize_expr,
                 skip_serializing_if_expr,
             )
         }

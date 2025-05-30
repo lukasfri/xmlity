@@ -10,7 +10,7 @@ use crate::{
     de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
     options::{
         records::fields::{ChildOpts, FieldOpts, GroupOpts, ValueOpts},
-        ElementOrder, Extendable, FieldWithOpts,
+        AllowUnknown, ElementOrder, Extendable, FieldWithOpts,
     },
     DeriveError,
 };
@@ -86,8 +86,8 @@ impl VisitorBuilder for DeserializeSingleChildElementBuilder<'_> {
             input: &input,
             ignore_whitespace: false,
             required_expanded_name: self.required_expanded_name.clone(),
-            allow_unknown_attributes: false,
-            allow_unknown_children: false,
+            allow_unknown_attributes: AllowUnknown::default(),
+            allow_unknown_children: AllowUnknown::default(),
             children_order: ElementOrder::None,
             attribute_order: ElementOrder::None,
         };

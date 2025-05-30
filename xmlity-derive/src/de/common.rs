@@ -4,7 +4,7 @@ use syn::{parse_quote, Expr, ExprWhile, Generics, Ident, Stmt};
 use crate::{
     common::FieldIdent,
     de::builders::DeserializeBuilderExt,
-    options::{records::fields::FieldValueGroupOpts, FieldWithOpts},
+    options::{records::fields::FieldValueGroupOpts, AllowUnknown, FieldWithOpts},
     DeriveError, DeriveResult,
 };
 
@@ -31,7 +31,7 @@ pub struct SeqVisitLoop<
     F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
 > {
     seq_access_ident: &'a Ident,
-    allow_unknown_children: bool,
+    allow_unknown_children: AllowUnknown,
     order: ElementOrder,
     fields: F,
     ignore_whitespace: bool,
@@ -42,7 +42,7 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
 {
     pub fn new(
         seq_access_ident: &'a Ident,
-        allow_unknown_children: bool,
+        allow_unknown_children: AllowUnknown,
         order: ElementOrder,
         fields: F,
         ignore_whitespace: bool,
@@ -95,66 +95,57 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
             parse_quote! {}
         };
 
+        let skip_unknown: Vec<Stmt> = match allow_unknown_children {
+            AllowUnknown::Any => {
+                let skip_ident = Ident::new("__skip", access_ident.span());
+                parse_quote! {
+                    let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
+                    if ::core::option::Option::is_none(&#skip_ident) {
+                        break;
+                    }
+                    continue;
+                }
+            }
+            AllowUnknown::AtEnd => {
+                //Ignore whatever is left
+                parse_quote! {
+                    break;
+                }
+            }
+            AllowUnknown::None => {
+                //Check that nothing is left
+                let skip_ident = Ident::new("__skip", access_ident.span());
+                parse_quote! {
+                    let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
+                    if ::core::option::Option::is_none(&#skip_ident) {
+                        break;
+                    }
+
+                    return Err(::xmlity::de::Error::unknown_child());
+                }
+            }
+        };
+
         match order {
-            ElementOrder::Loose => field_visits.into_iter().zip(fields.clone()).map(|(field_visit, field)| {
-                let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
-                    let skip_ident = Ident::new("__skip", access_ident.span());
-                    parse_quote! {
-                        let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
-                        if ::core::option::Option::is_none(&#skip_ident) {
-                            break;
+            ElementOrder::Loose => field_visits
+                .into_iter()
+                .map(|field_visit| {
+                    Ok(parse_quote! {
+                        loop {
+                            #(#ignore_whitespace_expression)*
+                            #field_visit
+                            #(#skip_unknown)*
                         }
-                        continue;
-                    }
-                } else {
-                    let condition = element_done_expr(field, quote! {});
-
-                    parse_quote! {
-                        if #condition {
-                            break;
-                        } else {
-                            return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
-                        }
-                    }
-                };
-
-                Ok(parse_quote! {
-                    loop {
-                        #(#ignore_whitespace_expression)*
-                        #field_visit
-                        #(#skip_unknown)*
-                    }
+                    })
                 })
-            }).collect(),
-            ElementOrder::None => {
-                let skip_unknown: Vec<Stmt> = if *allow_unknown_children {
-                    let skip_ident = Ident::new("__skip", access_ident.span());
-                    parse_quote! {
-                        let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
-                        if ::core::option::Option::is_none(&#skip_ident) {
-                            break
-                        }
-                    }
-                } else {
-                    let all_some_condition = all_elements_done_expr(fields.clone(), quote! {});
-
-                    parse_quote! {
-                        if #all_some_condition {
-                            break;
-                        } else {
-                            return ::core::result::Result::Err(::xmlity::de::Error::unknown_child());
-                        }
-                    }
-                };
-
-                Ok(parse_quote! {
-                    loop {
-                        #(#ignore_whitespace_expression)*
-                        #(#field_visits)*
-                        #(#skip_unknown)*
-                    }
-                })
-            },
+                .collect(),
+            ElementOrder::None => Ok(parse_quote! {
+                loop {
+                    #(#ignore_whitespace_expression)*
+                    #(#field_visits)*
+                    #(#skip_unknown)*
+                }
+            }),
         }
     }
 }
