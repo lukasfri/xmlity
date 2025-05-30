@@ -305,7 +305,7 @@ impl<'a> XmlNamespace<'a> {
         XmlNamespace::new_dangerous("http://www.w3.org/2001/XMLSchema-instance");
 }
 
-impl FromStr for XmlNamespace<'static> {
+impl FromStr for XmlNamespace<'_> {
     type Err = XmlNamespaceParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -316,6 +316,24 @@ impl FromStr for XmlNamespace<'static> {
 impl Display for XmlNamespace<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl Serialize for XmlNamespace<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_text(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for XmlNamespace<'_> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(types::string::FromStrVisitor::default())
     }
 }
 
@@ -391,7 +409,7 @@ impl<'a> From<Option<Prefix<'a>>> for Prefix<'a> {
     }
 }
 
-impl FromStr for Prefix<'static> {
+impl FromStr for Prefix<'_> {
     type Err = PrefixParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -402,6 +420,24 @@ impl FromStr for Prefix<'static> {
 impl Display for Prefix<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl Serialize for Prefix<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_text(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Prefix<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(types::string::FromStrVisitor::default())
     }
 }
 
@@ -459,6 +495,24 @@ impl FromStr for LocalName<'_> {
 impl Display for LocalName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl Serialize for LocalName<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_text(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for LocalName<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(types::string::FromStrVisitor::default())
     }
 }
 
