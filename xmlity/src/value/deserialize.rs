@@ -365,27 +365,24 @@ impl<'v> crate::de::Visitor<'v> for XmlAttributeVisitor<'v> {
     {
         Ok(XmlAttribute {
             name: attribute.name().clone().into_owned(),
-            value: attribute.value().to_owned(),
+            value: attribute.value()?,
         })
     }
 }
 
 impl<'a> de::AttributeAccess<'a> for &'a XmlAttribute {
     type Error = XmlValueDeserializerError;
-    type NamespaceContext<'b>
-        = ()
-    where
-        Self: 'b;
 
     fn name(&self) -> ExpandedName<'_> {
         self.name.clone()
     }
 
-    fn value(&self) -> &str {
-        &self.value
+    fn value<T>(self) -> Result<T, Self::Error>
+    where
+        T: Deserialize<'a>,
+    {
+        T::deserialize(&self.value)
     }
-
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
 }
 
 impl<'de> crate::de::Deserialize<'de> for XmlAttribute {

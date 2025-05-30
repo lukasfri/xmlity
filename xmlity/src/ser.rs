@@ -1,10 +1,52 @@
 //! This module contains the [`Serialize`], [`SerializeAttribute`], [`Serializer`] and [`SerializationGroup`] traits and associated types.
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::{ExpandedName, Prefix};
 
+/// An enum representing the unexpected type of data that was expected.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Unexpected {
+    /// A text node.
+    #[error("text")]
+    Text,
+    /// A CDATA section.
+    #[error("cdata")]
+    CData,
+    /// A sequence of XML values.
+    #[error("sequence")]
+    Seq,
+    /// An element.
+    #[error("element")]
+    Element,
+    /// An attribute.
+    #[error("attribute")]
+    Attribute,
+    /// A comment.
+    #[error("comment")]
+    Comment,
+    /// A declaration.
+    #[error("declaration")]
+    Decl,
+    /// A processing instruction.
+    #[error("processing instruction")]
+    PI,
+    /// A doctype.
+    #[error("doctype")]
+    DocType,
+    /// End of file.
+    #[error("eof")]
+    Eof,
+    /// Nothing.
+    #[error("none")]
+    None,
+}
+
 /// A trait for errors that can be returned by serializer after a serialization attempt.
 pub trait Error {
+    /// Error for when a serializer expects a certain type, but it is not.
+    fn unexpected_serialize(unexpected: Unexpected) -> Self;
+
     /// Creates an error with a custom message.
     fn custom<T>(msg: T) -> Self
     where
@@ -214,7 +256,7 @@ pub trait SerializeAttributeAccess: Sized {
     ) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize the attribute.
-    fn end<S: AsRef<str>>(self, value: S) -> Result<Self::Ok, Self::Error>;
+    fn end<S: Serialize>(self, value: &S) -> Result<Self::Ok, Self::Error>;
 }
 
 /// A type that can be serialized as an attribute. Since this is a separate trait from [`Serialize`], it is possible to choose between serializing a type as an attribute or as an element.
@@ -245,5 +287,31 @@ pub trait SerializationGroup: Sized {
         let _ = serializer;
 
         Ok(())
+    }
+}
+
+impl<T: SerializationGroup> SerializationGroup for &T {
+    fn serialize_attributes<S: SerializeAttributes>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error> {
+        T::serialize_attributes(*self, serializer)
+    }
+
+    fn serialize_children<S: SerializeSeq>(&self, serializer: &mut S) -> Result<(), S::Error> {
+        T::serialize_children(*self, serializer)
+    }
+}
+
+impl<T: SerializationGroup> SerializationGroup for &mut T {
+    fn serialize_attributes<S: SerializeAttributes>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error> {
+        T::serialize_attributes(*self, serializer)
+    }
+
+    fn serialize_children<S: SerializeSeq>(&self, serializer: &mut S) -> Result<(), S::Error> {
+        T::serialize_children(*self, serializer)
     }
 }

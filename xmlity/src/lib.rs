@@ -26,6 +26,8 @@ mod macros;
 pub mod types;
 pub mod value;
 pub use value::XmlValue;
+mod noop;
+pub use noop::NoopDeSerializer;
 
 #[cfg(feature = "derive")]
 extern crate xmlity_derive;

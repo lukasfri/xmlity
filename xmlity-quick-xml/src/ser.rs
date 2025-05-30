@@ -7,8 +7,11 @@ use std::ops::DerefMut;
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer as QuickXmlWriter;
 
-use xmlity::ser::IncludePrefix;
-use xmlity::{ser, ExpandedName, LocalName, Prefix, QName, Serialize, XmlNamespace};
+use xmlity::NoopDeSerializer;
+use xmlity::{
+    ser::{self, Error as _, IncludePrefix, Unexpected},
+    ExpandedName, LocalName, Prefix, QName, Serialize, XmlNamespace,
+};
 
 use crate::{OwnedQuickName, XmlnsDeclaration};
 
@@ -33,6 +36,10 @@ pub enum Error {
 }
 
 impl xmlity::ser::Error for Error {
+    fn unexpected_serialize(unexpected: ser::Unexpected) -> Self {
+        Error::Custom(format!("Unexpected serialize: {:?}", unexpected))
+    }
+
     fn custom<T: ToString>(msg: T) -> Self {
         Error::Custom(msg.to_string())
     }
@@ -339,6 +346,78 @@ pub struct AttributeSerializer<'t, W: Write> {
     enforce_prefix: IncludePrefix,
 }
 
+/// The text serializer for the `quick-xml` crate. Used when serializing to an attribute value.
+pub struct TextSerializer {
+    value: Vec<u8>,
+}
+
+impl ser::Serializer for &mut TextSerializer {
+    type Ok = ();
+    type Error = Error;
+
+    type SerializeElement = NoopDeSerializer<Self::Ok, Self::Error>;
+
+    type SerializeSeq = NoopDeSerializer<Self::Ok, Self::Error>;
+
+    fn serialize_text<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        self.value.extend_from_slice(text.as_ref().as_bytes());
+
+        Ok(())
+    }
+
+    fn serialize_cdata<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        let _ = text;
+
+        Err(Error::unexpected_serialize(Unexpected::CData))
+    }
+
+    fn serialize_element(
+        self,
+        name: &'_ ExpandedName<'_>,
+    ) -> Result<Self::SerializeElement, Self::Error> {
+        let _ = name;
+
+        Err(Error::unexpected_serialize(Unexpected::Element))
+    }
+
+    fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
+        Err(Error::unexpected_serialize(Unexpected::Seq))
+    }
+
+    fn serialize_decl<S: AsRef<str>>(
+        self,
+        version: S,
+        encoding: Option<S>,
+        standalone: Option<S>,
+    ) -> Result<Self::Ok, Self::Error> {
+        let _ = (version, encoding, standalone);
+
+        Err(Error::unexpected_serialize(Unexpected::Decl))
+    }
+
+    fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error> {
+        let _ = (target, content);
+
+        Err(Error::unexpected_serialize(Unexpected::PI))
+    }
+
+    fn serialize_comment<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        let _ = text;
+
+        Err(Error::unexpected_serialize(Unexpected::Comment))
+    }
+
+    fn serialize_doctype<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+        let _ = text;
+
+        Err(Error::unexpected_serialize(Unexpected::DocType))
+    }
+
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        Err(Error::unexpected_serialize(Unexpected::None))
+    }
+}
+
 impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
     type Ok = ();
     type Error = Error;
@@ -356,11 +435,11 @@ impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
         Ok(())
     }
 
-    fn end<S: AsRef<str>>(self, value: S) -> Result<Self::Ok, Self::Error> {
+    fn end<S: Serialize>(self, value: &S) -> Result<Self::Ok, Self::Error> {
         let (qname, decl) = SerializeElement::resolve_name_or_declare(
             self.name,
-            None,
-            IncludePrefix::default(),
+            self.preferred_prefix.as_ref(),
+            self.enforce_prefix,
             self.serializer,
         );
 
@@ -368,7 +447,11 @@ impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
             self.serializer.push_decl_attr(decl);
         }
 
-        self.serializer.push_attr(qname, value.as_ref());
+        let mut text_ser = TextSerializer { value: Vec::new() };
+
+        value.serialize(&mut text_ser)?;
+
+        self.serializer.push_attr(qname, text_ser.value);
 
         Ok(())
     }
@@ -602,11 +685,11 @@ impl<W: Write> Serializer<W> {
         Ok(())
     }
 
-    fn push_attr(&mut self, qname: QName<'_>, value: &str) {
+    fn push_attr(&mut self, qname: QName<'_>, value: Vec<u8>) {
         self.buffered_bytes_start
             .push_attribute(quick_xml::events::attributes::Attribute {
                 key: quick_xml::name::QName(qname.to_string().as_bytes()),
-                value: Cow::Borrowed(value.as_bytes()),
+                value: Cow::Owned(value),
             });
     }
 
@@ -615,7 +698,7 @@ impl<W: Write> Serializer<W> {
 
         let key = XmlnsDeclaration::xmlns_qname(prefix);
 
-        self.push_attr(key, namespace.as_str());
+        self.push_attr(key, namespace.as_str().as_bytes().to_vec());
     }
 }
 

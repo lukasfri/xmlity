@@ -191,24 +191,20 @@ impl SerializeAttributeBuilder for StructSerializeAttributeBuilder<'_> {
             struct_type,
             ..
         } = self;
-        let str_expr = match struct_type {
+        let value_exepr = match struct_type {
             StructTypeWithFields::Named(FieldWithOpts { field_ident, .. }) => {
                 quote! {
-                    ::std::string::String::as_str(&
-                        ::std::string::ToString::to_string(&self.#field_ident)
-                    )
+                    &self.#field_ident
                 }
             }
             StructTypeWithFields::Unnamed(FieldWithOpts { field_ident, .. }) => {
                 quote! {
-                    ::std::string::String::as_str(&
-                        ::std::string::ToString::to_string(&self.#field_ident)
-                    )
+                    &self.#field_ident
                 }
             }
             StructTypeWithFields::Unit => {
                 quote! {
-                    ""
+                    &""
                 }
             }
         };
@@ -231,7 +227,7 @@ impl SerializeAttributeBuilder for StructSerializeAttributeBuilder<'_> {
             )?;
             #preferred_prefix_setting
             #enforce_prefix_setting
-            ::xmlity::ser::SerializeAttributeAccess::end(#access_ident, #str_expr)
+            ::xmlity::ser::SerializeAttributeAccess::end(#access_ident, #value_exepr)
         })
     }
 
