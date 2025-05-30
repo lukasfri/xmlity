@@ -401,12 +401,16 @@ pub enum XmlValueSerializerError {
     /// Error for when a custom error occurs during serialization.
     #[error("Custom error: {0}")]
     Custom(String),
-    /// Error for when an invalid child deserialization occurs.
-    #[error("Invalid child deserialization")]
-    InvalidChildDeserialization,
+    /// Error for when an unexpected serialization occurs.
+    #[error("Unexpected serialization: {0}")]
+    UnexpectedSerialize(ser::Unexpected),
 }
 
 impl ser::Error for XmlValueSerializerError {
+    fn unexpected_serialize(unexpected: ser::Unexpected) -> Self {
+        Self::UnexpectedSerialize(unexpected)
+    }
+
     fn custom<T>(msg: T) -> Self
     where
         T: std::fmt::Display,

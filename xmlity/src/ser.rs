@@ -1,10 +1,52 @@
 //! This module contains the [`Serialize`], [`SerializeAttribute`], [`Serializer`] and [`SerializationGroup`] traits and associated types.
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::{ExpandedName, Prefix};
 
+/// An enum representing the unexpected type of data that was expected.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Unexpected {
+    /// A text node.
+    #[error("text")]
+    Text,
+    /// A CDATA section.
+    #[error("cdata")]
+    CData,
+    /// A sequence of XML values.
+    #[error("sequence")]
+    Seq,
+    /// An element.
+    #[error("element")]
+    Element,
+    /// An attribute.
+    #[error("attribute")]
+    Attribute,
+    /// A comment.
+    #[error("comment")]
+    Comment,
+    /// A declaration.
+    #[error("declaration")]
+    Decl,
+    /// A processing instruction.
+    #[error("processing instruction")]
+    PI,
+    /// A doctype.
+    #[error("doctype")]
+    DocType,
+    /// End of file.
+    #[error("eof")]
+    Eof,
+    /// Nothing.
+    #[error("none")]
+    None,
+}
+
 /// A trait for errors that can be returned by serializer after a serialization attempt.
 pub trait Error {
+    /// Error for when a serializer expects a certain type, but it is not.
+    fn unexpected_serialize(unexpected: Unexpected) -> Self;
+
     /// Creates an error with a custom message.
     fn custom<T>(msg: T) -> Self
     where

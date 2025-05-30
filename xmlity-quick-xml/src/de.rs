@@ -309,7 +309,7 @@ impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_, 'de> {
     {
         T::deserialize(TextDeserializer {
             value: self.value,
-            deserializer: &self.deserializer,
+            deserializer: self.deserializer,
         })
     }
 }
@@ -335,13 +335,13 @@ impl<'de> de::XmlText<'de> for TextDeserializer<'_, 'de> {
 
     fn into_string(self) -> Cow<'de, str> {
         match self.value {
-            Cow::Borrowed(bytes) => return Cow::Borrowed(str::from_utf8(bytes).unwrap()),
+            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes).unwrap()),
             Cow::Owned(_) => Cow::Owned(String::from_utf8(self.value.into_owned()).unwrap()),
         }
     }
 
     fn as_str(&self) -> &str {
-        str::from_utf8(self.value.as_ref()).unwrap()
+        std::str::from_utf8(self.value.as_ref()).unwrap()
     }
 
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {

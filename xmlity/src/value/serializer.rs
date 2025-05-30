@@ -1,6 +1,6 @@
 use crate::{
     noop::NoopDeSerializer,
-    ser::{self, IncludePrefix, SerializeAttributeAccess},
+    ser::{self, Error, IncludePrefix, SerializeAttributeAccess, Unexpected},
     ExpandedName, Prefix, Serialize, SerializeAttribute, Serializer,
 };
 
@@ -216,11 +216,11 @@ impl<'s> Serializer for &'s mut &mut XmlSeq<XmlChild> {
         _encoding: Option<S>,
         _standalone: Option<S>,
     ) -> Result<Self::Ok, Self::Error> {
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::Decl))
     }
 
     fn serialize_doctype<S: AsRef<[u8]>>(self, _text: S) -> Result<Self::Ok, Self::Error> {
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::DocType))
     }
 }
 
@@ -410,7 +410,7 @@ impl crate::ser::Serializer for &mut XmlText {
     fn serialize_cdata<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
         let _ = text;
 
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::CData))
     }
 
     fn serialize_element(
@@ -419,11 +419,11 @@ impl crate::ser::Serializer for &mut XmlText {
     ) -> Result<Self::SerializeElement, Self::Error> {
         let _ = name;
 
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::Element))
     }
 
     fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::Seq))
     }
 
     fn serialize_decl<S: AsRef<str>>(
@@ -434,28 +434,28 @@ impl crate::ser::Serializer for &mut XmlText {
     ) -> Result<Self::Ok, Self::Error> {
         let _ = (version, encoding, standalone);
 
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::Decl))
     }
 
     fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error> {
         let _ = (target, content);
 
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::PI))
     }
 
     fn serialize_comment<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
         let _ = text;
 
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::Comment))
     }
 
     fn serialize_doctype<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
         let _ = text;
 
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::DocType))
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Err(XmlValueSerializerError::InvalidChildDeserialization)
+        Err(Error::unexpected_serialize(Unexpected::None))
     }
 }

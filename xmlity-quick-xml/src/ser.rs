@@ -7,9 +7,11 @@ use std::ops::DerefMut;
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer as QuickXmlWriter;
 
-use xmlity::ser::IncludePrefix;
 use xmlity::NoopDeSerializer;
-use xmlity::{ser, ExpandedName, LocalName, Prefix, QName, Serialize, XmlNamespace};
+use xmlity::{
+    ser::{self, Error as _, IncludePrefix, Unexpected},
+    ExpandedName, LocalName, Prefix, QName, Serialize, XmlNamespace,
+};
 
 use crate::{OwnedQuickName, XmlnsDeclaration};
 
@@ -34,6 +36,10 @@ pub enum Error {
 }
 
 impl xmlity::ser::Error for Error {
+    fn unexpected_serialize(unexpected: ser::Unexpected) -> Self {
+        Error::Custom(format!("Unexpected serialize: {:?}", unexpected))
+    }
+
     fn custom<T: ToString>(msg: T) -> Self {
         Error::Custom(msg.to_string())
     }
@@ -340,6 +346,7 @@ pub struct AttributeSerializer<'t, W: Write> {
     enforce_prefix: IncludePrefix,
 }
 
+/// The text serializer for the `quick-xml` crate. Used when serializing to an attribute value.
 pub struct TextSerializer {
     value: Vec<u8>,
 }
@@ -359,18 +366,22 @@ impl ser::Serializer for &mut TextSerializer {
     }
 
     fn serialize_cdata<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let _ = text;
+
+        Err(Error::unexpected_serialize(Unexpected::CData))
     }
 
     fn serialize_element(
         self,
         name: &'_ ExpandedName<'_>,
     ) -> Result<Self::SerializeElement, Self::Error> {
-        todo!()
+        let _ = name;
+
+        Err(Error::unexpected_serialize(Unexpected::Element))
     }
 
     fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
-        todo!()
+        Err(Error::unexpected_serialize(Unexpected::Seq))
     }
 
     fn serialize_decl<S: AsRef<str>>(
@@ -379,23 +390,31 @@ impl ser::Serializer for &mut TextSerializer {
         encoding: Option<S>,
         standalone: Option<S>,
     ) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let _ = (version, encoding, standalone);
+
+        Err(Error::unexpected_serialize(Unexpected::Decl))
     }
 
     fn serialize_pi<S: AsRef<[u8]>>(self, target: S, content: S) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let _ = (target, content);
+
+        Err(Error::unexpected_serialize(Unexpected::PI))
     }
 
     fn serialize_comment<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let _ = text;
+
+        Err(Error::unexpected_serialize(Unexpected::Comment))
     }
 
     fn serialize_doctype<S: AsRef<[u8]>>(self, text: S) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let _ = text;
+
+        Err(Error::unexpected_serialize(Unexpected::DocType))
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        Err(Error::unexpected_serialize(Unexpected::None))
     }
 }
 

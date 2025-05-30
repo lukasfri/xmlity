@@ -8,26 +8,17 @@ pub struct NoopDeSerializer<Ok, Err> {
     _marker: std::marker::PhantomData<(Ok, Err)>,
 }
 
-impl ser::Error for Infallible {
-    fn custom<T>(_msg: T) -> Self
-    where
-        T: std::fmt::Display,
-    {
-        unreachable!()
-    }
-}
-
 impl<Ok, Err: ser::Error> crate::ser::SerializeSeq for NoopDeSerializer<Ok, Err> {
     type Ok = Ok;
 
     type Error = Err;
 
     fn serialize_element<V: ser::Serialize>(&mut self, _: &V) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 }
 
@@ -40,7 +31,7 @@ impl<Ok, Err: ser::Error> crate::ser::SerializeAttributes for NoopDeSerializer<O
         &mut self,
         _a: &A,
     ) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 }
 
@@ -48,11 +39,11 @@ impl<Ok, Err: ser::Error> crate::ser::SerializeElementAttributes for NoopDeSeria
     type ChildrenSerializeSeq = NoopDeSerializer<Ok, Err>;
 
     fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
-        unreachable!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 }
 
@@ -69,25 +60,25 @@ impl<Ok, Err: ser::Error> crate::ser::SerializeElement for NoopDeSerializer<Ok, 
         &mut self,
         _should_enforce: crate::ser::IncludePrefix,
     ) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 
     fn preferred_prefix(
         &mut self,
         _preferred_prefix: Option<crate::Prefix<'_>>,
     ) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 
     fn serialize_attributes(self) -> Result<Self::SerializeElementAttributes, Self::Error> {
-        todo!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 
     fn serialize_children(self) -> Result<Self::ChildrenSerializeSeq, Self::Error> {
-        todo!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 }
