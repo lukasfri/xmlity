@@ -149,3 +149,10 @@ impl Serialize for &str {
         serializer.serialize_text(self)
     }
 }
+
+impl Serialize for str {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        //TODO: Change to serialize as CDATA if it contains invalid XML characters
+        serializer.serialize_text(self)
+    }
+}

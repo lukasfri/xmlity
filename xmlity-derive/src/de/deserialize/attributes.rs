@@ -162,16 +162,14 @@ impl VisitorBuilder for StructDeserializeAttributeBuilder<'_> {
                 ..
             }) => {
                 parse_quote! {
-                    <#field_type as ::core::str::FromStr>::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
-                        .map(|a| #ident {#field_ident: a})
-                        .map_err(::xmlity::de::Error::custom)
+                    ::xmlity::de::AttributeAccess::value::<#field_type>(#attribute_access_ident)
+                    .map(|a| #ident {#field_ident: a})
                 }
             }
             StructTypeWithFields::Unnamed(FieldWithOpts { field_type, .. }) => {
                 parse_quote! {
-                    <#field_type as ::core::str::FromStr>::from_str(::xmlity::de::AttributeAccess::value(&#attribute_access_ident))
-                        .map(#ident)
-                        .map_err(::xmlity::de::Error::custom)
+                    ::xmlity::de::AttributeAccess::value::<#field_type>(#attribute_access_ident)
+                    .map(#ident)
                 }
             }
             StructTypeWithFields::Unit => {

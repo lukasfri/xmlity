@@ -289,30 +289,81 @@ impl NamespaceContext for &Deserializer<'_> {
     }
 }
 
-struct AttributeAccess<'a> {
-    name: ExpandedName<'a>,
-    value: &'a str,
+struct AttributeAccess<'a, 'v> {
+    name: ExpandedName<'v>,
+    value: Cow<'v, [u8]>,
     deserializer: &'a Deserializer<'a>,
 }
 
-impl de::AttributeAccess<'_> for AttributeAccess<'_> {
+impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_, 'de> {
     type Error = Error;
 
-    type NamespaceContext<'b>
-        = &'b Deserializer<'b>
-    where
-        Self: 'b;
-
-    fn name(&self) -> ExpandedName<'_> {
-        self.name.as_ref()
+    fn name(&self) -> ExpandedName<'de> {
+        self.name.clone()
     }
 
-    fn value(&self) -> &str {
+    /// Deserializes the value of the attribute.
+    fn value<T>(self) -> Result<T, Self::Error>
+    where
+        T: Deserialize<'de>,
+    {
+        T::deserialize(TextDeserializer {
+            value: self.value,
+            deserializer: self.deserializer,
+        })
+    }
+}
+
+struct TextDeserializer<'a, 'v> {
+    value: Cow<'v, [u8]>,
+    deserializer: &'a Deserializer<'a>,
+}
+
+impl<'de> de::XmlText<'de> for TextDeserializer<'_, 'de> {
+    type NamespaceContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn into_bytes(self) -> Cow<'de, [u8]> {
         self.value
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        self.value.as_ref()
+    }
+
+    fn into_string(self) -> Cow<'de, str> {
+        match self.value {
+            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes).unwrap()),
+            Cow::Owned(_) => Cow::Owned(String::from_utf8(self.value.into_owned()).unwrap()),
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(self.value.as_ref()).unwrap()
     }
 
     fn namespace_context(&self) -> Self::NamespaceContext<'_> {
         self.deserializer
+    }
+}
+
+impl<'de> de::Deserializer<'de> for TextDeserializer<'_, 'de> {
+    type Error = Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_text(self)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_text(self)
     }
 }
 
@@ -344,13 +395,13 @@ impl<'de> de::SeqAccess<'de> for EmptySeqAccess {
     }
 }
 
-struct AttributeDeserializer<'a> {
-    name: ExpandedName<'a>,
-    value: &'a str,
+struct AttributeDeserializer<'a, 'v> {
+    name: ExpandedName<'v>,
+    value: Cow<'v, [u8]>,
     deserializer: &'a Deserializer<'a>,
 }
 
-impl<'de> xmlity::Deserializer<'de> for AttributeDeserializer<'_> {
+impl<'de> xmlity::Deserializer<'de> for AttributeDeserializer<'_, 'de> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -393,19 +444,16 @@ fn next_attribute<'a, 'de, T: Deserialize<'de>>(
     while let Some(attribute) = bytes_start.attributes().nth(*attribute_index) {
         let attribute = attribute?;
 
-        let key = deserializer.resolve_attribute(&attribute);
+        let key = deserializer.resolve_attribute(&attribute).into_owned();
 
         if key.namespace() == Some(&XmlNamespace::XMLNS) {
             *attribute_index += 1;
             continue;
         }
 
-        let value =
-            std::str::from_utf8(&attribute.value).expect("attribute value should be valid utf8");
-
-        let deserializer = AttributeDeserializer {
+        let deserializer: AttributeDeserializer<'_, 'static> = AttributeDeserializer {
             name: key,
-            value,
+            value: Cow::Owned(attribute.value.into_owned()),
             deserializer,
         };
 
