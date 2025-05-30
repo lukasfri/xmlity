@@ -356,6 +356,8 @@ pub mod records {
     }
 
     pub mod fields {
+        use syn::{parse_quote, Path};
+
         use crate::common::Prefix;
 
         use super::*;
@@ -365,6 +367,8 @@ pub mod records {
         pub struct ElementOpts {
             #[darling(default)]
             pub default: bool,
+            #[darling(default)]
+            pub default_with: Option<Path>,
             #[darling(default)]
             pub extendable: Extendable,
             #[darling(default)]
@@ -381,6 +385,8 @@ pub mod records {
             pub optional: bool,
             #[darling(default)]
             pub group: bool,
+            #[darling(default)]
+            pub skip_serializing_if: Option<Path>,
         }
 
         impl WithExpandedName for ElementOpts {
@@ -403,7 +409,11 @@ pub mod records {
             #[darling(default)]
             pub default: bool,
             #[darling(default)]
+            pub default_with: Option<Path>,
+            #[darling(default)]
             pub extendable: Extendable,
+            #[darling(default)]
+            pub skip_serializing_if: Option<Path>,
         }
 
         #[allow(clippy::large_enum_variant)]
@@ -420,10 +430,30 @@ pub mod records {
         }
 
         impl ChildOpts {
-            pub fn should_unwrap_default(&self) -> bool {
-                match self {
-                    ChildOpts::Value(ValueOpts { default, .. }) => *default,
-                    ChildOpts::Element(ElementOpts { default, .. }) => *default,
+            pub fn default_or_else(&self) -> Option<Expr> {
+                let (default, default_with) = match self {
+                    ChildOpts::Value(ValueOpts {
+                        default,
+                        default_with,
+                        ..
+                    }) => (default, default_with),
+                    ChildOpts::Element(ElementOpts {
+                        default,
+                        default_with,
+                        ..
+                    }) => (default, default_with),
+                };
+
+                if let Some(default_with) = default_with {
+                    Some(parse_quote! {
+                        #default_with
+                    })
+                } else if *default {
+                    Some(parse_quote! {
+                        ::core::default::Default::default
+                    })
+                } else {
+                    None
                 }
             }
 
@@ -469,18 +499,22 @@ pub mod records {
         #[derive(Clone)]
         pub struct AttributeDeferredOpts {
             pub default: bool,
+            pub default_with: Option<Path>,
             pub optional: bool,
+            pub skip_serializing_if: Option<Path>,
         }
 
         #[derive(Clone)]
         pub struct AttributeDeclaredOpts {
             pub default: bool,
+            pub default_with: Option<Path>,
             pub name: Option<LocalName<'static>>,
             pub namespace: Option<XmlNamespace<'static>>,
             pub namespace_expr: Option<Expr>,
             pub preferred_prefix: Option<Prefix<'static>>,
             pub enforce_prefix: bool,
             pub optional: bool,
+            pub skip_serializing_if: Option<Path>,
         }
 
         impl WithExpandedName for AttributeDeclaredOpts {
@@ -505,10 +539,30 @@ pub mod records {
         }
 
         impl AttributeOpts {
-            pub fn should_unwrap_default(&self) -> bool {
-                match self {
-                    AttributeOpts::Deferred(AttributeDeferredOpts { default, .. }) => *default,
-                    AttributeOpts::Declared(AttributeDeclaredOpts { default, .. }) => *default,
+            pub fn default_or_else(&self) -> Option<Expr> {
+                let (default, default_with) = match self {
+                    AttributeOpts::Deferred(AttributeDeferredOpts {
+                        default,
+                        default_with,
+                        ..
+                    }) => (default, default_with),
+                    AttributeOpts::Declared(AttributeDeclaredOpts {
+                        default,
+                        default_with,
+                        ..
+                    }) => (default, default_with),
+                };
+
+                if let Some(default_with) = default_with {
+                    Some(parse_quote! {
+                        #default_with
+                    })
+                } else if *default {
+                    Some(parse_quote! {
+                        ::core::default::Default::default
+                    })
+                } else {
+                    None
                 }
             }
 
@@ -528,6 +582,8 @@ pub mod records {
                     #[darling(default)]
                     pub default: bool,
                     #[darling(default)]
+                    pub default_with: Option<Path>,
+                    #[darling(default)]
                     pub deferred: bool,
                     #[darling(default)]
                     pub name: Option<LocalName<'static>>,
@@ -541,6 +597,8 @@ pub mod records {
                     pub enforce_prefix: Option<bool>,
                     #[darling(default)]
                     pub optional: bool,
+                    #[darling(default)]
+                    pub skip_serializing_if: Option<Path>,
                 }
 
                 let raw = FieldAttributeRawOpts::from_attributes(&[attribute])
@@ -559,28 +617,31 @@ pub mod records {
                         (raw.preferred_prefix.is_some(), "preferred_prefix"),
                         (raw.enforce_prefix.is_some(), "enforce_prefix"),
                     ];
-
-                    for (unallowed, field) in unallowed_fields {
-                        if unallowed {
-                            return Err(DeriveError::custom(format!(
-                                "{field} can not be set if deferred is set"
-                            )));
-                        }
+                    if let Some((true, field)) =
+                        unallowed_fields.iter().find(|(unallowed, _)| *unallowed)
+                    {
+                        return Err(DeriveError::custom(format!(
+                            "{field} can not be set if deferred is set"
+                        )));
                     }
 
                     Ok(Some(Self::Deferred(AttributeDeferredOpts {
                         default: raw.default,
+                        default_with: raw.default_with,
                         optional: raw.optional,
+                        skip_serializing_if: raw.skip_serializing_if,
                     })))
                 } else {
                     Ok(Some(Self::Declared(AttributeDeclaredOpts {
                         default: raw.default,
+                        default_with: raw.default_with,
                         name: raw.name,
                         namespace: raw.namespace,
                         namespace_expr: raw.namespace_expr,
                         preferred_prefix: raw.preferred_prefix,
                         enforce_prefix: raw.enforce_prefix.unwrap_or(false),
                         optional: raw.optional,
+                        skip_serializing_if: raw.skip_serializing_if,
                     })))
                 }
             }

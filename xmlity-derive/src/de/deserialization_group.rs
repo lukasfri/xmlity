@@ -300,16 +300,16 @@ fn finish_constructor_expr(
     let local_value_expressions_constructors = attribute_fields.into_iter()
         .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
             a.field_ident,
-            a.options.should_unwrap_default()
+            a.options.default_or_else()
         ))
         .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
             a.field_ident,
-            a.options.should_unwrap_default()
+            a.options.default_or_else()
         )))
-      .map(|( field_ident, should_unwrap_default )| {
-          let expression = if should_unwrap_default {
+      .map(|( field_ident, default_or_else )| {
+          let expression = if let Some(default_or_else) = default_or_else {
               quote! {
-                  ::core::option::Option::unwrap_or_default(self.#field_ident)
+                  ::core::option::Option::unwrap_or_else(self.#field_ident, #default_or_else)
               }
           } else {
               quote! {

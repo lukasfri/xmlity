@@ -8,8 +8,8 @@ use crate::{options::records::roots::RootGroupOpts, DeriveError, DeriveMacro};
 use super::{
     builders::{SerializationGroupBuilder, SerializationGroupBuilderExt},
     common::{
-        attribute_group_field_serializer, attribute_group_fields, element_group_field_serializer,
-        element_group_fields, fields,
+        attribute_group_fields, attribute_group_fields_serializer, element_group_fields,
+        element_group_fields_serializer, fields,
     },
 };
 
@@ -30,7 +30,7 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         &self,
         element_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let serialize_attributes_implementation = attribute_group_field_serializer(
+        let serialize_attributes_implementation = attribute_group_fields_serializer(
             quote! { #element_access_ident},
             attribute_group_fields(fields(self.ast)?)?,
             |field_ident| parse_quote!(&self.#field_ident),
@@ -46,7 +46,7 @@ impl SerializationGroupBuilder for DeriveSerializationGroupStruct<'_> {
         &self,
         children_access_ident: &Ident,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let serialize_children_implementation = element_group_field_serializer(
+        let serialize_children_implementation = element_group_fields_serializer(
             quote! { #children_access_ident},
             element_group_fields(fields(self.ast)?)?,
             |field_ident| parse_quote!(&self.#field_ident),

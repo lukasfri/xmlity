@@ -25,6 +25,7 @@ pub struct DeserializeSingleChildElementBuilder<'a> {
     pub extendable: Extendable,
     pub group: bool,
     pub default: bool,
+    pub default_with: Option<syn::Path>,
 }
 
 impl DeserializeSingleChildElementBuilder<'_> {
@@ -71,7 +72,9 @@ impl VisitorBuilder for DeserializeSingleChildElementBuilder<'_> {
                 } else {
                     FieldOpts::Value(ChildOpts::Value(ValueOpts {
                         default: self.default,
+                        default_with: self.default_with.clone(),
                         extendable: self.extendable,
+                        skip_serializing_if: None,
                     }))
                 },
             }]),

@@ -101,18 +101,18 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
         let local_value_expressions_constructors = attribute_fields.into_iter()
             .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
                 a.field_ident,
-                a.options.should_unwrap_default()
+                a.options.default_or_else()
             ))
             .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
                 a.field_ident,
-                a.options.should_unwrap_default()
+                a.options.default_or_else()
             )))
-            .map::<(_, Expr), _>(|(field_ident, default_unwrap)| {
+            .map::<(_, Expr), _>(|(field_ident, default_or_else)| {
                 let builder_field_ident = field_ident.to_named_ident();
 
-                let expression = if default_unwrap {
+                let expression = if let Some(default_or_else) = default_or_else {
                     parse_quote! {
-                        ::core::option::Option::unwrap_or_default(#builder_field_ident)
+                        ::core::option::Option::unwrap_or_else(#builder_field_ident, #default_or_else)
                     }
                 } else {
                     parse_quote! {

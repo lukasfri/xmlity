@@ -173,8 +173,8 @@ define_test!(
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "k")]
 pub struct K {
-    #[xelement(name = "l", optional, default)]
-    pub b: Option<String>,
+    #[xelement(name = "l", optional)]
+    pub l: Option<String>,
 }
 
 define_test!(
@@ -182,12 +182,12 @@ define_test!(
     [
         (
             K {
-                b: Some("A".to_string())
+                l: Some("A".to_string())
             },
             "<k><l>A</l></k>"
         ),
-        (K { b: None }, "<k/>", "<k></k>"),
-        (K { b: None }, "<k/>")
+        (K { l: None }, "<k/>", "<k></k>"),
+        (K { l: None }, "<k/>")
     ]
 );
 
@@ -231,7 +231,7 @@ define_test!(
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "R")]
 pub struct R {
-    #[xattribute(name = "s", optional, default)]
+    #[xattribute(name = "s", optional)]
     pub s: Option<String>,
 }
 

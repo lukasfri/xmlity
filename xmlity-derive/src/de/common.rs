@@ -377,6 +377,8 @@ pub fn element_field_deserialize_impl(
                 extendable,
                 group,
                 default,
+                default_with,
+                optional,
                 ..
             },
         ) => {
@@ -388,7 +390,8 @@ pub fn element_field_deserialize_impl(
                         .into_owned(),
                 ),
                 item_type: &field_type,
-                default: *default,
+                default: *default || *optional,
+                default_with: default_with.clone(),
                 extendable: *extendable,
                 group: *group,
             };

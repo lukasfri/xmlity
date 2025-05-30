@@ -1,5 +1,5 @@
 mod attributes;
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Not};
 
 pub use attributes::SimpleDeserializeAttributeBuilder;
 mod elements;
@@ -46,14 +46,10 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
             DeserializeRootOpts::Element(opts) => RecordDeserializeElementBuilder {
                 input: self.input,
                 ignore_whitespace: opts.ignore_whitespace.unwrap_or(true),
-                required_expanded_name: if opts.deserialize_any_name {
-                    None
-                } else {
-                    Some(
-                        opts.expanded_name(&deserializer_ident.to_string())
-                            .into_owned(),
-                    )
-                },
+                required_expanded_name: opts.deserialize_any_name.not().then(|| {
+                    opts.expanded_name(&deserializer_ident.to_string())
+                        .into_owned()
+                }),
                 allow_unknown_attributes: opts.allow_unknown_attributes,
                 allow_unknown_children: opts.allow_unknown_children,
                 children_order: opts.children_order,
