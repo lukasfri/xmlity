@@ -300,6 +300,9 @@ impl<'a> XmlNamespace<'a> {
     /// The namespace for XHTML.
     pub const XHTML: XmlNamespace<'static> =
         XmlNamespace::new_dangerous("http://www.w3.org/1999/xhtml");
+    /// The namespace for XML Schema.
+    pub const XS: XmlNamespace<'static> =
+        XmlNamespace::new_dangerous("http://www.w3.org/2001/XMLSchema");
     /// The namespace for XML Schema Instance.
     pub const XSI: XmlNamespace<'static> =
         XmlNamespace::new_dangerous("http://www.w3.org/2001/XMLSchema-instance");
