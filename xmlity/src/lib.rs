@@ -432,7 +432,7 @@ impl Serialize for Prefix<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for Prefix<'de> {
+impl<'de> Deserialize<'de> for Prefix<'_> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -507,7 +507,7 @@ impl Serialize for LocalName<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for LocalName<'de> {
+impl<'de> Deserialize<'de> for LocalName<'_> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
