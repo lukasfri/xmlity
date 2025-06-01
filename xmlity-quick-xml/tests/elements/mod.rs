@@ -4,6 +4,7 @@ pub mod basic;
 pub mod default;
 pub mod extendable;
 pub mod generics;
+pub mod ignore_whitespace;
 pub mod inline_attribute_declarations;
 pub mod inline_blend;
 pub mod inline_declarations;

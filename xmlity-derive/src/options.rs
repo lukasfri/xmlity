@@ -71,14 +71,14 @@ impl RenameRule {
 impl FromMeta for RenameRule {
     fn from_string(value: &str) -> darling::Result<Self> {
         match value {
-            "lowercase" => Ok(RenameRule::LowerCase),
-            "UPPERCASE" => Ok(RenameRule::UpperCase),
-            "PascalCase" => Ok(RenameRule::PascalCase),
-            "camelCase" => Ok(RenameRule::CamelCase),
-            "snake_case" => Ok(RenameRule::SnakeCase),
-            "SCREAMING_SNAKE_CASE" => Ok(RenameRule::ScreamingSnakeCase),
-            "kebab-case" => Ok(RenameRule::KebabCase),
-            "SCREAMING-KEBAB-CASE" => Ok(RenameRule::ScreamingKebabCase),
+            "lowercase" => Ok(Self::LowerCase),
+            "UPPERCASE" => Ok(Self::UpperCase),
+            "PascalCase" => Ok(Self::PascalCase),
+            "camelCase" => Ok(Self::CamelCase),
+            "snake_case" => Ok(Self::SnakeCase),
+            "SCREAMING_SNAKE_CASE" => Ok(Self::ScreamingSnakeCase),
+            "kebab-case" => Ok(Self::KebabCase),
+            "SCREAMING-KEBAB-CASE" => Ok(Self::ScreamingKebabCase),
             _ => Err(darling::Error::unknown_value(value)),
         }
     }
@@ -95,9 +95,9 @@ pub enum AllowUnknown {
 impl FromMeta for AllowUnknown {
     fn from_string(value: &str) -> darling::Result<Self> {
         match value {
-            "any" => Ok(AllowUnknown::Any),
-            "at_end" => Ok(AllowUnknown::AtEnd),
-            "none" => Ok(AllowUnknown::None),
+            "any" => Ok(Self::Any),
+            "at_end" => Ok(Self::AtEnd),
+            "none" => Ok(Self::None),
             _ => Err(darling::Error::unknown_value(value)),
         }
     }
@@ -114,18 +114,35 @@ pub enum Extendable {
 impl FromMeta for Extendable {
     fn from_string(value: &str) -> darling::Result<Self> {
         match value {
-            "iterator" => Ok(Extendable::Iterator),
-            "single" => Ok(Extendable::Single),
-            "none" => Ok(Extendable::None),
+            "iterator" => Ok(Self::Iterator),
+            "single" => Ok(Self::Single),
+            "none" => Ok(Self::None),
             _ => Err(darling::Error::unknown_value(value)),
         }
     }
 
     fn from_bool(value: bool) -> darling::Result<Self> {
         if value {
-            Ok(Extendable::Single)
+            Ok(Self::Single)
         } else {
-            Ok(Extendable::None)
+            Ok(Self::None)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum IgnoreWhitespace {
+    #[default]
+    Any,
+    None,
+}
+
+impl FromMeta for IgnoreWhitespace {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        match value {
+            "any" => Ok(Self::Any),
+            "none" => Ok(Self::None),
+            _ => Err(darling::Error::unknown_value(value)),
         }
     }
 }
@@ -208,7 +225,7 @@ pub mod records {
             pub children_order: ElementOrder,
             #[darling(default)]
             /// Deserialize only
-            pub ignore_whitespace: Option<bool>,
+            pub ignore_whitespace: IgnoreWhitespace,
         }
 
         impl RootElementOpts {
@@ -293,10 +310,12 @@ pub mod records {
             pub value: Option<String>,
             #[darling(default)]
             /// Deserialize only
-            pub ignore_whitespace: Option<bool>,
+            pub ignore_whitespace: IgnoreWhitespace,
             #[darling(default)]
             /// Deserialize only
             pub allow_unknown: AllowUnknown,
+            #[darling(default)]
+            pub order: ElementOrder,
         }
 
         impl RootValueOpts {

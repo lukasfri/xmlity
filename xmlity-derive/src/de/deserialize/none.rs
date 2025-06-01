@@ -16,26 +16,22 @@ use crate::{
             fields::{FieldOpts, FieldValueGroupOpts},
             roots::DeserializeRootOpts,
         },
-        AllowUnknown, ElementOrder, FieldWithOpts,
+        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
     },
-    DeriveError, DeriveResult,
+    DeriveError,
 };
 
 use super::{parse_enum_variant_derive_input, variant::DeserializeVariantBuilder, RecordInput};
 
 pub struct RecordDeserializeValueBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub input: &'a RecordInput<'a, T>,
-    pub options: Option<&'a records::roots::RootValueOpts>,
+    pub ignore_whitespace: IgnoreWhitespace,
+    pub allow_unknown_children: AllowUnknown,
+    pub children_order: ElementOrder,
+    pub value: Option<String>,
 }
 
 impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
-    pub fn new(
-        input: &'a RecordInput<'a, T>,
-        options: Option<&'a records::roots::RootValueOpts>,
-    ) -> Self {
-        Self { input, options }
-    }
-
     pub fn field_decl(
         element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::ChildOpts>>,
         group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::GroupOpts>>,
@@ -112,31 +108,6 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
         constructor_expr(path, value_expressions_constructors, &constructor_type)
     }
 
-    pub fn seq_access(
-        access_ident: &Ident,
-        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
-        allow_unknown_children: AllowUnknown,
-        order: ElementOrder,
-        ignore_whitespace: bool,
-    ) -> DeriveResult<Vec<Stmt>> {
-        let visit = SeqVisitLoop::new(
-            access_ident,
-            allow_unknown_children,
-            order,
-            fields,
-            ignore_whitespace,
-        );
-
-        let field_storage = visit.field_storage();
-        let access_loop = visit.access_loop()?;
-
-        Ok(parse_quote! {
-            #field_storage
-
-            #(#access_loop)*
-        })
-    }
-
     fn str_value_body(
         &self,
         value: &str,
@@ -163,10 +134,8 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
     }
 
     fn should_deserialize_as_str(&self) -> Option<&str> {
-        if matches!(self.input.fields, StructTypeWithFields::Unit)
-            && self.options.is_some_and(|a| a.value.is_some())
-        {
-            self.options.as_ref().unwrap().value.as_deref()
+        if matches!(self.input.fields, StructTypeWithFields::Unit) && self.value.is_some() {
+            self.value.as_deref()
         } else {
             None
         }
@@ -281,29 +250,22 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             })
         });
 
-        let ignore_whitespace = self
-            .options
-            .as_ref()
-            .and_then(|a| a.ignore_whitespace)
-            .unwrap_or(true);
-
-        let allow_unknown_children = self
-            .options
-            .as_ref()
-            .map(|a| a.allow_unknown)
+        let children_loop = element_group_fields
+            .clone()
+            .next()
+            .is_some()
+            .then(|| {
+                SeqVisitLoop::new(
+                    access_ident,
+                    self.allow_unknown_children,
+                    self.children_order,
+                    self.ignore_whitespace,
+                    element_group_fields,
+                )
+                .access_loop()
+            })
+            .transpose()?
             .unwrap_or_default();
-
-        let children_loop = if element_group_fields.clone().next().is_some() {
-            Self::seq_access(
-                access_ident,
-                element_group_fields,
-                allow_unknown_children,
-                ElementOrder::Loose,
-                ignore_whitespace,
-            )?
-        } else {
-            Vec::new()
-        };
 
         let constructor = (self.input.wrapper_function)(Self::constructor_expr(
             self.input.constructor_path.as_ref(),
@@ -376,7 +338,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeValu
         )?;
 
         let deserialize_expr: syn::Expr = if matches!(self.input.fields, StructTypeWithFields::Unit)
-            && self.options.is_some_and(|a| a.value.is_some())
+            && self.value.is_some()
         {
             parse_quote!(
                 ::xmlity::de::Deserializer::deserialize_any(#deserializer_ident, #visitor_ident {
