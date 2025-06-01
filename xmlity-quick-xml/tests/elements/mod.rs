@@ -10,6 +10,7 @@ pub mod inline_declarations;
 pub mod mixed;
 pub mod namespace_access;
 pub mod namespace_expr;
+pub mod option;
 pub mod single_namespace;
 pub mod skip_serializing_if;
 pub mod strict_order;
