@@ -10,7 +10,7 @@ use crate::{
     de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
     options::{
         records::fields::{ChildOpts, FieldOpts, GroupOpts, ValueOpts},
-        AllowUnknown, ElementOrder, Extendable, FieldWithOpts,
+        AllowUnknown, ElementOrder, Extendable, FieldWithOpts, IgnoreWhitespace,
     },
     DeriveError,
 };
@@ -84,7 +84,7 @@ impl VisitorBuilder for DeserializeSingleChildElementBuilder<'_> {
 
         let builder = RecordDeserializeElementBuilder {
             input: &input,
-            ignore_whitespace: false,
+            ignore_whitespace: IgnoreWhitespace::default(),
             required_expanded_name: self.required_expanded_name.clone(),
             allow_unknown_attributes: AllowUnknown::default(),
             allow_unknown_children: AllowUnknown::default(),

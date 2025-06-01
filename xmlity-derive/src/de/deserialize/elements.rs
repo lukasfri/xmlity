@@ -20,7 +20,7 @@ use crate::{
             AttributeOpts, ChildOpts, FieldAttributeGroupOpts, FieldOpts, FieldValueGroupOpts,
             GroupOpts,
         },
-        AllowUnknown, ElementOrder, FieldWithOpts,
+        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
     },
     DeriveError, DeriveResult,
 };
@@ -29,7 +29,7 @@ use super::RecordInput;
 
 pub struct RecordDeserializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub input: &'a RecordInput<'a, T>,
-    pub ignore_whitespace: bool,
+    pub ignore_whitespace: IgnoreWhitespace,
     pub required_expanded_name: Option<ExpandedName<'static>>,
     pub allow_unknown_attributes: AllowUnknown,
     pub allow_unknown_children: AllowUnknown,
@@ -215,12 +215,12 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
         }
     }
 
-    pub fn element_access(
+    pub fn children_access(
         element_access_ident: &Ident,
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
         allow_unknown_children: AllowUnknown,
         order: ElementOrder,
-        ignore_whitespace: bool,
+        ignore_whitespace: IgnoreWhitespace,
     ) -> DeriveResult<Vec<Stmt>> {
         let access_ident = Ident::new("__children", element_access_ident.span());
 
@@ -228,17 +228,14 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
             &access_ident,
             allow_unknown_children,
             order,
-            fields,
             ignore_whitespace,
+            fields,
         );
 
-        let field_storage = visit.field_storage();
         let access_loop = visit.access_loop()?;
 
         Ok(parse_quote! {
             let mut #access_ident = ::xmlity::de::ElementAccess::children(#element_access_ident)?;
-
-            #field_storage
 
             #(#access_loop)*
         })
@@ -331,29 +328,37 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
             })
         });
 
-        let attribute_loop = if attribute_group_fields.clone().next().is_some() {
-            Self::attribute_access(
-                element_access_ident,
-                ident.span(),
-                attribute_group_fields,
-                *allow_unknown_attributes,
-                *attribute_order,
-            )?
-        } else {
-            Vec::new()
-        };
+        let attribute_loop = attribute_group_fields
+            .clone()
+            .next()
+            .is_some()
+            .then(|| {
+                Self::attribute_access(
+                    element_access_ident,
+                    ident.span(),
+                    attribute_group_fields,
+                    *allow_unknown_attributes,
+                    *attribute_order,
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
 
-        let children_loop = if element_group_fields.clone().next().is_some() {
-            Self::element_access(
-                element_access_ident,
-                element_group_fields,
-                *allow_unknown_children,
-                *children_order,
-                *ignore_whitespace,
-            )?
-        } else {
-            Vec::new()
-        };
+        let children_loop = element_group_fields
+            .clone()
+            .next()
+            .is_some()
+            .then(|| {
+                Self::children_access(
+                    element_access_ident,
+                    element_group_fields,
+                    *allow_unknown_children,
+                    *children_order,
+                    *ignore_whitespace,
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
 
         let constructor = (self.input.wrapper_function)(Self::constructor_expr(
             &self.input.constructor_path,

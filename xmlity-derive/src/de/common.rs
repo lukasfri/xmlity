@@ -4,7 +4,9 @@ use syn::{parse_quote, Expr, ExprWhile, Generics, Ident, Stmt};
 use crate::{
     common::FieldIdent,
     de::builders::DeserializeBuilderExt,
-    options::{records::fields::FieldValueGroupOpts, AllowUnknown, FieldWithOpts},
+    options::{
+        records::fields::FieldValueGroupOpts, AllowUnknown, FieldWithOpts, IgnoreWhitespace,
+    },
     DeriveError, DeriveResult,
 };
 
@@ -34,7 +36,7 @@ pub struct SeqVisitLoop<
     allow_unknown_children: AllowUnknown,
     order: ElementOrder,
     fields: F,
-    ignore_whitespace: bool,
+    ignore_whitespace: IgnoreWhitespace,
 }
 
 impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone>
@@ -44,8 +46,8 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
         seq_access_ident: &'a Ident,
         allow_unknown_children: AllowUnknown,
         order: ElementOrder,
+        ignore_whitespace: IgnoreWhitespace,
         fields: F,
-        ignore_whitespace: bool,
     ) -> Self {
         Self {
             seq_access_ident,
@@ -54,10 +56,6 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
             fields,
             ignore_whitespace,
         }
-    }
-
-    pub fn field_storage(&self) -> proc_macro2::TokenStream {
-        quote! {}
     }
 
     pub fn access_loop(&self) -> DeriveResult<Vec<Stmt>> {
@@ -85,14 +83,17 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
             pop_error,
         )?;
 
-        let ignore_whitespace_expression: Vec<Stmt> = if *ignore_whitespace {
-            parse_quote! {
-                if let Ok(Some(_)) = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::Whitespace>(&mut #access_ident) {
-                    continue;
+        let ignore_whitespace_expression: Vec<Stmt> = match ignore_whitespace {
+            IgnoreWhitespace::Any => {
+                parse_quote! {
+                    if let Ok(Some(_)) = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::Whitespace>(&mut #access_ident) {
+                        continue;
+                    }
                 }
             }
-        } else {
-            parse_quote! {}
+            IgnoreWhitespace::None => {
+                vec![]
+            }
         };
 
         let skip_unknown: Vec<Stmt> = match allow_unknown_children {
