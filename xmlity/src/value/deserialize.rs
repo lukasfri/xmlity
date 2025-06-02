@@ -147,6 +147,10 @@ impl<'v> crate::de::Visitor<'v> for XmlTextVisitor<'v> {
 }
 
 impl NamespaceContext for () {
+    fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
+        None
+    }
+
     fn resolve_prefix(&self, _prefix: Prefix<'_>) -> Option<XmlNamespace<'_>> {
         None
     }

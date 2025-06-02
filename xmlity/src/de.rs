@@ -81,6 +81,9 @@ pub enum Unexpected {
 
 /// Trait that lets you access the namespaces declared on an XML node.
 pub trait NamespaceContext {
+    /// Get the default namespace.
+    fn default_namespace(&self) -> Option<XmlNamespace<'_>>;
+
     /// Resolve a prefix to a namespace.
     fn resolve_prefix(&self, prefix: Prefix<'_>) -> Option<XmlNamespace<'_>>;
 }
