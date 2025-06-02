@@ -281,6 +281,15 @@ impl<'r> ElementAccess<'_, 'r> {
 }
 
 impl NamespaceContext for &Deserializer<'_> {
+    fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
+        let name = format!("a");
+        let (_, namespace) = self
+            .resolve_qname(QuickName(name.as_bytes()), false)
+            .into_parts();
+
+        namespace.map(XmlNamespace::into_owned)
+    }
+
     fn resolve_prefix(&self, prefix: xmlity::Prefix<'_>) -> Option<XmlNamespace<'_>> {
         let name = format!("{prefix}:a");
         let (_, namespace) = self
