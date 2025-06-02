@@ -225,19 +225,19 @@ impl<'i> Deserializer<'i> {
         res
     }
 
-    fn resolve_qname<'a>(&'a self, qname: QuickName<'a>) -> ExpandedName<'a> {
-        let (resolve_result, _) = self.reader.resolve(qname, false);
+    fn resolve_qname<'a>(&'a self, qname: QuickName<'a>, attribute: bool) -> ExpandedName<'a> {
+        let (resolve_result, _) = self.reader.resolve(qname, attribute);
         let namespace = xml_namespace_from_resolve_result(resolve_result);
 
         ExpandedName::new(LocalName::from_quick_xml(qname.local_name()), namespace)
     }
 
     fn resolve_bytes_start<'a>(&'a self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
-        self.resolve_qname(bytes_start.name())
+        self.resolve_qname(bytes_start.name(), false)
     }
 
     fn resolve_attribute<'a>(&'a self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
-        self.resolve_qname(attribute.key)
+        self.resolve_qname(attribute.key, true)
     }
 }
 
@@ -283,7 +283,9 @@ impl<'r> ElementAccess<'_, 'r> {
 impl NamespaceContext for &Deserializer<'_> {
     fn resolve_prefix(&self, prefix: xmlity::Prefix<'_>) -> Option<XmlNamespace<'_>> {
         let name = format!("{prefix}:a");
-        let (_, namespace) = self.resolve_qname(QuickName(name.as_bytes())).into_parts();
+        let (_, namespace) = self
+            .resolve_qname(QuickName(name.as_bytes()), false)
+            .into_parts();
 
         namespace.map(XmlNamespace::into_owned)
     }
@@ -436,6 +438,11 @@ impl Drop for SubAttributesAccess<'_, '_> {
     }
 }
 
+fn key_is_declaration(key: &ExpandedName) -> bool {
+    key.namespace() == Some(&XmlNamespace::XMLNS)
+        || (key.local_name() == &LocalName::new_dangerous("xmlns") && key.namespace().is_none())
+}
+
 fn next_attribute<'a, 'de, T: Deserialize<'de>>(
     deserializer: &'a Deserializer<'_>,
     bytes_start: &'a BytesStart<'_>,
@@ -446,7 +453,7 @@ fn next_attribute<'a, 'de, T: Deserialize<'de>>(
 
         let key = deserializer.resolve_attribute(&attribute).into_owned();
 
-        if key.namespace() == Some(&XmlNamespace::XMLNS) {
+        if key_is_declaration(&key) {
             *attribute_index += 1;
             continue;
         }
