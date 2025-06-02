@@ -15,3 +15,5 @@ pub mod option;
 pub mod single_namespace;
 pub mod skip_serializing_if;
 pub mod strict_order;
+
+pub mod attribute_namespace;
