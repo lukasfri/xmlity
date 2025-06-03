@@ -17,3 +17,4 @@ pub mod skip_serializing_if;
 pub mod strict_order;
 
 pub mod attribute_namespace;
+pub mod group_element_equivalent;
