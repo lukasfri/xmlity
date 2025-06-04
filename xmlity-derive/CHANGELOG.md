@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.5...xmlity-derive-v0.0.6) - 2025-06-04
+
+### Added
+
+- *(derive)* Adds `(De)SerializationGroup` support for unit groups. ([#93](https://github.com/lukasfri/xmlity/pull/93))
+- *(derive)* [**breaking**] Made item structs work like element children. Improved IgnoreWhitespace option with tests. ([#88](https://github.com/lukasfri/xmlity/pull/88))
+
+### Fixed
+
+- *(derive)* Fixes `(De)SerializationGroup` support for unnamed field groups. ([#92](https://github.com/lukasfri/xmlity/pull/92))
+
 ## [0.0.5](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.4...xmlity-derive-v0.0.5) - 2025-05-30
 
 ### Added

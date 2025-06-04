@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.5...xmlity-v0.0.6) - 2025-06-04
+
+### Added
+
+- Adds `NamespaceContext::default_namespace` that gives access to default namespace. ([#90](https://github.com/lukasfri/xmlity/pull/90))
+- *(core)* Adds XmlSchema XmlNamespace const. ([#87](https://github.com/lukasfri/xmlity/pull/87))
+- *(core)* Implements Serialize and Deserialize for LocalName, Prefix and XmlNamespace. ([#84](https://github.com/lukasfri/xmlity/pull/84))
+
+### Fixed
+
+- Changed `Option<T>` to work correctly using trial-and-error deserialization. ([#91](https://github.com/lukasfri/xmlity/pull/91))
+- *(core)* Fixed lifetime on Deserialize impl of LocalName and Prefix. ([#86](https://github.com/lukasfri/xmlity/pull/86))
+
 ## [0.0.5](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.4...xmlity-v0.0.5) - 2025-05-30
 
 ### Added
