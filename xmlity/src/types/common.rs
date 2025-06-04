@@ -19,9 +19,36 @@ impl Serialize for () {
     }
 }
 
+struct OptionVisitor<T>(std::marker::PhantomData<T>);
+
+impl<T> OptionVisitor<T> {
+    fn new() -> Self {
+        Self(std::marker::PhantomData)
+    }
+}
+
+impl<'de, T: Deserialize<'de>> de::Visitor<'de> for OptionVisitor<T> {
+    type Value = Option<T>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str(format!("an optional value of {}", std::any::type_name::<T>()).as_str())
+    }
+
+    fn visit_seq<S>(self, mut sequence: S) -> Result<Self::Value, S::Error>
+    where
+        S: SeqAccess<'de>,
+    {
+        Ok(sequence.next_element_seq::<T>().unwrap_or_else(|_| None))
+    }
+}
+
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Option<T> {
     fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        Deserialize::deserialize(reader).map(Some)
+        T::deserialize(reader).map(Some)
+    }
+
+    fn deserialize_seq<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
+        reader.deserialize_seq(OptionVisitor::new())
     }
 }
 
