@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.6](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.5...xmlity-quick-xml-v0.0.6) - 2025-06-04
+
+### Added
+
+- *(derive)* Adds `(De)SerializationGroup` support for unit groups. ([#93](https://github.com/lukasfri/xmlity/pull/93))
+- Adds `NamespaceContext::default_namespace` that gives access to default namespace. ([#90](https://github.com/lukasfri/xmlity/pull/90))
+- *(derive)* [**breaking**] Made item structs work like element children. Improved IgnoreWhitespace option with tests. ([#88](https://github.com/lukasfri/xmlity/pull/88))
+
+### Fixed
+
+- *(derive)* Fixes `(De)SerializationGroup` support for unnamed field groups. ([#92](https://github.com/lukasfri/xmlity/pull/92))
+- Changed `Option<T>` to work correctly using trial-and-error deserialization. ([#91](https://github.com/lukasfri/xmlity/pull/91))
+- *(quick-xml)* Fixes bug involving attributes not resolving namespaces correctly. ([#89](https://github.com/lukasfri/xmlity/pull/89))
+
 ## [0.0.5](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.4...xmlity-quick-xml-v0.0.5) - 2025-05-30
 
 ### Added

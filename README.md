@@ -24,9 +24,9 @@ To get started, we recommend you check out the [XMLity book](https://xmlity.luka
 ```toml
 [dependencies]
 
-xmlity = { version = "0.0.5", features = ["derive"] }
+xmlity = { version = "0.0.6", features = ["derive"] }
 
-xmlity-quick-xml = "0.0.5"
+xmlity-quick-xml = "0.0.6"
 ```
 
 2. Write defintions and use:
