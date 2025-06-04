@@ -61,7 +61,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let attribute_visit = builder_attribute_field_visitor(
             attributes_access_ident,
-            quote! {self.},
+            |field| parse_quote! {self.#field},
             attribute_group_fields(self.ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
             parse_quote! {return ::core::result::Result::Ok(true);},
@@ -86,7 +86,10 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         &self,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_attributes_done_expr(attribute_group_fields(self.ast)?, quote! {self.});
+        let expr = all_attributes_done_expr(
+            attribute_group_fields(self.ast)?,
+            |field| parse_quote! {&self.#field},
+        );
 
         Ok(Some(parse_quote!(
             #expr
@@ -100,7 +103,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
     ) -> DeriveResult<Option<Vec<Stmt>>> {
         let element_visit = builder_element_field_visitor(
             elements_access_ident,
-            quote! {self.},
+            |field| parse_quote! {self.#field},
             element_group_fields(self.ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
             parse_quote! {return ::core::result::Result::Ok(true);},
@@ -127,16 +130,19 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         &self,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        let expr = all_elements_done_expr(element_group_fields(self.ast)?, quote! {self.});
+        let expr = all_elements_done_expr(
+            element_group_fields(self.ast)?,
+            |field| parse_quote! {&self.#field},
+        );
 
         Ok(Some(parse_quote!(
             #expr
         )))
     }
 
-    fn finish_fn_body(&self) -> Result<Vec<Stmt>, DeriveError> {
+    fn finish_fn_body(&self, ident: &syn::Ident) -> Result<Vec<Stmt>, DeriveError> {
         let finish_constructor = finish_constructor_expr(
-            &parse_quote! {Self::Value},
+            &parse_quote!(#ident),
             element_fields(self.ast)?,
             attribute_fields(self.ast)?,
             group_fields(self.ast)?,
@@ -214,14 +220,14 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
             syn::GenericParam::Lifetime(LifetimeParam::new((*deserialize_lifetime).to_owned())),
         );
 
-        Ok(syn::parse2(struct_definition_expr(
+        Ok(struct_definition_expr(
             builder_ident,
             // Builder only needs lifetime if there are groups
             Some(&generics),
             value_expressions_constructors,
             &Self::constructor_type(self.ast),
             &self.ast.vis,
-        ))?)
+        ))
     }
 
     fn builder_constructor(&self, builder_ident: &Ident) -> Result<Vec<Stmt>, DeriveError> {
