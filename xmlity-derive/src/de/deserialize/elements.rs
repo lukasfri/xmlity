@@ -3,7 +3,6 @@
 use std::borrow::Cow;
 
 use proc_macro2::Span;
-use quote::quote;
 use syn::{parse_quote, Expr, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
@@ -147,7 +146,10 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
     ) -> DeriveResult<Vec<Stmt>> {
         let field_visits = builder_attribute_field_visitor(
             access_ident,
-            quote! {},
+            |field| {
+                let ident = field.to_named_ident();
+                parse_quote! {#ident}
+            },
             fields.clone(),
             parse_quote! {break;},
             match order {

@@ -2,10 +2,10 @@ use xmlity::{DeserializationGroup, Deserialize, SerializationGroup, Serialize};
 
 use crate::define_test;
 
-#[derive(Debug, SerializationGroup, DeserializationGroup)]
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
 pub struct BlockGroup(#[xvalue(default)] pub Vec<String>);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "block")]
 pub struct Block(#[xgroup] pub BlockGroup);
 
