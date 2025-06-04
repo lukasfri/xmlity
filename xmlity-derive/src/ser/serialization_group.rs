@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use quote::{quote, ToTokens};
-use syn::{parse_quote, DataStruct, DeriveInput, Generics, Ident, Stmt};
+use syn::{parse_quote, DeriveInput, Generics, Ident, Stmt};
 
 use crate::{options::records::roots::RootGroupOpts, DeriveError, DeriveMacro};
 
