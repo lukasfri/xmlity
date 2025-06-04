@@ -185,7 +185,7 @@ pub fn non_bound_generics(generics: &syn::Generics) -> syn::Generics {
     non_bound_generics
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum StructType {
     Named,
     Unnamed,
@@ -422,7 +422,7 @@ pub fn struct_definition_expr<I: ToTokens>(
     constructor_type: &StructType,
     visibility: &Visibility,
 ) -> ItemStruct {
-    let fields = fields.into_iter();
+    let mut fields = fields.into_iter();
     match constructor_type {
         StructType::Unnamed => unnamed_struct_definition_expr(
             ident,
@@ -439,7 +439,10 @@ pub fn struct_definition_expr<I: ToTokens>(
             }),
             visibility,
         ),
-        StructType::Unit => unit_struct_definition_expr(ident, generics, visibility),
+        StructType::Unit => {
+            assert!(fields.next().is_none(), "unit structs cannot have fields");
+            unit_struct_definition_expr(ident, generics, visibility)
+        }
     }
 }
 

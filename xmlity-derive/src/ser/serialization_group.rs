@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use quote::{quote, ToTokens};
-use syn::{parse_quote, DataStruct, DeriveInput, Generics, Ident, Stmt};
+use syn::{parse_quote, DeriveInput, Generics, Ident, Stmt};
 
 use crate::{options::records::roots::RootGroupOpts, DeriveError, DeriveMacro};
 
@@ -86,12 +86,6 @@ impl DeriveMacro for DeriveSerializationGroup {
         let SerializationGroupOption::Group(opts) = SerializationGroupOption::parse(ast)?;
 
         match &ast.data {
-            syn::Data::Struct(DataStruct {
-                fields: syn::Fields::Unit,
-                ..
-            }) => Err(DeriveError::custom(
-                "Unit structs are not supported for serialization groups.",
-            )),
             syn::Data::Struct(_) => DeriveSerializationGroupStruct::new(ast, &opts)
                 .serialization_group_trait_impl()
                 .map(|a| a.to_token_stream()),

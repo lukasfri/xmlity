@@ -726,7 +726,7 @@ pub fn fields(
                 })
             })
             .collect::<Result<Vec<_>, _>>()?,
-        _ => unreachable!(),
+        _ => Vec::new(),
     })
 }
 

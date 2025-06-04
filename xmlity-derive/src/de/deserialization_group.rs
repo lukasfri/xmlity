@@ -48,7 +48,7 @@ impl<'a> DeriveDeserializationGroupStruct<'a> {
         match &data_struct.fields {
             syn::Fields::Named(_) => StructType::Named,
             syn::Fields::Unnamed(_) => StructType::Unnamed,
-            _ => unreachable!(),
+            syn::Fields::Unit => StructType::Unit,
         }
     }
 }
@@ -207,7 +207,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                         FieldIdent::Named(Ident::new("__marker", Span::call_site()))
                     }
                     StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
-                    StructType::Unit => unreachable!(),
+                    StructType::Unit => FieldIdent::Indexed(Index::from(0)),
                 },
                 parse_quote! {
                     ::core::marker::PhantomData<&#deserialize_lifetime ()>
@@ -225,12 +225,17 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
             // Builder only needs lifetime if there are groups
             Some(&generics),
             value_expressions_constructors,
-            &Self::constructor_type(self.ast),
+            &match Self::constructor_type(self.ast) {
+                StructType::Unit => StructType::Unnamed,
+                a => a,
+            },
             &self.ast.vis,
         ))
     }
 
     fn builder_constructor(&self, builder_ident: &Ident) -> Result<Vec<Stmt>, DeriveError> {
+        let builder_path: syn::Path = parse_quote!(#builder_ident);
+
         let local_value_expressions_constructors = attribute_fields(self.ast)?
             .into_iter()
             .map(|FieldWithOpts { field_ident, .. }| {
@@ -269,19 +274,20 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
                         FieldIdent::Named(Ident::new("__marker", Span::call_site()))
                     }
                     StructType::Unnamed => FieldIdent::Indexed(Index::from(0)),
-                    StructType::Unit => unreachable!(),
+                    StructType::Unit => FieldIdent::Indexed(Index::from(0)),
                 },
                 quote! {
                     ::core::marker::PhantomData
                 },
             )));
 
-        let builder_path: syn::Path = parse_quote!(#builder_ident);
-
         let expr = constructor_expr(
             &builder_path,
             value_expressions_constructors,
-            &Self::constructor_type(self.ast),
+            &match Self::constructor_type(self.ast) {
+                StructType::Unit => StructType::Unnamed,
+                a => a,
+            },
         );
 
         Ok(parse_quote!(#expr))
