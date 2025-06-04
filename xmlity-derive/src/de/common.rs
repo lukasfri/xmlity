@@ -71,7 +71,10 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
 
         let field_visits = builder_element_field_visitor(
             access_ident,
-            quote! {},
+            |field| {
+                let field = field.to_named_ident();
+                parse_quote!(#field)
+            },
             fields.clone(),
             parse_quote! {break;},
             match order {
@@ -153,7 +156,7 @@ impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> 
 
 fn attribute_field_deserialize_impl(
     access_ident: &Ident,
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts {
         field_ident,
         field_type,
@@ -164,7 +167,7 @@ fn attribute_field_deserialize_impl(
     after_attempt: &[Stmt],
     pop_error: bool,
 ) -> DeriveResult<Vec<Stmt>> {
-    let builder_field_ident = field_ident.to_named_ident();
+    let builder_expr = ident_to_expr(&field_ident);
     let temporary_value_ident = Ident::new("__v", Span::call_site());
     let wrapper_ident = Ident::new("__W", Span::call_site());
     let empty_generics: Generics = parse_quote!();
@@ -219,7 +222,7 @@ fn attribute_field_deserialize_impl(
             #(#if_next_attribute_none)*
         };
         #value_transformer
-        #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
+        #builder_expr = ::core::option::Option::Some(#temporary_value_ident);
         #(#finished_attribute)*
     };
     let deserialize_expr: Expr = parse_quote!(
@@ -231,7 +234,7 @@ fn attribute_field_deserialize_impl(
     let after_attempt = if !pop_error { after_attempt } else { &[] };
 
     Ok(parse_quote! {
-        if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
+        if ::core::option::Option::is_none(&#builder_expr) {
             #(#deserialize_wrapper_def)*
 
             #inner
@@ -243,18 +246,18 @@ fn attribute_field_deserialize_impl(
 
 fn group_field_contribute_attributes(
     access_ident: &Ident,
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts { field_ident, .. }: FieldWithOpts<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
 ) -> Vec<Stmt> {
-    let builder_field_ident = field_ident.to_named_ident();
+    let builder_expr = ident_to_expr(&field_ident);
     let contributed_to_attributes_ident =
         Ident::new("__contributed_to_attributes", Span::call_site());
 
     let deserialize_expr: Expr = parse_quote!(
-        ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?)
+        ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_expr, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?)
     );
 
     let inner = quote! {
@@ -273,7 +276,7 @@ fn group_field_contribute_attributes(
     let after_attempt = if !pop_error { after_attempt } else { &[] };
 
     parse_quote! {
-        if !::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident) {
+        if !::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_expr) {
             #inner
             #(#after_attempt)*
         }
@@ -285,7 +288,7 @@ pub fn builder_attribute_field_visitor<
     F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>,
 >(
     access_ident: &Ident,
-    builder_field_ident_prefix: proc_macro2::TokenStream,
+    ident_to_expr: impl Fn(&FieldIdent) -> Expr + Clone,
     fields: F,
     if_next_attribute_none: Vec<Stmt>,
     finished_attribute: Vec<Stmt>,
@@ -296,7 +299,7 @@ pub fn builder_attribute_field_visitor<
     fields
         .into_iter()
         .zip(utils::repeat_clone((
-            builder_field_ident_prefix,
+            ident_to_expr,
             if_next_attribute_none,
             finished_attribute,
             if_contributed_to_groups,
@@ -306,7 +309,7 @@ pub fn builder_attribute_field_visitor<
             move |(
                 var_field,
                 (
-                    builder_field_ident_prefix,
+                    ident_to_expr,
                     if_next_attribute_none,
                     finished_attribute,
                     if_contributed_to_groups,
@@ -315,7 +318,7 @@ pub fn builder_attribute_field_visitor<
             )| match &var_field.options {
                 FieldAttributeGroupOpts::Attribute(_) => attribute_field_deserialize_impl(
                     access_ident,
-                    builder_field_ident_prefix,
+                    ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldAttributeGroupOpts::Attribute(opts) => opts,
                         _ => unreachable!(),
@@ -327,7 +330,7 @@ pub fn builder_attribute_field_visitor<
                 ),
                 FieldAttributeGroupOpts::Group(_) => Ok(group_field_contribute_attributes(
                     access_ident,
-                    builder_field_ident_prefix,
+                    ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldAttributeGroupOpts::Group(opts) => opts,
                         _ => unreachable!(),
@@ -344,7 +347,7 @@ pub fn builder_attribute_field_visitor<
 
 pub fn element_field_deserialize_impl(
     access_ident: &Ident,
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts {
         field_ident,
         field_type,
@@ -358,7 +361,7 @@ pub fn element_field_deserialize_impl(
     after_attempt: &[Stmt],
     pop_error: bool,
 ) -> DeriveResult<Vec<Stmt>> {
-    let builder_field_ident = field_ident.to_named_ident();
+    let builder_field_expr = ident_to_expr(&field_ident);
     let temporary_value_ident = Ident::new("__v", Span::call_site());
     let wrapper_ident = Ident::new("__W", Span::call_site());
     let empty_generics: Generics = parse_quote!();
@@ -465,7 +468,7 @@ pub fn element_field_deserialize_impl(
         };
         #value_transformer
         #extendable_loop
-        #builder_field_ident_prefix #builder_field_ident = ::core::option::Option::Some(#temporary_value_ident);
+        #builder_field_expr = ::core::option::Option::Some(#temporary_value_ident);
 
         #(#finished_element)*
     );
@@ -479,7 +482,7 @@ pub fn element_field_deserialize_impl(
     let after_attempt = if !pop_error { after_attempt } else { &[] };
 
     Ok(parse_quote! {
-        if ::core::option::Option::is_none(&#builder_field_ident_prefix #builder_field_ident) {
+        if ::core::option::Option::is_none(&#builder_field_expr) {
             #(#deserialize_wrapper_def)*
 
             #inner
@@ -513,17 +516,17 @@ pub fn pop_or_ignore_error(
 
 pub fn group_field_contribute_elements(
     access_ident: &Ident,
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts { field_ident, .. }: FieldWithOpts<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
     after_attempt: &[Stmt],
     pop_error: bool,
 ) -> DeriveResult<Vec<Stmt>> {
-    let builder_field_ident = field_ident.to_named_ident();
+    let builder_field_expr = ident_to_expr(&field_ident);
     let contributed_to_elements_ident = Ident::new("__contributed_to_elements", Span::call_site());
 
     let deserialize_expr: Expr = parse_quote!(
-        ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_ident_prefix #builder_field_ident, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)
+        ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_expr, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)
     );
 
     let inner = quote! {
@@ -542,7 +545,7 @@ pub fn group_field_contribute_elements(
     let after_attempt = if !pop_error { after_attempt } else { &[] };
 
     Ok(parse_quote! {
-        if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident) {
+        if !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_expr) {
 
            #inner
             #(#after_attempt)*
@@ -556,7 +559,7 @@ pub fn builder_element_field_visitor<
     F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
 >(
     access_ident: &Ident,
-    builder_field_ident_prefix: proc_macro2::TokenStream,
+    ident_to_expr: impl Fn(&FieldIdent) -> Expr + Clone,
     fields: F,
     if_next_element_none: Vec<Stmt>,
     finished_element: Vec<Stmt>,
@@ -567,7 +570,7 @@ pub fn builder_element_field_visitor<
     fields
         .into_iter()
         .zip(utils::repeat_clone((
-            builder_field_ident_prefix,
+            ident_to_expr,
             if_next_element_none,
             finished_element,
             if_contributed_to_groups,
@@ -577,7 +580,7 @@ pub fn builder_element_field_visitor<
             move |(
                 var_field,
                 (
-                    builder_field_ident_prefix,
+                    ident_to_expr,
                     if_next_element_none,
                     finished_element,
                     if_contributed_to_groups,
@@ -586,7 +589,7 @@ pub fn builder_element_field_visitor<
             )| match &var_field.options {
                 FieldValueGroupOpts::Value(_) => element_field_deserialize_impl(
                     access_ident,
-                    builder_field_ident_prefix,
+                    ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldValueGroupOpts::Value(opts) => opts,
                         _ => unreachable!(),
@@ -598,7 +601,7 @@ pub fn builder_element_field_visitor<
                 ),
                 FieldValueGroupOpts::Group(_) => group_field_contribute_elements(
                     access_ident,
-                    builder_field_ident_prefix,
+                    ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldValueGroupOpts::Group(opts) => opts,
                         _ => unreachable!(),
@@ -619,27 +622,26 @@ pub fn attribute_done_expr(
         options,
         ..
     }: FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>,
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
 ) -> Expr {
-    let builder_field_ident = field_ident.to_named_ident();
+    let builder_field_expr = ident_to_expr(&field_ident);
     match options {
         FieldAttributeGroupOpts::Attribute(_) => parse_quote! {
-            ::core::option::Option::is_some(&#builder_field_ident_prefix #builder_field_ident)
+            ::core::option::Option::is_some( #builder_field_expr)
         },
         FieldAttributeGroupOpts::Group(_) => parse_quote! {
-            ::xmlity::de::DeserializationGroupBuilder::attributes_done(&#builder_field_ident_prefix #builder_field_ident)
+            ::xmlity::de::DeserializationGroupBuilder::attributes_done(#builder_field_expr)
         },
     }
 }
 
 pub fn all_attributes_done_expr(
     fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>,
-
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl Fn(&FieldIdent) -> Expr,
 ) -> Expr {
     let conditions = fields
         .into_iter()
-        .map(|field| attribute_done_expr(field, &builder_field_ident_prefix));
+        .map(|field| attribute_done_expr(field, &ident_to_expr));
 
     let conditions = quote! {
         #(#conditions)&&*
@@ -658,26 +660,26 @@ pub fn element_done_expr(
         options,
         ..
     }: FieldWithOpts<FieldIdent, FieldValueGroupOpts>,
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
 ) -> Expr {
-    let builder_field_ident = field_ident.to_named_ident();
+    let field_expr = ident_to_expr(&field_ident);
     match options {
         FieldValueGroupOpts::Value(_) => parse_quote! {
-            ::core::option::Option::is_some(&#builder_field_ident_prefix #builder_field_ident)
+            ::core::option::Option::is_some(#field_expr)
         },
         FieldValueGroupOpts::Group(_) => parse_quote! {
-            ::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_field_ident_prefix #builder_field_ident)
+            ::xmlity::de::DeserializationGroupBuilder::elements_done(#field_expr)
         },
     }
 }
 
 pub fn all_elements_done_expr(
     fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
-    builder_field_ident_prefix: impl ToTokens,
+    ident_to_expr: impl Fn(&FieldIdent) -> Expr,
 ) -> Expr {
     let conditions = fields
         .into_iter()
-        .map(|field| element_done_expr(field, &builder_field_ident_prefix));
+        .map(|field| element_done_expr(field, &ident_to_expr));
 
     let conditions = quote! {
         #(#conditions)&&*

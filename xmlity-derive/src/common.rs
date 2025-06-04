@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use darling::FromMeta;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{parse_quote, Expr, Ident, Index, Stmt, Type, Visibility};
+use syn::{parse_quote, Expr, Ident, Index, ItemStruct, Stmt, Type, Visibility};
 
 use crate::{
     derive::{DeriveError, DeriveResult},
@@ -374,16 +374,18 @@ fn named_struct_definition_expr<I: ToTokens, K: ToTokens, V: ToTokens>(
     generics: Option<&syn::Generics>,
     fields: impl IntoIterator<Item = (K, V)>,
     visibility: &Visibility,
-) -> proc_macro2::TokenStream {
-    let field_tokens = fields.into_iter().map(|(ident, expression)| {
-        quote! {
-            #ident: #expression,
-        }
-    });
+) -> ItemStruct {
+    let field_tokens = fields
+        .into_iter()
+        .map::<syn::Field, _>(|(ident, expression)| {
+            parse_quote! {
+                #ident: #expression
+            }
+        });
 
-    quote! {
+    parse_quote! {
         #visibility struct #ident #generics {
-            #(#field_tokens)*
+            #(#field_tokens,)*
         }
     }
 }
@@ -393,13 +395,13 @@ fn unnamed_struct_definition_expr<I: ToTokens, T: ToTokens>(
     generics: Option<&syn::Generics>,
     fields: impl IntoIterator<Item = T>,
     visibility: &Visibility,
-) -> proc_macro2::TokenStream {
+) -> ItemStruct {
     let fields = fields.into_iter();
 
-    quote! {
+    parse_quote! {
         #visibility struct #ident #generics (
-            #(#fields,)*
-        )
+            #(#fields),*
+        );
     }
 }
 
@@ -407,8 +409,8 @@ fn unit_struct_definition_expr<I: ToTokens>(
     ident: I,
     generics: Option<&syn::Generics>,
     visibility: &Visibility,
-) -> proc_macro2::TokenStream {
-    quote! {
+) -> ItemStruct {
+    parse_quote! {
         #visibility struct #ident #generics;
     }
 }
@@ -419,7 +421,7 @@ pub fn struct_definition_expr<I: ToTokens>(
     fields: impl IntoIterator<Item = (FieldIdent, Type)>,
     constructor_type: &StructType,
     visibility: &Visibility,
-) -> proc_macro2::TokenStream {
+) -> ItemStruct {
     let fields = fields.into_iter();
     match constructor_type {
         StructType::Unnamed => unnamed_struct_definition_expr(
