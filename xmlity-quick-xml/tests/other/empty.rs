@@ -13,9 +13,9 @@ pub struct B;
 #[xvalue(order = "loose")]
 pub struct F {
     #[xvalue(default)]
-    pub child_0: Vec<A>,
+    pub a: Vec<A>,
     #[xvalue(default)]
-    pub any_attribute: Option<Box<B>>,
+    pub b: Option<Box<B>>,
 }
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "C")]
@@ -28,44 +28,44 @@ pub struct D;
 #[xvalue(order = "loose")]
 pub struct G {
     #[xelement(name = "E", optional, default)]
-    pub assert: Option<String>,
+    pub e: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xvalue(order = "loose")]
 pub struct I {
     #[xvalue(default)]
-    pub open_content: Option<Box<C>>,
+    pub c: Option<Box<C>>,
     #[xvalue(default)]
-    pub type_def_particle: Option<Box<D>>,
-    pub attr_decls: Box<F>,
-    pub assertions: Box<G>,
+    pub d: Option<Box<D>>,
+    pub f: Box<F>,
+    pub g: Box<G>,
 }
 
 define_test!(
     empty_element_1,
     [(
         F {
-            child_0: Vec::new(),
-            any_attribute: None,
+            a: Vec::new(),
+            b: None,
         },
         ""
     )]
 );
 
-define_test!(empty_element_2, [(G { assert: None }, "")]);
+define_test!(empty_element_2, [(G { e: None }, "")]);
 
 define_test!(
     recursive_empty_element,
     [(
         I {
-            open_content: None,
-            type_def_particle: None,
-            attr_decls: Box::new(F {
-                child_0: Vec::new(),
-                any_attribute: None,
+            c: None,
+            d: None,
+            f: Box::new(F {
+                a: Vec::new(),
+                b: None,
             }),
-            assertions: Box::new(G { assert: None }),
+            g: Box::new(G { e: None }),
         },
         ""
     )]
