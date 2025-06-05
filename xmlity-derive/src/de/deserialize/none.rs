@@ -114,7 +114,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
         value_ident: &Ident,
         visitor_lifetime: &Lifetime,
         access_type: &Type,
-    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let constructor = (self.input.wrapper_function)(Self::constructor_expr(
             self.input.constructor_path.as_ref(),
             visitor_lifetime,
@@ -124,13 +124,13 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
             StructType::Unit,
         ));
 
-        Ok(Some(parse_quote! {
+        Ok(parse_quote! {
             if ::core::primitive::str::trim(::core::ops::Deref::deref(&#value_ident)) == #value {
                 return ::core::result::Result::Ok(#constructor);
             }
 
             ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant("Value"))
-        }))
+        })
     }
 
     fn should_deserialize_as_str(&self) -> Option<&str> {
@@ -158,10 +158,6 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
 
         let str_body = self.str_value_body(value, &str_ident, visitor_lifetime, access_type)?;
 
-        let Some(str_body) = str_body else {
-            return Ok(None);
-        };
-
         Ok(Some(parse_quote! {
             let #str_ident = ::xmlity::de::XmlText::as_str(&#access_ident);
             #(#str_body)*
@@ -182,10 +178,6 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
         let str_ident = Ident::new("__value_str", Span::mixed_site());
 
         let str_body = self.str_value_body(value, &str_ident, visitor_lifetime, access_type)?;
-
-        let Some(str_body) = str_body else {
-            return Ok(None);
-        };
 
         Ok(Some(parse_quote! {
             let #str_ident = ::xmlity::de::XmlCData::as_str(&#access_ident);
@@ -283,6 +275,21 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
 
             ::core::result::Result::Ok(#constructor)
         }))
+    }
+
+    fn visit_none_fn_body(
+        &self,
+        visitor_lifetime: &Lifetime,
+        error_type: &Type,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        let RecordInput { fields, .. } = &self.input;
+
+        // Only text match
+        if self.should_deserialize_as_str().is_some() {
+            return Ok(None);
+        }
+
+        todo!()
     }
 
     fn visitor_definition(&self) -> Result<ItemStruct, DeriveError> {
@@ -466,6 +473,14 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
 
             ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
         }))
+    }
+
+    fn visit_none_fn_body(
+        &self,
+        visitor_lifetime: &Lifetime,
+        error_type: &Type,
+    ) -> Result<Option<Vec<Stmt>>, DeriveError> {
+        todo!()
     }
 
     fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {

@@ -387,14 +387,14 @@ impl<'de> de::SeqAccess<'de> for EmptySeqAccess {
     where
         Self: 's;
 
-    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
+    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
     where
         T: Deserialize<'de>,
     {
         Ok(None)
     }
 
-    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
+    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
     where
         T: Deserialize<'de>,
     {
@@ -657,10 +657,6 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
             return Ok(None);
         };
 
-        if deserializer.peek_event().is_none() {
-            return Ok(None);
-        }
-
         let current_depth = deserializer.current_depth;
 
         if let Some(Event::End(bytes_end)) = deserializer.peek_event() {
@@ -684,10 +680,6 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
         else {
             return Ok(None);
         };
-
-        if deserializer.peek_event().is_none() {
-            return Ok(None);
-        }
 
         let current_depth = deserializer.current_depth;
 
@@ -738,25 +730,6 @@ impl<'r> de::SeqAccess<'r> for SubSeqAccess<'_, 'r> {
     where
         Self: 's;
 
-    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
-    where
-        T: Deserialize<'r>,
-    {
-        let Self::Filled { current, .. } = self else {
-            return Ok(None);
-        };
-
-        let deserializer = current.as_mut().expect("SubSeqAccess used after drop");
-
-        if deserializer.peek_event().is_none() {
-            return Ok(None);
-        }
-
-        deserializer
-            .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
-            .map(Some)
-    }
-
     fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
     where
         T: Deserialize<'r>,
@@ -767,12 +740,23 @@ impl<'r> de::SeqAccess<'r> for SubSeqAccess<'_, 'r> {
 
         let deserializer = current.as_mut().expect("SubSeqAccess used after drop");
 
-        if deserializer.peek_event().is_none() {
-            return Ok(None);
-        }
-
         deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize(deserializer))
+            .map(Some)
+    }
+
+    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'r>,
+    {
+        let Self::Filled { current, .. } = self else {
+            return Ok(None);
+        };
+
+        let deserializer = current.as_mut().expect("SubSeqAccess used after drop");
+
+        deserializer
+            .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
             .map(Some)
     }
 
@@ -796,29 +780,21 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     where
         Self: 's;
 
-    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
-    where
-        T: Deserialize<'r>,
-    {
-        if self.deserializer.peek_event().is_none() {
-            return Ok(None);
-        }
-
-        self.deserializer
-            .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
-            .map(Some)
-    }
-
     fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
     where
         T: Deserialize<'r>,
     {
-        if self.deserializer.peek_event().is_none() {
-            return Ok(None);
-        }
-
         self.deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize(deserializer))
+            .map(Some)
+    }
+
+    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'r>,
+    {
+        self.deserializer
+            .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
             .map(Some)
     }
 
@@ -1014,7 +990,9 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
     where
         V: de::Visitor<'r>,
     {
-        let event = self.next_event().ok_or_else(|| Error::custom("EOF"))?;
+        let Some(event) = self.next_event() else {
+            return visitor.visit_none();
+        };
 
         match event {
             Event::Start(bytes_start) => {
@@ -1031,7 +1009,9 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
                     },
                 )?;
 
-                let end_event = self.next_event().ok_or_else(|| Error::custom("EOF"))?;
+                let end_event = self.next_event().ok_or_else(|| {
+                    Error::custom("Start element does not have a matching end element")
+                })?;
 
                 let success = if let Event::End(bytes_end) = &end_event {
                     bytes_end.name() == element_name.as_ref()
@@ -1070,7 +1050,11 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
     where
         V: de::Visitor<'r>,
     {
-        visitor.visit_seq(SeqAccess { deserializer: self })
+        if self.peek_event().is_some() {
+            visitor.visit_seq(SeqAccess { deserializer: self })
+        } else {
+            visitor.visit_none()
+        }
     }
 }
 

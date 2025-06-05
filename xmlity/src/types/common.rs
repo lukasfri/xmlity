@@ -40,6 +40,13 @@ impl<'de, T: Deserialize<'de>> de::Visitor<'de> for OptionVisitor<T> {
     {
         Ok(sequence.next_element_seq::<T>().unwrap_or_else(|_| None))
     }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(None)
+    }
 }
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Option<T> {

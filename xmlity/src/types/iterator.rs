@@ -97,6 +97,13 @@ where
             seq.next_element_seq::<T>().ok().flatten()
         })))
     }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(M::transform(std::iter::empty()))
+    }
 }
 
 fn serialize_seq<T, S>(iter: T, serializer: S) -> Result<S::Ok, S::Error>
