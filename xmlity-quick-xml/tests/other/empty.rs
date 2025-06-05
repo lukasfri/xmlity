@@ -20,6 +20,7 @@ pub struct F {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "C")]
 pub struct C;
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "D")]
 pub struct D;
@@ -69,4 +70,26 @@ define_test!(
         },
         ""
     )]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "J")]
+pub struct J;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct K {
+    #[xvalue(default)]
+    pub j: Option<J>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct L {
+    pub k: K,
+}
+
+define_test!(simple_recursive_child_empty_element, [(K { j: None }, "")]);
+
+define_test!(
+    simple_recursive_empty_element,
+    [(L { k: K { j: None } }, "")]
 );
