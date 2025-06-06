@@ -567,11 +567,26 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
 
     fn visit_none_fn_body(
         &self,
-        visitor_lifetime: &Lifetime,
-        error_type: &Type,
+        _visitor_lifetime: &Lifetime,
+        _error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        // todo!()
-        Ok(None)
+        let DeriveInput {
+            ident,
+            generics,
+            data,
+            ..
+        } = &self.ast;
+
+        //TODO
+        let variants: Vec<syn::Stmt> = vec![];
+
+        let ident_string = ident.to_string();
+
+        Ok(Some(parse_quote! {
+            #(#variants)*
+
+            ::core::result::Result::Err(::xmlity::de::Error::no_possible_variant(#ident_string))
+        }))
     }
 
     fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {
