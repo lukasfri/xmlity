@@ -25,6 +25,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 serde = { version = "1.0.210", features = ["derive"] }
 quick-xml = { version = "0.37.4", features = ["serialize"] }
 yaserde = { version = "0.12.0", features = ["derive"] }
+ntest = "0.9.3"
 
 [[bench]]
 name = "xmlity_vs_serde"
