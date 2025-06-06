@@ -451,7 +451,7 @@ pub fn element_field_deserialize_impl(
         };
 
         Some(parse_quote! {
-            while let Some(#loop_temporary_value_ident) = ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(&mut #access_ident)? {
+            while let Ok(Some(#loop_temporary_value_ident)) = ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(&mut #access_ident) {
                 #value_transformer
                 ::core::iter::Extend::extend(&mut #temporary_value_ident, #extendable_value);
             }
