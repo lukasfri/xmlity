@@ -140,6 +140,58 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
             None
         }
     }
+
+    pub fn empty_constructor_expr(
+        path: &syn::Path,
+        visitor_lifetime: &Lifetime,
+        error_type: &Type,
+        fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
+        constructor_type: StructType,
+    ) -> syn::Expr {
+        let value_expressions_constructors = fields.into_iter().map::<(_, Expr), _>(
+            |FieldWithOpts {
+                 field_ident,
+                 options,
+                 field_type,
+                 ..
+             }| {
+                let expression = match options {
+                    FieldValueGroupOpts::Value(options) => {
+                        if let Some(default_or_else) = options.default_or_else() {
+                            parse_quote! {
+                                ::core::result::Result::unwrap_or_else(
+                                    <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                                        ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
+                                    ),
+                                    |_: #error_type| (#default_or_else)(),
+                                )
+                            }
+                        } else {
+                            parse_quote! {
+                                ::core::result::Result::map_err(
+                                    <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                                        ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
+                                    ),
+                                    |_| <#error_type as ::xmlity::de::Error>::missing_field(stringify!(#field_ident)),
+                                )?
+                            }
+                        }
+                    },
+                    FieldValueGroupOpts::Group(_options) => {
+                        parse_quote! {
+                            <<#field_type as ::xmlity::DeserializationGroup>::Builder as ::xmlity::de::DeserializationGroupBuilder>::finish::<#error_type>(
+                                <#field_type as ::xmlity::DeserializationGroup>::builder()
+                            )?
+                        }
+                    },
+                };
+
+                (field_ident, expression)
+            },
+        );
+
+        constructor_expr(path, value_expressions_constructors, &constructor_type)
+    }
 }
 
 impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBuilder<'_, T> {
@@ -289,7 +341,45 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             return Ok(None);
         }
 
-        todo!()
+        let (constructor_type, fields) = match fields {
+            StructTypeWithFields::Named(fields) => (
+                StructType::Named,
+                fields
+                    .iter()
+                    .cloned()
+                    .map(|a| a.map_ident(FieldIdent::Named))
+                    .collect(),
+            ),
+            StructTypeWithFields::Unnamed(fields) => (
+                StructType::Unnamed,
+                fields
+                    .iter()
+                    .cloned()
+                    .map(|a| a.map_ident(FieldIdent::Indexed))
+                    .collect(),
+            ),
+            StructTypeWithFields::Unit => (StructType::Unit, vec![]),
+        };
+
+        let fields = fields.clone().into_iter().filter_map(|field| {
+            field.map_options_opt(|opt| match opt {
+                FieldOpts::Value(opts) => Some(FieldValueGroupOpts::Value(opts)),
+                FieldOpts::Group(opts) => Some(FieldValueGroupOpts::Group(opts)),
+                _ => None,
+            })
+        });
+
+        let constructor = (self.input.wrapper_function)(Self::empty_constructor_expr(
+            self.input.constructor_path.as_ref(),
+            visitor_lifetime,
+            error_type,
+            fields,
+            constructor_type,
+        ));
+
+        Ok(Some(parse_quote! {
+            ::core::result::Result::Ok(#constructor)
+        }))
     }
 
     fn visitor_definition(&self) -> Result<ItemStruct, DeriveError> {
@@ -480,7 +570,8 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
         visitor_lifetime: &Lifetime,
         error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
-        todo!()
+        // todo!()
+        Ok(None)
     }
 
     fn visitor_definition(&self) -> Result<syn::ItemStruct, DeriveError> {
