@@ -93,3 +93,21 @@ define_test!(
     simple_recursive_empty_element,
     [(L { k: K { j: None } }, "")]
 );
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct M {
+    pub k: Vec<K>,
+}
+
+define_test!(
+    simple_recursive_empty_element_vec,
+    [
+        (M { k: vec![] }, ""),
+        (
+            M {
+                k: vec![K { j: Some(J) }]
+            },
+            "<J/>"
+        )
+    ]
+);
