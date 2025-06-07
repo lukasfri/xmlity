@@ -247,3 +247,46 @@ define_test!(
         (R { s: None }, "<R/>")
     ]
 );
+
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+struct S;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[xvalue(order = "loose")]
+pub struct T {
+    #[xelement(name = "s", group, optional, default)]
+    pub simple_type: Option<Box<S>>,
+}
+
+define_test!(
+    value_with_optional_group_element,
+    [
+        (
+            T {
+                simple_type: Some(Box::new(S))
+            },
+            "<s/>"
+        ),
+        (T { simple_type: None }, "")
+    ]
+);
+
+#[derive(Debug, Serialize, Deserialize)]
+#[xelement(name = "U")]
+pub struct U {
+    #[xelement(name = "s", group, optional, default)]
+    pub simple_type: Option<Box<S>>,
+}
+
+define_test!(
+    element_with_optional_group_element,
+    [
+        (
+            U {
+                simple_type: Some(Box::new(S))
+            },
+            "<U><s/></U>"
+        ),
+        (U { simple_type: None }, "<U/>", "<U></U>")
+    ]
+);
