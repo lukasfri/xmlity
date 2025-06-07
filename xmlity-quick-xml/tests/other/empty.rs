@@ -119,7 +119,7 @@ pub struct N {
 }
 
 define_test!(
-    partially_empty_element,
+    partially_empty_value,
     [
         (
             N {
@@ -134,6 +134,33 @@ define_test!(
                 k: K { j: Some(J) }
             },
             "<J/><J/>"
+        )
+    ]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "O")]
+pub struct O {
+    pub j: J,
+    pub k: K,
+}
+
+define_test!(
+    partially_empty_element,
+    [
+        (
+            N {
+                j: J,
+                k: K { j: None }
+            },
+            "<O><J/></O>"
+        ),
+        (
+            N {
+                j: J,
+                k: K { j: Some(J) }
+            },
+            "<O><J/><J/></O>"
         )
     ]
 );
