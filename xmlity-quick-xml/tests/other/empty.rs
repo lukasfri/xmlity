@@ -149,14 +149,14 @@ define_test!(
     partially_empty_element,
     [
         (
-            N {
+            O {
                 j: J,
                 k: K { j: None }
             },
             "<O><J/></O>"
         ),
         (
-            N {
+            O {
                 j: J,
                 k: K { j: Some(J) }
             },
