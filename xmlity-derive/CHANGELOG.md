@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.6...xmlity-derive-v0.0.7) - 2025-06-07
+
+### Fixed
+
+- Fixes recursively empty values not deserializing correctly. ([#94](https://github.com/lukasfri/xmlity/pull/94))
+
 ## [0.0.6](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.5...xmlity-derive-v0.0.6) - 2025-06-04
 
 ### Added
