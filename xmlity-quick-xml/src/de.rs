@@ -280,18 +280,19 @@ impl<'r> ElementAccess<'_, 'r> {
     }
 }
 
+const PLACEHOLDER_ELEMENT_NAME: &str = "a";
+
 impl NamespaceContext for &Deserializer<'_> {
     fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
-        let name = format!("a");
         let (_, namespace) = self
-            .resolve_qname(QuickName(name.as_bytes()), false)
+            .resolve_qname(QuickName(PLACEHOLDER_ELEMENT_NAME.as_bytes()), false)
             .into_parts();
 
         namespace.map(XmlNamespace::into_owned)
     }
 
     fn resolve_prefix(&self, prefix: xmlity::Prefix<'_>) -> Option<XmlNamespace<'_>> {
-        let name = format!("{prefix}:a");
+        let name = format!("{prefix}:{PLACEHOLDER_ELEMENT_NAME}");
         let (_, namespace) = self
             .resolve_qname(QuickName(name.as_bytes()), false)
             .into_parts();
