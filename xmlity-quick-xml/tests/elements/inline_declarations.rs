@@ -249,9 +249,9 @@ define_test!(
 );
 
 #[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
-struct S;
+pub struct S;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xvalue(order = "loose")]
 pub struct T {
     #[xelement(name = "s", group, optional, default)]
@@ -271,7 +271,7 @@ define_test!(
     ]
 );
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "U")]
 pub struct U {
     #[xelement(name = "s", group, optional, default)]
