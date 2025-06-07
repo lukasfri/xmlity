@@ -494,6 +494,194 @@ impl<'a> EnumVisitorBuilder<'a> {
     pub fn new(ast: &'a DeriveInput, value_opts: Option<&'a enums::roots::RootValueOpts>) -> Self {
         Self { ast, value_opts }
     }
+
+    pub fn variant_deserialize_definition(
+        &self,
+        variant: &syn::Variant,
+    ) -> Result<Vec<syn::Item>, DeriveError> {
+        let DeriveInput {
+            ident,
+            generics,
+            data: syn::Data::Enum(data),
+            ..
+        } = &self.ast
+        else {
+            unreachable!("Should already have been checked.")
+        };
+
+        let fallible_enum = data.variants.len() > 1;
+
+        let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
+        if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+            value: value @ None,
+            ..
+        }) = &mut variant_opts
+        {
+            let ident_value = self
+                .value_opts
+                .as_ref()
+                .map(|a| a.rename_all)
+                .unwrap_or_default()
+                .apply_to_variant(&variant.ident.to_string());
+
+            *value = Some(ident_value);
+        }
+        if let DeserializeRootOpts::None = variant_opts {
+            let ident_value = self
+                .value_opts
+                .as_ref()
+                .map(|a| a.rename_all)
+                .unwrap_or_default()
+                .apply_to_variant(&variant.ident.to_string());
+
+            variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
+                value: Some(ident_value),
+                ..Default::default()
+            });
+        }
+
+        let record = parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
+
+        let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
+
+        let definition = builder.definition();
+        let deserialize_trait_impl = builder.deserialize_trait_impl()?;
+
+        Ok(vec![definition.into(), deserialize_trait_impl.into()])
+    }
+
+    pub fn variant_deserialize_expr(
+        &self,
+        variant: &syn::Variant,
+        access_ident: &Ident,
+    ) -> Result<Expr, DeriveError> {
+        let DeriveInput {
+            ident,
+            generics,
+            data: syn::Data::Enum(data),
+            ..
+        } = &self.ast
+        else {
+            unreachable!("Should already have been checked.")
+        };
+
+        let fallible_enum = data.variants.len() > 1;
+
+        let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
+        if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+            value: value @ None,
+            ..
+        }) = &mut variant_opts
+        {
+            let ident_value = self
+                .value_opts
+                .as_ref()
+                .map(|a| a.rename_all)
+                .unwrap_or_default()
+                .apply_to_variant(&variant.ident.to_string());
+
+            *value = Some(ident_value);
+        }
+        if let DeserializeRootOpts::None = variant_opts {
+            let ident_value = self
+                .value_opts
+                .as_ref()
+                .map(|a| a.rename_all)
+                .unwrap_or_default()
+                .apply_to_variant(&variant.ident.to_string());
+
+            variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
+                value: Some(ident_value),
+                ..Default::default()
+            });
+        }
+
+        let record = parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
+
+        let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
+        let inner_access = builder.value_access_ident();
+        let non_bound_generics = non_bound_generics(builder.record.generics.as_ref());
+
+        let variant_deserializer_ident = builder.record.impl_for_ident.as_ref();
+        let variant_deserializer_type: syn::Type =
+            parse_quote!( #variant_deserializer_ident #non_bound_generics);
+
+        Ok(parse_quote! {
+            {
+                if let ::core::result::Result::Ok(::core::option::Option::Some(__v)) = ::xmlity::de::SeqAccess::next_element::<#variant_deserializer_type>(&mut #access_ident) {
+                    return ::core::result::Result::Ok(__v.#inner_access);
+                }
+            }
+        })
+    }
+
+    pub fn variant_deserialize_none_expr(
+        &self,
+        variant: &syn::Variant,
+        visitor_lifetime: &Lifetime,
+        error_type: &Type,
+    ) -> Result<syn::Expr, DeriveError> {
+        let DeriveInput {
+            ident,
+            generics,
+            data: syn::Data::Enum(data),
+            ..
+        } = &self.ast
+        else {
+            unreachable!("Should already have been checked.")
+        };
+
+        let fallible_enum = data.variants.len() > 1;
+
+        let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
+        if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+            value: value @ None,
+            ..
+        }) = &mut variant_opts
+        {
+            let ident_value = self
+                .value_opts
+                .as_ref()
+                .map(|a| a.rename_all)
+                .unwrap_or_default()
+                .apply_to_variant(&variant.ident.to_string());
+
+            *value = Some(ident_value);
+        }
+        if let DeserializeRootOpts::None = variant_opts {
+            let ident_value = self
+                .value_opts
+                .as_ref()
+                .map(|a| a.rename_all)
+                .unwrap_or_default()
+                .apply_to_variant(&variant.ident.to_string());
+
+            variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
+                value: Some(ident_value),
+                ..Default::default()
+            });
+        }
+
+        let record = parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
+
+        let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
+        let inner_access = builder.value_access_ident();
+        let non_bound_generics = non_bound_generics(builder.record.generics.as_ref());
+
+        let variant_deserializer_ident = builder.record.impl_for_ident.as_ref();
+        let variant_deserializer_type: syn::Type =
+            parse_quote!( #variant_deserializer_ident #non_bound_generics);
+
+        Ok(parse_quote! {
+            {
+                if let ::core::result::Result::Ok(__v) = <#variant_deserializer_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                        ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
+                    ) {
+                    return ::core::result::Result::Ok(__v.#inner_access);
+                }
+            }
+        })
+    }
 }
 
 impl VisitorBuilder for EnumVisitorBuilder<'_> {
@@ -505,70 +693,19 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput {
             ident,
-            generics,
-            data,
+            data: syn::Data::Enum(data),
             ..
-        } = &self.ast;
-        let data_enum = match &data {
-            syn::Data::Enum(data_enum) => data_enum,
-            _ => panic!("Wrong options. Only enums can be used for xelement."),
+        } = &self.ast
+        else {
+            unreachable!("Should already have been checked.")
         };
 
-        let fallible_enum = data_enum.variants.len() > 1;
-
-        let variants = data_enum.variants.iter()
-            .map::<Result<Expr, DeriveError>, _>(
-                |variant | {
-                    let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
-                    if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
-                        value: value @ None,
-                        ..
-                    }) = &mut variant_opts {
-                        let ident_value = self.value_opts
-                            .as_ref()
-                            .map(|a| a.rename_all)
-                            .unwrap_or_default()
-                            .apply_to_variant(&variant.ident.to_string());
-
-                        *value = Some(ident_value);
-                    }
-                    if let DeserializeRootOpts::None = variant_opts {
-                        let ident_value = self
-                            .value_opts
-                            .as_ref()
-                            .map(|a| a.rename_all)
-                            .unwrap_or_default()
-                            .apply_to_variant(&variant.ident.to_string());
-
-                        variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
-                            value: Some(ident_value),
-                            ..Default::default()
-                        });
-                    }
-
-                    let record =
-                        parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
-
-                    let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
-                    let inner_access = builder.value_access_ident();
-                    let non_bound_generics = non_bound_generics(builder.record.generics.as_ref());
-
-                    let variant_deserializer_ident = builder.record.impl_for_ident.as_ref();
-                    let variant_deserializer_type: syn::Type = parse_quote!( #variant_deserializer_ident #non_bound_generics);
-
-                    let definition = builder.definition();
-                    let deserialize_trait_impl = builder.deserialize_trait_impl()?;
-                    Ok(parse_quote! {
-                        {
-                            #definition
-                            #deserialize_trait_impl
-                            if let ::core::result::Result::Ok(::core::option::Option::Some(__v)) = ::xmlity::de::SeqAccess::next_element::<#variant_deserializer_type>(&mut #access_ident) {
-                                return ::core::result::Result::Ok(__v.#inner_access);
-                            }
-                        }
-                    })
-                },
-            )
+        let variants = data
+            .variants
+            .iter()
+            .map::<Result<Expr, DeriveError>, _>(|variant| {
+                self.variant_deserialize_expr(variant, access_ident)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let ident_string = ident.to_string();
 
@@ -587,72 +724,19 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput {
             ident,
-            generics,
-            data,
+            data: syn::Data::Enum(data),
             ..
-        } = &self.ast;
-        let data_enum = match &data {
-            syn::Data::Enum(data_enum) => data_enum,
-            _ => panic!("Wrong options. Only enums can be used for xelement."),
+        } = &self.ast
+        else {
+            unreachable!("Should already have been checked.")
         };
 
-        let fallible_enum = data_enum.variants.len() > 1;
-
-        let variants = data_enum.variants.iter()
-            .map::<Result<Expr, DeriveError>, _>(
-                |variant | {
-                    let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
-                    if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
-                        value: value @ None,
-                        ..
-                    }) = &mut variant_opts {
-                        let ident_value = self.value_opts
-                            .as_ref()
-                            .map(|a| a.rename_all)
-                            .unwrap_or_default()
-                            .apply_to_variant(&variant.ident.to_string());
-
-                        *value = Some(ident_value);
-                    }
-                    if let DeserializeRootOpts::None = variant_opts {
-                        let ident_value = self
-                            .value_opts
-                            .as_ref()
-                            .map(|a| a.rename_all)
-                            .unwrap_or_default()
-                            .apply_to_variant(&variant.ident.to_string());
-
-                        variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
-                            value: Some(ident_value),
-                            ..Default::default()
-                        });
-                    }
-
-                    let record =
-                        parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
-
-                    let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
-                    let inner_access = builder.value_access_ident();
-                    let non_bound_generics = non_bound_generics(builder.record.generics.as_ref());
-
-                    let variant_deserializer_ident = builder.record.impl_for_ident.as_ref();
-                    let variant_deserializer_type: syn::Type = parse_quote!( #variant_deserializer_ident #non_bound_generics);
-
-                    let definition = builder.definition();
-                    let deserialize_trait_impl = builder.deserialize_trait_impl()?;
-                    Ok(parse_quote! {
-                        {
-                            #definition
-                            #deserialize_trait_impl
-                            if let ::core::result::Result::Ok(__v) = <#variant_deserializer_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
-                                    ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
-                                ) {
-                                return ::core::result::Result::Ok(__v.#inner_access);
-                            }
-                        }
-                    })
-                },
-            )
+        let variants = data
+            .variants
+            .iter()
+            .map::<Result<Expr, DeriveError>, _>(|variant| {
+                self.variant_deserialize_none_expr(variant, visitor_lifetime, error_type)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let ident_string = ident.to_string();
@@ -703,6 +787,14 @@ impl DeserializeBuilder for EnumVisitorBuilder<'_> {
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
+        let DeriveInput {
+            data: syn::Data::Enum(data),
+            ..
+        } = &self.ast
+        else {
+            unreachable!("Should already have been checked.")
+        };
+
         let formatter_expecting = format!("enum {}", self.ast.ident);
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
@@ -714,7 +806,18 @@ impl DeserializeBuilder for EnumVisitorBuilder<'_> {
             &formatter_expecting,
         )?;
 
+        let sub_serializer_defs = data
+            .variants
+            .iter()
+            .map(|v| self.variant_deserialize_definition(v))
+            .collect::<Result<Vec<_>, DeriveError>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
         Ok(parse_quote! {
+            #(#sub_serializer_defs)*
+
             #visitor_def
 
             #visitor_trait_impl

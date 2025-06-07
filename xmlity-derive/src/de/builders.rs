@@ -736,13 +736,13 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         );
         let non_bound_builder_generics = non_bound_generics(&builder_generics);
 
-        let contribute_attributes_fn = self.contribute_attributes_fn(&deserialize_lifetime)?;
+        let contribute_attributes_fn = self.contribute_attributes_fn(deserialize_lifetime)?;
 
-        let attributes_done_fn = self.attributes_done_fn(&deserialize_lifetime)?;
+        let attributes_done_fn = self.attributes_done_fn(deserialize_lifetime)?;
 
-        let contribute_elements_fn = self.contribute_elements_fn(&deserialize_lifetime)?;
+        let contribute_elements_fn = self.contribute_elements_fn(deserialize_lifetime)?;
 
-        let elements_done_fn = self.elements_done_fn(&deserialize_lifetime)?;
+        let elements_done_fn = self.elements_done_fn(deserialize_lifetime)?;
 
         let finish_fn = self.finish_fn(&ident)?;
 
