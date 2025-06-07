@@ -60,6 +60,29 @@ impl<'de> Deserializer<'de> for &'de XmlText {
     }
 }
 
+impl<'de> Deserializer<'de> for Option<&'de XmlText> {
+    type Error = XmlValueDeserializerError;
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self {
+            Some(xml_text) => xml_text.deserialize_any(visitor),
+            None => visitor.visit_none(),
+        }
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self {
+            Some(xml_text) => xml_text.deserialize_seq(visitor),
+            None => visitor.visit_none(),
+        }
+    }
+}
+
 impl<'de> Deserializer<'de> for &'de XmlCData {
     type Error = XmlValueDeserializerError;
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>

@@ -415,6 +415,14 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for ValueOrWhitespace<'de, T> {
                         .map(ValueOrWhitespace::Value)
                 }
             }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                T::deserialize_seq(crate::types::utils::NoneDeserializer::new())
+                    .map(ValueOrWhitespace::Value)
+            }
         }
 
         deserializer.deserialize_seq(__Visitor {
@@ -520,5 +528,43 @@ impl<'de> Deserialize<'de> for IgnoredAny {
             lifetime: ::core::marker::PhantomData,
             marker: ::core::marker::PhantomData,
         })
+    }
+}
+
+/// A deserializer that always runs [`Visitor::visit_none`].
+pub struct NoneDeserializer<E: de::Error> {
+    _marker: PhantomData<E>,
+}
+
+impl<E: de::Error> NoneDeserializer<E> {
+    /// Creates a new [`NoneDeserializer`].
+    pub fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<E: de::Error> Default for NoneDeserializer<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'de, E: de::Error> Deserializer<'de> for NoneDeserializer<E> {
+    type Error = E;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_none()
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_none()
     }
 }

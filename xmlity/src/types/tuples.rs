@@ -56,7 +56,15 @@ macro_rules! impl_deserialize_tuple {
                         S: crate::de::SeqAccess<'__visitor>,
                     {
                         Ok(($(
-                            seq.next_element::<$name>()?.ok_or_else(de::Error::missing_data)?,
+                            seq.next_element_seq::<$name>()?.ok_or_else(de::Error::missing_data)?,
+                        )*))
+                    }
+                    fn visit_none<E>(self) -> Result<Self::Value, E>
+                    where
+                        E: de::Error,
+                    {
+                        Ok(($(
+                            <$name as Deserialize<'__visitor>>::deserialize(crate::types::utils::NoneDeserializer::new())?,
                         )*))
                     }
                 }
