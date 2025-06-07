@@ -68,14 +68,14 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
     pub fn constructor_expr(
         path: &syn::Path,
         visitor_lifetime: &syn::Lifetime,
-        access_type: &Type,
+        error_type: &syn::Type,
         element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::ChildOpts>>,
         group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::GroupOpts>>,
         constructor_type: StructType,
     ) -> syn::Expr {
         let local_value_expressions_constructors =
             element_fields.into_iter()
-            .map::<(_, Expr), _>(|FieldWithOpts {  field_ident, options, .. }| {
+            .map::<(_, Expr), _>(|FieldWithOpts {  field_ident, options, field_type }| {
                 let builder_field_ident = field_ident.to_named_ident();
                 let expression = if let Some(default_or_else) = options.default_or_else() {
                     parse_quote! {
@@ -83,7 +83,16 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
                     }
                 } else {
                     parse_quote! {
-                        ::core::option::Option::ok_or(#builder_field_ident, ::xmlity::de::Error::missing_field(stringify!(#field_ident)))?
+                        ::core::result::Result::map_err(
+                            ::core::option::Option::map_or_else(
+                                #builder_field_ident,
+                                || <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                                    ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
+                                ),
+                                |__v| ::core::result::Result::Ok(__v)
+                            ),
+                            |_|  ::xmlity::de::Error::missing_field(stringify!(#field_ident))
+                        )?
                     }
                 };
                 (field_ident, expression)
@@ -95,7 +104,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
              }| {
                 let builder_field_ident = field_ident.to_named_ident();
                 let expression = parse_quote! {
-                    ::xmlity::de::DeserializationGroupBuilder::finish::<<#access_type as ::xmlity::de::AttributesAccess<#visitor_lifetime>>::Error>(#builder_field_ident)?
+                    ::xmlity::de::DeserializationGroupBuilder::finish::<#error_type>(#builder_field_ident)?
                 };
 
                 (field_ident, expression)
@@ -113,12 +122,13 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
         value: &str,
         value_ident: &Ident,
         visitor_lifetime: &Lifetime,
-        access_type: &Type,
+        _access_type: &Type,
+        error_type: &Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let constructor = (self.input.wrapper_function)(Self::constructor_expr(
             self.input.constructor_path.as_ref(),
             visitor_lifetime,
-            access_type,
+            error_type,
             [],
             [],
             StructType::Unit,
@@ -200,7 +210,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
         visitor_lifetime: &Lifetime,
         access_ident: &Ident,
         access_type: &Type,
-        _error_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let Some(value) = self.should_deserialize_as_str() else {
             return Ok(None);
@@ -208,7 +218,8 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
 
         let str_ident = Ident::new("__value_str", Span::mixed_site());
 
-        let str_body = self.str_value_body(value, &str_ident, visitor_lifetime, access_type)?;
+        let str_body =
+            self.str_value_body(value, &str_ident, visitor_lifetime, access_type, error_type)?;
 
         Ok(Some(parse_quote! {
             let #str_ident = ::xmlity::de::XmlText::as_str(&#access_ident);
@@ -221,7 +232,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
         visitor_lifetime: &Lifetime,
         access_ident: &Ident,
         access_type: &Type,
-        _error_type: &Type,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let Some(value) = self.should_deserialize_as_str() else {
             return Ok(None);
@@ -229,7 +240,8 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
 
         let str_ident = Ident::new("__value_str", Span::mixed_site());
 
-        let str_body = self.str_value_body(value, &str_ident, visitor_lifetime, access_type)?;
+        let str_body =
+            self.str_value_body(value, &str_ident, visitor_lifetime, access_type, error_type)?;
 
         Ok(Some(parse_quote! {
             let #str_ident = ::xmlity::de::XmlCData::as_str(&#access_ident);
@@ -311,10 +323,13 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             .transpose()?
             .unwrap_or_default();
 
+        let error_type: syn::Type =
+            parse_quote!(<#access_type as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error);
+
         let constructor = (self.input.wrapper_function)(Self::constructor_expr(
             self.input.constructor_path.as_ref(),
             visitor_lifetime,
-            access_type,
+            &error_type,
             element_fields.clone(),
             group_fields.clone(),
             constructor_type,
@@ -498,11 +513,10 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
             syn::Data::Enum(data_enum) => data_enum,
             _ => panic!("Wrong options. Only enums can be used for xelement."),
         };
-        let variants = data_enum.variants.iter().collect::<Vec<_>>();
 
-        let variants = variants
-            .clone()
-            .into_iter()
+        let fallible_enum = data_enum.variants.len() > 1;
+
+        let variants = data_enum.variants.iter()
             .map::<Result<Expr, DeriveError>, _>(
                 |variant | {
                     let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
@@ -533,7 +547,7 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
                     }
 
                     let record =
-                        parse_enum_variant_derive_input(ident, generics, variant, variants.len() > 1)?;
+                        parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
 
                     let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
                     let inner_access = builder.value_access_ident();
@@ -565,10 +579,11 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
         }))
     }
 
+    // TODO: This function really needs to be unified with `visit_seq_fn_body`, so that variant deserialize definitions are not duplicated.
     fn visit_none_fn_body(
         &self,
-        _visitor_lifetime: &Lifetime,
-        _error_type: &Type,
+        visitor_lifetime: &Lifetime,
+        error_type: &Type,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let DeriveInput {
             ident,
@@ -576,9 +591,69 @@ impl VisitorBuilder for EnumVisitorBuilder<'_> {
             data,
             ..
         } = &self.ast;
+        let data_enum = match &data {
+            syn::Data::Enum(data_enum) => data_enum,
+            _ => panic!("Wrong options. Only enums can be used for xelement."),
+        };
 
-        //TODO
-        let variants: Vec<syn::Stmt> = vec![];
+        let fallible_enum = data_enum.variants.len() > 1;
+
+        let variants = data_enum.variants.iter()
+            .map::<Result<Expr, DeriveError>, _>(
+                |variant | {
+                    let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
+                    if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+                        value: value @ None,
+                        ..
+                    }) = &mut variant_opts {
+                        let ident_value = self.value_opts
+                            .as_ref()
+                            .map(|a| a.rename_all)
+                            .unwrap_or_default()
+                            .apply_to_variant(&variant.ident.to_string());
+
+                        *value = Some(ident_value);
+                    }
+                    if let DeserializeRootOpts::None = variant_opts {
+                        let ident_value = self
+                            .value_opts
+                            .as_ref()
+                            .map(|a| a.rename_all)
+                            .unwrap_or_default()
+                            .apply_to_variant(&variant.ident.to_string());
+
+                        variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
+                            value: Some(ident_value),
+                            ..Default::default()
+                        });
+                    }
+
+                    let record =
+                        parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
+
+                    let builder = DeserializeVariantBuilder::new(&record, &variant_opts);
+                    let inner_access = builder.value_access_ident();
+                    let non_bound_generics = non_bound_generics(builder.record.generics.as_ref());
+
+                    let variant_deserializer_ident = builder.record.impl_for_ident.as_ref();
+                    let variant_deserializer_type: syn::Type = parse_quote!( #variant_deserializer_ident #non_bound_generics);
+
+                    let definition = builder.definition();
+                    let deserialize_trait_impl = builder.deserialize_trait_impl()?;
+                    Ok(parse_quote! {
+                        {
+                            #definition
+                            #deserialize_trait_impl
+                            if let ::core::result::Result::Ok(__v) = <#variant_deserializer_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                                    ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
+                                ) {
+                                return ::core::result::Result::Ok(__v.#inner_access);
+                            }
+                        }
+                    })
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?;
 
         let ident_string = ident.to_string();
 

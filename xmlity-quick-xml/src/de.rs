@@ -657,6 +657,10 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
             return Ok(None);
         };
 
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
         let current_depth = deserializer.current_depth;
 
         if let Some(Event::End(bytes_end)) = deserializer.peek_event() {
@@ -680,6 +684,10 @@ impl<'r> de::SeqAccess<'r> for ChildrenAccess<'_, 'r> {
         else {
             return Ok(None);
         };
+
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
 
         let current_depth = deserializer.current_depth;
 
@@ -740,6 +748,10 @@ impl<'r> de::SeqAccess<'r> for SubSeqAccess<'_, 'r> {
 
         let deserializer = current.as_mut().expect("SubSeqAccess used after drop");
 
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
         deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize(deserializer))
             .map(Some)
@@ -754,6 +766,10 @@ impl<'r> de::SeqAccess<'r> for SubSeqAccess<'_, 'r> {
         };
 
         let deserializer = current.as_mut().expect("SubSeqAccess used after drop");
+
+        if deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
 
         deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
@@ -784,6 +800,10 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     where
         T: Deserialize<'r>,
     {
+        if self.deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
         self.deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize(deserializer))
             .map(Some)
@@ -793,6 +813,10 @@ impl<'r> de::SeqAccess<'r> for SeqAccess<'_, 'r> {
     where
         T: Deserialize<'r>,
     {
+        if self.deserializer.peek_event().is_none() {
+            return Ok(None);
+        }
+
         self.deserializer
             .try_deserialize(|deserializer| Deserialize::<'r>::deserialize_seq(deserializer))
             .map(Some)

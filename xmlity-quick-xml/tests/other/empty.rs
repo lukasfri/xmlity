@@ -111,3 +111,29 @@ define_test!(
         )
     ]
 );
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct N {
+    pub j: J,
+    pub k: K,
+}
+
+define_test!(
+    partially_empty_element,
+    [
+        (
+            N {
+                j: J,
+                k: K { j: None }
+            },
+            "<J/>"
+        ),
+        (
+            N {
+                j: J,
+                k: K { j: Some(J) }
+            },
+            "<J/><J/>"
+        )
+    ]
+);
