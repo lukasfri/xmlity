@@ -1,6 +1,7 @@
 use std::{borrow::Cow, ops::Deref};
 
 use proc_macro2::Span;
+use quote::format_ident;
 use syn::{
     parse_quote, Generics, Ident, ImplItemFn, Item, ItemImpl, ItemStruct, Lifetime, LifetimeParam,
     Stmt, Type,
@@ -578,7 +579,11 @@ pub trait DeserializationGroupBuilderBuilder {
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
-    fn finish_fn_body(&self, ident: &Ident) -> Result<Vec<Stmt>, DeriveError>;
+    fn finish_fn_body(
+        &self,
+        ident: &Ident,
+        error_type: &syn::Type,
+    ) -> Result<Vec<Stmt>, DeriveError>;
 
     fn builder_definition(
         &self,
@@ -709,10 +714,12 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
     }
 
     fn finish_fn(&self, ident: &Ident) -> Result<ImplItemFn, DeriveError> {
-        let content = self.finish_fn_body(ident)?;
+        let error_type_ident = format_ident!("__Error");
+
+        let content = self.finish_fn_body(ident, &parse_quote!(#error_type_ident))?;
 
         Ok(parse_quote! {
-        fn finish<E: ::xmlity::de::Error>(self) -> Result<Self::Value, E> {
+        fn finish<#error_type_ident: ::xmlity::de::Error>(self) -> Result<Self::Value, #error_type_ident> {
            #(#content)*
           }
         })
