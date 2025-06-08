@@ -151,14 +151,15 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
         }
     }
 
+    // This is an option because sometimes we know that a type cannot be constructed from an empty, for example when it has an inline element without a default value.
     pub fn empty_constructor_expr(
         path: &syn::Path,
         visitor_lifetime: &Lifetime,
         error_type: &Type,
         fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
         constructor_type: StructType,
-    ) -> syn::Expr {
-        let value_expressions_constructors = fields.into_iter().map::<(_, Expr), _>(
+    ) -> Option<syn::Expr> {
+        let value_expressions_constructors = fields.into_iter().map::<Option<(_, Expr)>, _>(
             |FieldWithOpts {
                  field_ident,
                  options,
@@ -168,39 +169,44 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
                 let expression = match options {
                     FieldValueGroupOpts::Value(options) => {
                         if let Some(default_or_else) = options.default_or_else() {
-                            parse_quote! {
-                                ::core::result::Result::unwrap_or_else(
-                                    <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
-                                        ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
-                                    ),
-                                    |_: #error_type| (#default_or_else)(),
-                                )
-                            }
+                            Some(parse_quote! {
+                                (#default_or_else)()
+                            })
                         } else {
-                            parse_quote! {
-                                ::core::result::Result::map_err(
-                                    <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
-                                        ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
-                                    ),
-                                    |_| <#error_type as ::xmlity::de::Error>::missing_field(stringify!(#field_ident)),
-                                )?
+                            match options {
+                                records::fields::ChildOpts::Value(_) =>  {
+                                    Some(parse_quote! {
+                                        ::core::result::Result::map_err(
+                                            <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                                                ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
+                                            ),
+                                            |_| <#error_type as ::xmlity::de::Error>::missing_field(stringify!(#field_ident)),
+                                        )?
+                                    })
+                                }
+                                ,
+                                records::fields::ChildOpts::Element(_) => None,
                             }
                         }
                     },
                     FieldValueGroupOpts::Group(_options) => {
-                        parse_quote! {
+                        Some(parse_quote! {
                             <<#field_type as ::xmlity::DeserializationGroup>::Builder as ::xmlity::de::DeserializationGroupBuilder>::finish::<#error_type>(
                                 <#field_type as ::xmlity::DeserializationGroup>::builder()
                             )?
-                        }
+                        })
                     },
                 };
 
-                (field_ident, expression)
+                expression.map(|expression| (field_ident, expression))
             },
-        );
+        ).collect::<Option<Vec<_>>>()?;
 
-        constructor_expr(path, value_expressions_constructors, &constructor_type)
+        Some(constructor_expr(
+            path,
+            value_expressions_constructors,
+            &constructor_type,
+        ))
     }
 }
 
@@ -384,13 +390,17 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             })
         });
 
-        let constructor = (self.input.wrapper_function)(Self::empty_constructor_expr(
+        let Some(constructor) = Self::empty_constructor_expr(
             self.input.constructor_path.as_ref(),
             visitor_lifetime,
             error_type,
             fields,
             constructor_type,
-        ));
+        ) else {
+            return Ok(None);
+        };
+
+        let constructor = (self.input.wrapper_function)(constructor);
 
         Ok(Some(parse_quote! {
             ::core::result::Result::Ok(#constructor)

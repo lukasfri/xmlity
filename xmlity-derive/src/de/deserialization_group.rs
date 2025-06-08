@@ -140,13 +140,18 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         )))
     }
 
-    fn finish_fn_body(&self, ident: &syn::Ident) -> Result<Vec<Stmt>, DeriveError> {
+    fn finish_fn_body(
+        &self,
+        ident: &syn::Ident,
+        error_type: &syn::Type,
+    ) -> Result<Vec<Stmt>, DeriveError> {
         let finish_constructor = finish_constructor_expr(
             &parse_quote!(#ident),
             element_fields(self.ast)?,
             attribute_fields(self.ast)?,
             group_fields(self.ast)?,
             &Self::constructor_type(self.ast),
+            error_type,
         );
 
         Ok(parse_quote! {
@@ -308,6 +313,7 @@ fn finish_constructor_expr(
     attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
     group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
     constructor_type: &StructType,
+    error_type: &syn::Type,
 ) -> Expr {
     let local_value_expressions_constructors = attribute_fields.into_iter()
         .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
@@ -330,16 +336,15 @@ fn finish_constructor_expr(
           };
           (field_ident, expression)
       });
-    let group_value_expressions_constructors =
-        group_fields
-            .into_iter()
-            .map(|FieldWithOpts { field_ident, .. }| {
-                let expression = quote! {
-                    ::xmlity::de::DeserializationGroupBuilder::finish::<E>(self.#field_ident)?
-                };
+    let group_value_expressions_constructors = group_fields.into_iter().map(
+        |FieldWithOpts { field_ident, .. }| {
+            let expression = quote! {
+                ::xmlity::de::DeserializationGroupBuilder::finish::<#error_type>(self.#field_ident)?
+            };
 
-                (field_ident, expression)
-            });
+            (field_ident, expression)
+        },
+    );
 
     let value_expressions_constructors =
         local_value_expressions_constructors.chain(group_value_expressions_constructors);
