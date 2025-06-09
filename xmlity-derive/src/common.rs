@@ -1,3 +1,4 @@
+use core::fmt;
 use std::borrow::Cow;
 
 use darling::FromMeta;
@@ -24,6 +25,15 @@ impl FieldIdent {
                 format!("__{}", index.index).as_str(),
                 Span::call_site(),
             )),
+        }
+    }
+}
+
+impl fmt::Display for FieldIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FieldIdent::Named(ident) => write!(f, "{}", ident),
+            FieldIdent::Indexed(index) => write!(f, "{}", index.index),
         }
     }
 }

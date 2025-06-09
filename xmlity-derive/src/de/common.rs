@@ -793,3 +793,36 @@ pub fn element_group_fields(
         })
     }))
 }
+
+pub fn deserialize_option_value_expr(
+    field_type: &syn::Type,
+    field_ident: &Expr,
+    default_or_else: Option<Expr>,
+    should_try_none: bool,
+    visitor_lifetime: &syn::Lifetime,
+    error_type: &syn::Type,
+    missing_field: &str,
+) -> Expr {
+    if let Some(default_or_else) = default_or_else {
+        parse_quote! {
+            ::core::option::Option::unwrap_or_else(#field_ident, #default_or_else)
+        }
+    } else if should_try_none {
+        parse_quote! {
+            ::core::result::Result::map_err(
+                ::core::option::Option::map_or_else(
+                    #field_ident,
+                    || <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                        ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
+                    ),
+                    |__v| ::core::result::Result::Ok(__v)
+                ),
+                |_|  ::xmlity::de::Error::missing_field(stringify!(#missing_field))
+            )?
+        }
+    } else {
+        parse_quote! {
+            ::core::option::Option::ok_or(#field_ident, ::xmlity::de::Error::missing_field(stringify!(#missing_field)))?
+        }
+    }
+}
