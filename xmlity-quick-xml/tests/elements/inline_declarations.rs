@@ -290,3 +290,22 @@ define_test!(
         (U { simple_type: None }, "<U/>", "<U></U>")
     ]
 );
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xvalue(order = "loose")]
+pub struct V {
+    #[xelement(name = "n", group)]
+    pub n: Box<N>,
+}
+
+define_test!(
+    value_with_group_element,
+    [(
+        V {
+            n: Box::new(N {
+                o: Some("A".to_string())
+            }),
+        },
+        "<n><o>A</o></n>"
+    )]
+);

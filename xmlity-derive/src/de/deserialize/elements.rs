@@ -12,7 +12,7 @@ use crate::{
     },
     de::{
         builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
-        common::{builder_attribute_field_visitor, SeqVisitLoop},
+        common::{builder_attribute_field_visitor, deserialize_option_value_expr, SeqVisitLoop},
     },
     options::{
         records::fields::{
@@ -94,53 +94,45 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeElementBuilder<'a, T> {
         group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
         constructor_type: StructType,
     ) -> Expr {
-        let local_value_expressions_constructors = attribute_fields.into_iter()
-            .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
-                a.field_ident,
-                a.field_type,
-                a.options.default_or_else(),
-                false
-            ))
-            .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
-                a.field_ident,
-                a.field_type,
-                a.options.default_or_else(),
-                match a.options {
-                    ChildOpts::Value(_) => true,
-                    ChildOpts::Element(_) => false,
-                }
-            )))
-            .map::<(_, Expr), _>(|(field_ident, field_type, default_or_else, should_try_none)| {
-                let builder_field_ident = field_ident.to_named_ident();
+        let local_value_expressions_constructors = attribute_fields
+            .into_iter()
+            .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| {
+                (
+                    a.field_ident,
+                    a.field_type,
+                    a.options.default_or_else(),
+                    false,
+                )
+            })
+            .chain(
+                element_fields
+                    .into_iter()
+                    .map(|a: FieldWithOpts<FieldIdent, ChildOpts>| {
+                        (
+                            a.field_ident,
+                            a.field_type,
+                            a.options.default_or_else(),
+                            matches!(a.options, ChildOpts::Value(_)),
+                        )
+                    }),
+            )
+            .map::<(_, Expr), _>(
+                |(field_ident, field_type, default_or_else, should_try_none)| {
+                    let builder_ident = field_ident.to_named_ident();
 
-                let expression = if let Some(default_or_else) = default_or_else {
-                    parse_quote! {
-                        ::core::option::Option::unwrap_or_else(#builder_field_ident, #default_or_else)
-                    }
-                } else if should_try_none {
-                    parse_quote! {
-                        ::core::result::Result::map_err(
-                            ::core::option::Option::map_or_else(
-                                #builder_field_ident,
-                                || <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
-                                    ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
-                                ),
-                                |__v| ::core::result::Result::Ok(__v)
-                            ),
-                            |_|  ::xmlity::de::Error::missing_field(stringify!(#field_ident))
-                        )?
-                    }
-                } else {
-                    parse_quote! {
-                        ::core::option::Option::ok_or_else(
-                            #builder_field_ident,
-                            ||  ::xmlity::de::Error::missing_field(stringify!(#field_ident))
-                        )?
-                    }
+                    let expression = deserialize_option_value_expr(
+                        &field_type,
+                        &parse_quote!(#builder_ident),
+                        default_or_else,
+                        should_try_none,
+                        visitor_lifetime,
+                        error_type,
+                        &field_ident.to_string(),
+                    );
 
-                };
-                (field_ident, expression)
-            });
+                    (field_ident, expression)
+                },
+            );
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
             |FieldWithOpts {
                  field_ident,

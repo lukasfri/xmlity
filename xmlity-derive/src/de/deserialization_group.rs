@@ -8,6 +8,7 @@ use syn::{
 
 use crate::{
     common::{FieldIdent, StructType},
+    de::common::deserialize_option_value_expr,
     options::{
         records::{
             fields::{AttributeOpts, ChildOpts, GroupOpts},
@@ -144,9 +145,11 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         &self,
         ident: &syn::Ident,
         error_type: &syn::Type,
+        deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
         let finish_constructor = finish_constructor_expr(
             &parse_quote!(#ident),
+            deserialize_lifetime,
             element_fields(self.ast)?,
             attribute_fields(self.ast)?,
             group_fields(self.ast)?,
@@ -309,36 +312,53 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
 
 fn finish_constructor_expr(
     ident: &syn::Path,
+    visitor_lifetime: &syn::Lifetime,
     element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, ChildOpts>>,
     attribute_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, AttributeOpts>>,
     group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, GroupOpts>>,
     constructor_type: &StructType,
     error_type: &syn::Type,
 ) -> Expr {
-    let local_value_expressions_constructors = attribute_fields.into_iter()
-        .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| (
-            a.field_ident,
-            a.options.default_or_else()
-        ))
-        .chain(element_fields.into_iter().map(|a: FieldWithOpts<FieldIdent, ChildOpts>| (
-            a.field_ident,
-            a.options.default_or_else()
-        )))
-      .map(|( field_ident, default_or_else )| {
-          let expression = if let Some(default_or_else) = default_or_else {
-              quote! {
-                  ::core::option::Option::unwrap_or_else(self.#field_ident, #default_or_else)
-              }
-          } else {
-              quote! {
-                  ::core::option::Option::ok_or(self.#field_ident, ::xmlity::de::Error::missing_field(stringify!(#field_ident)))?
-              }
-          };
-          (field_ident, expression)
-      });
+    let local_value_expressions_constructors = attribute_fields
+        .into_iter()
+        .map(|a: FieldWithOpts<FieldIdent, AttributeOpts>| {
+            (
+                a.field_ident,
+                a.field_type,
+                a.options.default_or_else(),
+                false,
+            )
+        })
+        .chain(
+            element_fields
+                .into_iter()
+                .map(|a: FieldWithOpts<FieldIdent, ChildOpts>| {
+                    (
+                        a.field_ident,
+                        a.field_type,
+                        a.options.default_or_else(),
+                        matches!(a.options, ChildOpts::Value(_)),
+                    )
+                }),
+        )
+        .map(
+            |(field_ident, field_type, default_or_else, should_try_none)| {
+                let expression = deserialize_option_value_expr(
+                    &field_type,
+                    &parse_quote!(self.#field_ident),
+                    default_or_else,
+                    should_try_none,
+                    visitor_lifetime,
+                    error_type,
+                    &field_ident.to_string(),
+                );
+
+                (field_ident, expression)
+            },
+        );
     let group_value_expressions_constructors = group_fields.into_iter().map(
         |FieldWithOpts { field_ident, .. }| {
-            let expression = quote! {
+            let expression = parse_quote! {
                 ::xmlity::de::DeserializationGroupBuilder::finish::<#error_type>(self.#field_ident)?
             };
 

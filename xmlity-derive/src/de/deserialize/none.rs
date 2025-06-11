@@ -7,13 +7,13 @@ use crate::{
     common::{constructor_expr, non_bound_generics, FieldIdent, StructType, StructTypeWithFields},
     de::{
         builders::{DeserializeBuilder, DeserializeBuilderExt, VisitorBuilder, VisitorBuilderExt},
-        common::SeqVisitLoop,
+        common::{deserialize_option_value_expr, SeqVisitLoop},
     },
     options::{
         enums::{self},
         records::{
             self,
-            fields::{FieldOpts, FieldValueGroupOpts},
+            fields::{ChildOpts, FieldOpts, FieldValueGroupOpts},
             roots::DeserializeRootOpts,
         },
         AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
@@ -73,30 +73,29 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
         group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::GroupOpts>>,
         constructor_type: StructType,
     ) -> syn::Expr {
-        let local_value_expressions_constructors =
-            element_fields.into_iter()
-            .map::<(_, Expr), _>(|FieldWithOpts {  field_ident, options, field_type }| {
-                let builder_field_ident = field_ident.to_named_ident();
-                let expression = if let Some(default_or_else) = options.default_or_else() {
-                    parse_quote! {
-                        ::core::option::Option::unwrap_or_else(#builder_field_ident, #default_or_else)
-                    }
-                } else {
-                    parse_quote! {
-                        ::core::result::Result::map_err(
-                            ::core::option::Option::map_or_else(
-                                #builder_field_ident,
-                                || <#field_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
-                                    ::xmlity::types::utils::NoneDeserializer::<#error_type>::new(),
-                                ),
-                                |__v| ::core::result::Result::Ok(__v)
-                            ),
-                            |_|  ::xmlity::de::Error::missing_field(stringify!(#field_ident))
-                        )?
-                    }
-                };
+        let local_value_expressions_constructors = element_fields.into_iter().map::<(_, Expr), _>(
+            |FieldWithOpts {
+                 field_ident,
+                 options,
+                 field_type,
+             }| {
+                let builder_ident = field_ident.to_named_ident();
+
+                let should_try_none = matches!(options, ChildOpts::Value(_));
+
+                let expression = deserialize_option_value_expr(
+                    &field_type,
+                    &parse_quote!(#builder_ident),
+                    options.default_or_else(),
+                    should_try_none,
+                    visitor_lifetime,
+                    error_type,
+                    &field_ident.to_string(),
+                );
+
                 (field_ident, expression)
-            });
+            },
+        );
         let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
             |FieldWithOpts {
                  field_ident,

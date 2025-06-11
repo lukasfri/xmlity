@@ -583,6 +583,7 @@ pub trait DeserializationGroupBuilderBuilder {
         &self,
         ident: &Ident,
         error_type: &syn::Type,
+        deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError>;
 
     fn builder_definition(
@@ -619,7 +620,11 @@ pub trait DeserializationGroupBuilderContentExt: DeserializationGroupBuilderBuil
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError>;
 
-    fn finish_fn(&self, builder_ident: &Ident) -> Result<ImplItemFn, DeriveError>;
+    fn finish_fn(
+        &self,
+        builder_ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<ImplItemFn, DeriveError>;
 
     fn deserialization_group_builder_trait_impl(
         &self,
@@ -713,10 +718,18 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         }))
     }
 
-    fn finish_fn(&self, ident: &Ident) -> Result<ImplItemFn, DeriveError> {
+    fn finish_fn(
+        &self,
+        ident: &Ident,
+        deserialize_lifetime: &Lifetime,
+    ) -> Result<ImplItemFn, DeriveError> {
         let error_type_ident = format_ident!("__Error");
 
-        let content = self.finish_fn_body(ident, &parse_quote!(#error_type_ident))?;
+        let content = self.finish_fn_body(
+            ident,
+            &parse_quote!(#error_type_ident),
+            deserialize_lifetime,
+        )?;
 
         Ok(parse_quote! {
         fn finish<#error_type_ident: ::xmlity::de::Error>(self) -> Result<Self::Value, #error_type_ident> {
@@ -751,7 +764,7 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
 
         let elements_done_fn = self.elements_done_fn(deserialize_lifetime)?;
 
-        let finish_fn = self.finish_fn(&ident)?;
+        let finish_fn = self.finish_fn(&ident, deserialize_lifetime)?;
 
         Ok(parse_quote! {
         impl #builder_generics ::xmlity::de::DeserializationGroupBuilder<#deserialize_lifetime> for #builder_ident #non_bound_builder_generics {
