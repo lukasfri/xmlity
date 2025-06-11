@@ -19,6 +19,22 @@ impl Serialize for () {
     }
 }
 
+impl<'de> DeserializationGroup<'de> for () {
+    type Builder = ();
+
+    fn builder() -> Self::Builder {}
+}
+
+impl<'de> DeserializationGroupBuilder<'de> for () {
+    type Value = ();
+
+    fn finish<E: de::Error>(self) -> Result<Self::Value, E> {
+        Ok(())
+    }
+}
+
+impl SerializationGroup for () {}
+
 struct OptionVisitor<T>(std::marker::PhantomData<T>);
 
 impl<T> OptionVisitor<T> {
