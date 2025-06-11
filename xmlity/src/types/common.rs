@@ -194,38 +194,36 @@ impl<T: SerializationGroup> SerializationGroup for Box<T> {
 }
 
 impl<'de, T: DeserializationGroup<'de>> DeserializationGroup<'de> for Box<T> {
-    type Builder = BoxBuilder<'de, T>;
+    type Builder = Box<<T as DeserializationGroup<'de>>::Builder>;
 
     fn builder() -> Self::Builder {
-        BoxBuilder(Box::new(T::builder()))
+        Box::new(T::builder())
     }
 }
 
-/// Builder for `Box<T>`.
-pub struct BoxBuilder<'de, T: DeserializationGroup<'de>>(Box<T::Builder>);
+impl<'de, T: DeserializationGroupBuilder<'de>> DeserializationGroupBuilder<'de> for Box<T> {
+    type Value = Box<T::Value>;
 
-impl<'de, T: DeserializationGroup<'de>> DeserializationGroupBuilder<'de> for BoxBuilder<'de, T> {
-    type Value = Box<T>;
     fn contribute_attributes<D: AttributesAccess<'de>>(
         &mut self,
         access: D,
     ) -> Result<bool, D::Error> {
-        self.0.contribute_attributes(access)
+        (**self).contribute_attributes(access)
     }
 
     fn attributes_done(&self) -> bool {
-        self.0.attributes_done()
+        (**self).attributes_done()
     }
 
     fn contribute_elements<D: SeqAccess<'de>>(&mut self, access: D) -> Result<bool, D::Error> {
-        self.0.contribute_elements(access)
+        (**self).contribute_elements(access)
     }
 
     fn elements_done(&self) -> bool {
-        self.0.elements_done()
+        (**self).elements_done()
     }
 
     fn finish<E: de::Error>(self) -> Result<Self::Value, E> {
-        self.0.finish().map(Box::new)
+        (*self).finish().map(Box::new)
     }
 }
