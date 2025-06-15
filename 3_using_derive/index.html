@@ -190,12 +190,12 @@ These attributes can be used to require that an element has a specific name and 
 <h3 id="attribute_order---and-children_order---1"><a class="header" href="#attribute_order---and-children_order---1"><code>attribute_order = "..."</code> and <code>children_order = "..."</code></a></h3>
 <p>By default, groups in XMLity are deserialized regardless of the order of the inputs, but this can be changed using the <code>attribute_order</code> and <code>children_order</code> attributes. These attributes change groups to require that the inputs be in the same order as the fields in the struct. The possible values are as follows:</p>
 <ul>
-<li><code>strict</code>: Elements/groups must be in order, and no other elements can be interspersed between them.</li>
+<li><code>strict</code>: Elements/groups must be in order, and no other values can be interspersed between them.</li>
 <li><code>loose</code>: Elements/groups must be in order, but incorrect elements can be interspersed between them. This can include elements in parent groups/elements.</li>
 <li><code>none</code>: Elements/groups can be in any order (default).</li>
 </ul>
 <!-- TODO: Some examples -->
-<p>This behaviour works on nested levels, so if you have an element with <code>children_order = "loose"</code>, and a group with <code>children_order = "none"</code> inside it, the elements listed in the group can be in any order, but they must be in order with respect to the other elements in the parent element.</p>
+<p>This behaviour works on nested levels, so if you have an element with <code>children_order = "strict"</code>, and a group with <code>children_order = "none"</code> inside it, the elements listed in the group can be in any order, but they must be in order with respect to the other elements in the parent element.</p>
 <!-- TODO: Some examples -->
 <h2 id="serializedeserialize---nothing-on-enums"><a class="header" href="#serializedeserialize---nothing-on-enums"><code>Serialize</code>/<code>Deserialize</code> - Nothing on enums</a></h2>
 <p>All variants must have exactly one unnamed field, and the type of that field must implement <code>Serialize</code>/<code>Deserialize</code>.</p>
