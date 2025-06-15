@@ -7,13 +7,13 @@ use crate::{
     common::{constructor_expr, non_bound_generics, FieldIdent, StructType, StructTypeWithFields},
     de::{
         builders::{DeserializeBuilder, DeserializeBuilderExt, VisitorBuilder, VisitorBuilderExt},
-        common::{deserialize_option_value_expr, SeqVisitLoop},
+        components::SeqLoopAccessor,
     },
     options::{
         enums::{self},
         records::{
             self,
-            fields::{ChildOpts, FieldOpts, FieldValueGroupOpts},
+            fields::{FieldOpts, FieldValueGroupOpts},
             roots::DeserializeRootOpts,
         },
         AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
@@ -32,105 +32,18 @@ pub struct RecordDeserializeValueBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
 }
 
 impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
-    pub fn field_decl(
-        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::ChildOpts>>,
-        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::GroupOpts>>,
-    ) -> Vec<Stmt> {
-        let getter_declarations = element_fields.into_iter().map::<Stmt, _>(
-                |FieldWithOpts {
-                     field_ident,
-                     field_type,
-                     ..
-                 }| {
-                    let builder_field_ident = field_ident.to_named_ident();
-                    parse_quote! {
-                        let mut #builder_field_ident = ::core::option::Option::<#field_type>::None;
-                    }
-                },
-            ).chain(group_fields.into_iter().map::<Stmt, _>(
-                |FieldWithOpts {
-                     field_ident,
-                     field_type,
-                     ..
-                 }| {
-                    let builder_field_ident = field_ident.to_named_ident();
-                    parse_quote! {
-                        let mut #builder_field_ident = <#field_type as ::xmlity::de::DeserializationGroup>::builder();
-                    }
-                },
-            ));
-
-        parse_quote! {
-            #(#getter_declarations)*
-        }
-    }
-
-    pub fn constructor_expr(
-        path: &syn::Path,
-        visitor_lifetime: &syn::Lifetime,
-        error_type: &syn::Type,
-        element_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::ChildOpts>>,
-        group_fields: impl IntoIterator<Item = FieldWithOpts<FieldIdent, records::fields::GroupOpts>>,
-        constructor_type: StructType,
-    ) -> syn::Expr {
-        let local_value_expressions_constructors = element_fields.into_iter().map::<(_, Expr), _>(
-            |FieldWithOpts {
-                 field_ident,
-                 options,
-                 field_type,
-             }| {
-                let builder_ident = field_ident.to_named_ident();
-
-                let should_try_none = matches!(options, ChildOpts::Value(_));
-
-                let expression = deserialize_option_value_expr(
-                    &field_type,
-                    &parse_quote!(#builder_ident),
-                    options.default_or_else(),
-                    should_try_none,
-                    visitor_lifetime,
-                    error_type,
-                    &field_ident.to_string(),
-                );
-
-                (field_ident, expression)
-            },
-        );
-        let group_value_expressions_constructors = group_fields.into_iter().map::<(_, Expr), _>(
-            |FieldWithOpts {
-                 field_ident,
-                 ..
-             }| {
-                let builder_field_ident = field_ident.to_named_ident();
-                let expression = parse_quote! {
-                    ::xmlity::de::DeserializationGroupBuilder::finish::<#error_type>(#builder_field_ident)?
-                };
-
-                (field_ident, expression)
-            },
-        );
-
-        let value_expressions_constructors =
-            local_value_expressions_constructors.chain(group_value_expressions_constructors);
-
-        constructor_expr(path, value_expressions_constructors, &constructor_type)
-    }
-
     fn str_value_body(
         &self,
         value: &str,
         value_ident: &Ident,
-        visitor_lifetime: &Lifetime,
+        _visitor_lifetime: &Lifetime,
         _access_type: &Type,
-        error_type: &Type,
+        _error_type: &Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
-        let constructor = (self.input.wrapper_function)(Self::constructor_expr(
+        let constructor = (self.input.wrapper_function)(constructor_expr::<syn::Expr>(
             self.input.constructor_path.as_ref(),
-            visitor_lifetime,
-            error_type,
             [],
-            [],
-            StructType::Unit,
+            &StructType::Unit,
         ));
 
         Ok(parse_quote! {
@@ -287,22 +200,6 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             StructTypeWithFields::Unit => (StructType::Unit, vec![]),
         };
 
-        let element_fields = fields.clone().into_iter().filter_map(|field| {
-            field.map_options_opt(|opt| match opt {
-                FieldOpts::Value(opts) => Some(opts),
-                _ => None,
-            })
-        });
-
-        let group_fields = fields.clone().into_iter().filter_map(|field| {
-            field.map_options_opt(|opt| match opt {
-                FieldOpts::Group(opts) => Some(opts),
-                _ => None,
-            })
-        });
-
-        let getter_declarations = Self::field_decl(element_fields.clone(), group_fields.clone());
-
         let element_group_fields = fields.clone().into_iter().filter_map(|field| {
             field.map_options_opt(|opt| match opt {
                 FieldOpts::Value(opts) => Some(FieldValueGroupOpts::Value(opts)),
@@ -311,19 +208,27 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
             })
         });
 
-        let children_loop = element_group_fields
-            .clone()
-            .next()
-            .is_some()
-            .then(|| {
-                SeqVisitLoop::new(
-                    access_ident,
-                    self.allow_unknown_children,
-                    self.children_order,
-                    self.ignore_whitespace,
-                    element_group_fields,
+        let seq_loop_accessor = element_group_fields.clone().next().is_some().then(|| {
+            SeqLoopAccessor::new(
+                self.allow_unknown_children,
+                self.children_order,
+                self.ignore_whitespace,
+            )
+        });
+
+        let field_definitions = seq_loop_accessor
+            .as_ref()
+            .map(|a| a.field_definitions(element_group_fields.clone()))
+            .transpose()?
+            .unwrap_or_default();
+
+        let access_loop = seq_loop_accessor
+            .as_ref()
+            .map(|a| {
+                a.access_loop(
+                    element_group_fields.clone(),
+                    &parse_quote!(&mut #access_ident),
                 )
-                .access_loop()
             })
             .transpose()?
             .unwrap_or_default();
@@ -331,19 +236,22 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
         let error_type: syn::Type =
             parse_quote!(<#access_type as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error);
 
-        let constructor = (self.input.wrapper_function)(Self::constructor_expr(
+        let result_exprs = seq_loop_accessor
+            .as_ref()
+            .map(|a| a.value_expressions(element_group_fields, visitor_lifetime, &error_type))
+            .transpose()?
+            .unwrap_or_default();
+
+        let constructor = (self.input.wrapper_function)(constructor_expr(
             self.input.constructor_path.as_ref(),
-            visitor_lifetime,
-            &error_type,
-            element_fields.clone(),
-            group_fields.clone(),
-            constructor_type,
+            result_exprs,
+            &constructor_type,
         ));
 
         Ok(Some(parse_quote! {
-            #(#getter_declarations)*
+            #(#field_definitions)*
 
-            #(#children_loop)*
+            #(#access_loop)*
 
             ::core::result::Result::Ok(#constructor)
         }))
