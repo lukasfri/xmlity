@@ -23,7 +23,6 @@ pub struct ElementLoopAccessor {
 impl ElementLoopAccessor {
     pub fn new(
         allow_unknown_children: AllowUnknown,
-
         allow_unknown_attributes: AllowUnknown,
         children_order: ElementOrder,
         attribute_order: ElementOrder,
@@ -131,8 +130,7 @@ impl ElementLoopAccessor {
 
         let attribute_group_fields = fields
             .into_iter()
-            .map(|a| a.map_options_opt(|a| a.attribute_group()))
-            .flatten();
+            .flat_map(|a| a.map_options_opt(|a| a.attribute_group()));
 
         let field_visits = builder_attribute_field_visitor(
             access_expr,
@@ -210,8 +208,7 @@ impl ElementLoopAccessor {
     ) -> DeriveResult<Vec<Stmt>> {
         let child_group_fields = fields
             .into_iter()
-            .map(|a| a.map_options_opt(|a| a.value_group()))
-            .flatten();
+            .flat_map(|a| a.map_options_opt(|a| a.value_group()));
 
         self.children_loop_accessor
             .access_loop(child_group_fields, access_expr)
