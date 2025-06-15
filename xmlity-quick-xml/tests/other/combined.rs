@@ -3,7 +3,7 @@ use xmlity::{DeserializationGroup, Deserialize, SerializationGroup, Serialize};
 use crate::define_test;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xvalue(order = "loose")]
+#[xvalue(order = "strict")]
 pub struct CombinedValue {
     #[xvalue(default)]
     pub a_list: Vec<A>,
@@ -17,7 +17,7 @@ pub struct CombinedValueGroup {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xvalue(order = "loose")]
+#[xvalue(order = "strict")]
 pub struct BParent {
     #[xelement(name = "b", optional, default)]
     pub b: Option<()>,
@@ -35,7 +35,7 @@ pub struct C(#[xgroup] pub CombinedValueGroup);
 pub struct D(pub CombinedValue);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xelement(name = "e", children_order = "loose")]
+#[xelement(name = "e", children_order = "strict")]
 pub struct E {
     #[xvalue(default)]
     pub a_list: Vec<A>,
