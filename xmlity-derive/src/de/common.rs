@@ -4,9 +4,7 @@ use syn::{parse_quote, Expr, ExprWhile, Generics, Ident, Stmt};
 use crate::{
     common::FieldIdent,
     de::builders::DeserializeBuilderExt,
-    options::{
-        records::fields::FieldValueGroupOpts, AllowUnknown, FieldWithOpts, IgnoreWhitespace,
-    },
+    options::{records::fields::FieldValueGroupOpts, FieldWithOpts},
     DeriveError, DeriveResult,
 };
 
@@ -22,140 +20,11 @@ use crate::{
 };
 
 use quote::{quote, ToTokens};
-use syn::spanned::Spanned;
-
-use crate::options::ElementOrder;
 
 use super::deserialize::{DeserializeSingleChildElementBuilder, SimpleDeserializeAttributeBuilder};
 
-pub struct SeqVisitLoop<
-    'a,
-    F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone,
-> {
-    seq_access_ident: &'a Ident,
-    allow_unknown_children: AllowUnknown,
-    order: ElementOrder,
-    fields: F,
-    ignore_whitespace: IgnoreWhitespace,
-}
-
-impl<'a, F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>> + Clone>
-    SeqVisitLoop<'a, F>
-{
-    pub fn new(
-        seq_access_ident: &'a Ident,
-        allow_unknown_children: AllowUnknown,
-        order: ElementOrder,
-        ignore_whitespace: IgnoreWhitespace,
-        fields: F,
-    ) -> Self {
-        Self {
-            seq_access_ident,
-            allow_unknown_children,
-            order,
-            fields,
-            ignore_whitespace,
-        }
-    }
-
-    pub fn access_loop(&self) -> DeriveResult<Vec<Stmt>> {
-        let Self {
-            seq_access_ident: access_ident,
-            allow_unknown_children,
-            order,
-            fields,
-            ignore_whitespace,
-        } = self;
-
-        let pop_error = matches!(order, ElementOrder::Loose);
-
-        let field_visits = builder_element_field_visitor(
-            access_ident,
-            |field| {
-                let field = field.to_named_ident();
-                parse_quote!(#field)
-            },
-            fields.clone(),
-            parse_quote! {break;},
-            match order {
-                ElementOrder::Loose => parse_quote! {break;},
-                ElementOrder::None => parse_quote! {continue;},
-            },
-            parse_quote! {continue;},
-            parse_quote! {},
-            pop_error,
-        )?;
-
-        let ignore_whitespace_expression: Vec<Stmt> = match ignore_whitespace {
-            IgnoreWhitespace::Any => {
-                parse_quote! {
-                    if let Ok(Some(_)) = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::Whitespace>(&mut #access_ident) {
-                        continue;
-                    }
-                }
-            }
-            IgnoreWhitespace::None => {
-                vec![]
-            }
-        };
-
-        let skip_unknown: Vec<Stmt> = match allow_unknown_children {
-            AllowUnknown::Any => {
-                let skip_ident = Ident::new("__skip", access_ident.span());
-                parse_quote! {
-                    let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
-                    if ::core::option::Option::is_none(&#skip_ident) {
-                        break;
-                    }
-                    continue;
-                }
-            }
-            AllowUnknown::AtEnd => {
-                //Ignore whatever is left
-                parse_quote! {
-                    break;
-                }
-            }
-            AllowUnknown::None => {
-                //Check that nothing is left
-                let skip_ident = Ident::new("__skip", access_ident.span());
-                parse_quote! {
-                    let #skip_ident = ::xmlity::de::SeqAccess::next_element::<::xmlity::types::utils::IgnoredAny>(&mut #access_ident).unwrap_or(None);
-                    if ::core::option::Option::is_none(&#skip_ident) {
-                        break;
-                    }
-
-                    return Err(::xmlity::de::Error::unknown_child());
-                }
-            }
-        };
-
-        match order {
-            ElementOrder::Loose => field_visits
-                .into_iter()
-                .map(|field_visit| {
-                    Ok(parse_quote! {
-                        loop {
-                            #(#ignore_whitespace_expression)*
-                            #field_visit
-                            #(#skip_unknown)*
-                        }
-                    })
-                })
-                .collect(),
-            ElementOrder::None => Ok(parse_quote! {
-                loop {
-                    #(#ignore_whitespace_expression)*
-                    #(#field_visits)*
-                    #(#skip_unknown)*
-                }
-            }),
-        }
-    }
-}
-
 fn attribute_field_deserialize_impl(
-    access_ident: &Ident,
+    access_expr: &Expr,
     ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts {
         field_ident,
@@ -226,7 +95,7 @@ fn attribute_field_deserialize_impl(
         #(#finished_attribute)*
     };
     let deserialize_expr: Expr = parse_quote!(
-        ::xmlity::de::AttributesAccess::next_attribute::<#deserialize_type>(&mut #access_ident)
+        ::xmlity::de::AttributesAccess::next_attribute::<#deserialize_type>(#access_expr)
     );
 
     let inner = pop_or_ignore_error(&temporary_value_ident, &deserialize_expr, pop_error, inner);
@@ -245,7 +114,7 @@ fn attribute_field_deserialize_impl(
 }
 
 fn group_field_contribute_attributes(
-    access_ident: &Ident,
+    access_expr: &Expr,
     ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts { field_ident, .. }: FieldWithOpts<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
@@ -257,7 +126,7 @@ fn group_field_contribute_attributes(
         Ident::new("__contributed_to_attributes", Span::call_site());
 
     let deserialize_expr: Expr = parse_quote!(
-        ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_expr, ::xmlity::de::AttributesAccess::sub_access(&mut #access_ident)?)
+        ::xmlity::de::DeserializationGroupBuilder::contribute_attributes(&mut #builder_expr, ::xmlity::de::AttributesAccess::sub_access(#access_expr)?)
     );
 
     let inner = quote! {
@@ -287,7 +156,7 @@ fn group_field_contribute_attributes(
 pub fn builder_attribute_field_visitor<
     F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldAttributeGroupOpts>>,
 >(
-    access_ident: &Ident,
+    access_expr: &Expr,
     ident_to_expr: impl Fn(&FieldIdent) -> Expr + Clone,
     fields: F,
     if_next_attribute_none: Vec<Stmt>,
@@ -317,7 +186,7 @@ pub fn builder_attribute_field_visitor<
                 ),
             )| match &var_field.options {
                 FieldAttributeGroupOpts::Attribute(_) => attribute_field_deserialize_impl(
-                    access_ident,
+                    access_expr,
                     ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldAttributeGroupOpts::Attribute(opts) => opts,
@@ -329,7 +198,7 @@ pub fn builder_attribute_field_visitor<
                     pop_error,
                 ),
                 FieldAttributeGroupOpts::Group(_) => Ok(group_field_contribute_attributes(
-                    access_ident,
+                    access_expr,
                     ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldAttributeGroupOpts::Group(opts) => opts,
@@ -346,7 +215,7 @@ pub fn builder_attribute_field_visitor<
 }
 
 pub fn element_field_deserialize_impl(
-    access_ident: &Ident,
+    access_expr: &Expr,
     ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts {
         field_ident,
@@ -451,7 +320,7 @@ pub fn element_field_deserialize_impl(
         };
 
         Some(parse_quote! {
-            while let Ok(Some(#loop_temporary_value_ident)) = ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(&mut #access_ident) {
+            while let Ok(Some(#loop_temporary_value_ident)) = ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(#access_expr) {
                 #value_transformer
                 ::core::iter::Extend::extend(&mut #temporary_value_ident, #extendable_value);
             }
@@ -474,7 +343,7 @@ pub fn element_field_deserialize_impl(
     );
 
     let deserialize_expr: Expr = parse_quote!(
-        ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(&mut #access_ident)
+        ::xmlity::de::SeqAccess::next_element_seq::<#deserialize_type>(#access_expr)
     );
 
     let inner = pop_or_ignore_error(&temporary_value_ident, &deserialize_expr, pop_error, inner);
@@ -515,7 +384,7 @@ pub fn pop_or_ignore_error(
 }
 
 pub fn group_field_contribute_elements(
-    access_ident: &Ident,
+    access_expr: &Expr,
     ident_to_expr: impl FnOnce(&FieldIdent) -> Expr,
     FieldWithOpts { field_ident, .. }: FieldWithOpts<FieldIdent, GroupOpts>,
     if_contributed_to_groups: &[Stmt],
@@ -526,7 +395,7 @@ pub fn group_field_contribute_elements(
     let contributed_to_elements_ident = Ident::new("__contributed_to_elements", Span::call_site());
 
     let deserialize_expr: Expr = parse_quote!(
-        ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_expr, ::xmlity::de::SeqAccess::sub_access(&mut #access_ident)?)
+        ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_field_expr, ::xmlity::de::SeqAccess::sub_access(#access_expr)?)
     );
 
     let inner = quote! {
@@ -558,7 +427,7 @@ pub fn group_field_contribute_elements(
 pub fn builder_element_field_visitor<
     F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldValueGroupOpts>>,
 >(
-    access_ident: &Ident,
+    access_expr: &Expr,
     ident_to_expr: impl Fn(&FieldIdent) -> Expr + Clone,
     fields: F,
     if_next_element_none: Vec<Stmt>,
@@ -588,7 +457,7 @@ pub fn builder_element_field_visitor<
                 ),
             )| match &var_field.options {
                 FieldValueGroupOpts::Value(_) => element_field_deserialize_impl(
-                    access_ident,
+                    access_expr,
                     ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldValueGroupOpts::Value(opts) => opts,
@@ -600,7 +469,7 @@ pub fn builder_element_field_visitor<
                     pop_error,
                 ),
                 FieldValueGroupOpts::Group(_) => group_field_contribute_elements(
-                    access_ident,
+                    access_expr,
                     ident_to_expr,
                     var_field.map_options(|opts| match opts {
                         FieldValueGroupOpts::Group(opts) => opts,

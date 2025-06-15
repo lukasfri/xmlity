@@ -57,7 +57,7 @@ fn complex_type_alike_wrapped_element_equals_element() {
     #[derive(
         Debug, PartialEq, Serialize, Deserialize, SerializationGroup, DeserializationGroup,
     )]
-    #[xelement(name = "a", namespace_expr = XmlNamespace::XS, children_order = "loose")]
+    #[xelement(name = "a", namespace_expr = XmlNamespace::XS, children_order = "strict")]
     #[xgroup(children_order = "strict")]
     pub struct A {
         #[xvalue(default)]
@@ -116,7 +116,7 @@ fn simple_wrapped_element_equals_element() {
     #[derive(
         Debug, PartialEq, Serialize, Deserialize, SerializationGroup, DeserializationGroup,
     )]
-    #[xelement(name = "a", namespace_expr = XmlNamespace::XS, children_order = "loose")]
+    #[xelement(name = "a", namespace_expr = XmlNamespace::XS, children_order = "strict")]
     #[xgroup(children_order = "strict")]
     pub struct A {
         #[xvalue(default)]
@@ -234,7 +234,7 @@ fn top_level_xs_wrapped_element_equals_element() {
     #[xelement(
         name = "element",
         namespace = "http://www.w3.org/2001/XMLSchema",
-        children_order = "loose"
+        children_order = "strict"
     )]
     #[xgroup(children_order = "strict")]
     struct TopLevelElement {

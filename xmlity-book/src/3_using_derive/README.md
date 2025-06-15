@@ -54,13 +54,13 @@ The `SerializationGroup` and `DeserializationGroup` traits are used to define gr
 
 By default, groups in XMLity are deserialized regardless of the order of the inputs, but this can be changed using the `attribute_order` and `children_order` attributes. These attributes change groups to require that the inputs be in the same order as the fields in the struct. The possible values are as follows:
 
-- `strict`: Elements/groups must be in order, and no other elements can be interspersed between them.
+- `strict`: Elements/groups must be in order, and no other values can be interspersed between them.
 - `loose`: Elements/groups must be in order, but incorrect elements can be interspersed between them. This can include elements in parent groups/elements.
 - `none`: Elements/groups can be in any order (default).
 
 <!-- TODO: Some examples -->
 
-This behaviour works on nested levels, so if you have an element with `children_order = "loose"`, and a group with `children_order = "none"` inside it, the elements listed in the group can be in any order, but they must be in order with respect to the other elements in the parent element.
+This behaviour works on nested levels, so if you have an element with `children_order = "strict"`, and a group with `children_order = "none"` inside it, the elements listed in the group can be in any order, but they must be in order with respect to the other elements in the parent element.
 
 <!-- TODO: Some examples -->
 

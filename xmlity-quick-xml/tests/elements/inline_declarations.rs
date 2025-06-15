@@ -252,7 +252,7 @@ define_test!(
 pub struct S;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xvalue(order = "loose")]
+#[xvalue(order = "strict")]
 pub struct T {
     #[xelement(name = "s", group, optional, default)]
     pub simple_type: Option<Box<S>>,
@@ -292,7 +292,7 @@ define_test!(
 );
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xvalue(order = "loose")]
+#[xvalue(order = "strict")]
 pub struct V {
     #[xelement(name = "n", group)]
     pub n: Box<N>,
