@@ -20,7 +20,7 @@ pub struct AGroup {
 pub struct A(#[xgroup] pub AGroup);
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[xelement(name = "a", children_order = "loose")]
+#[xelement(name = "a", children_order = "strict")]
 pub struct ATop {
     #[xattribute(name = "attr-a", optional)]
     pub attr_a: Option<String>,

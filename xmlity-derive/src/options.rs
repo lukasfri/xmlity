@@ -21,7 +21,7 @@ pub enum GroupOrder {
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 #[darling(rename_all = "snake_case")]
 pub enum ElementOrder {
-    Loose,
+    Strict,
     #[default]
     None,
 }
@@ -802,6 +802,36 @@ pub mod records {
             Value(ChildOpts),
             Attribute(AttributeOpts),
             Group(GroupOpts),
+        }
+
+        impl FieldOpts {
+            pub fn value_group(self) -> Option<FieldValueGroupOpts> {
+                match self {
+                    FieldOpts::Value(child_opts) => Some(FieldValueGroupOpts::Value(child_opts)),
+                    FieldOpts::Attribute(_) => None,
+                    FieldOpts::Group(group_opts) => Some(FieldValueGroupOpts::Group(group_opts)),
+                }
+            }
+
+            pub fn attribute(self) -> Option<AttributeOpts> {
+                match self {
+                    FieldOpts::Value(_) => None,
+                    FieldOpts::Attribute(attribute_opts) => Some(attribute_opts),
+                    FieldOpts::Group(_) => None,
+                }
+            }
+
+            pub fn attribute_group(self) -> Option<FieldAttributeGroupOpts> {
+                match self {
+                    FieldOpts::Value(_) => None,
+                    FieldOpts::Attribute(attribute_opts) => {
+                        Some(FieldAttributeGroupOpts::Attribute(attribute_opts))
+                    }
+                    FieldOpts::Group(group_opts) => {
+                        Some(FieldAttributeGroupOpts::Group(group_opts))
+                    }
+                }
+            }
         }
 
         #[allow(clippy::large_enum_variant)]

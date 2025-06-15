@@ -10,7 +10,7 @@ pub struct A;
 pub struct B;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xvalue(order = "loose")]
+#[xvalue(order = "strict")]
 pub struct F {
     #[xvalue(default)]
     pub a: Vec<A>,
@@ -26,14 +26,14 @@ pub struct C;
 pub struct D;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xvalue(order = "loose")]
+#[xvalue(order = "strict")]
 pub struct G {
     #[xelement(name = "E", optional, default)]
     pub e: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[xvalue(order = "loose")]
+#[xvalue(order = "strict")]
 pub struct I {
     #[xvalue(default)]
     pub c: Option<Box<C>>,

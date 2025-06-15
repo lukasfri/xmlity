@@ -61,7 +61,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let attribute_visit = builder_attribute_field_visitor(
-            attributes_access_ident,
+            &parse_quote!(&mut #attributes_access_ident),
             |field| parse_quote! {self.#field},
             attribute_group_fields(self.ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
@@ -103,7 +103,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
         _deserialize_lifetime: &Lifetime,
     ) -> DeriveResult<Option<Vec<Stmt>>> {
         let element_visit = builder_element_field_visitor(
-            elements_access_ident,
+            &parse_quote!(&mut #elements_access_ident),
             |field| parse_quote! {self.#field},
             element_group_fields(self.ast)?,
             parse_quote! {return ::core::result::Result::Ok(false);},
