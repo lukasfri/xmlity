@@ -33,18 +33,18 @@ impl ElementOpts {
     pub fn to_builder<'a>(
         &'a self,
         field_ident: &'a FieldIdent,
-        wrapper_ident: &'a Ident,
+        ident: &'a Ident,
         generics: &'a syn::Generics,
-        field_type: &'a Type,
+        item_type: &'a Type,
     ) -> DeserializeSingleChildElementBuilder<'a> {
         DeserializeSingleChildElementBuilder {
-            ident: &wrapper_ident,
-            generics: &generics,
+            ident,
+            generics,
             required_expanded_name: Some(
                 self.expanded_name(field_ident.to_named_ident().to_string().as_str())
                     .into_owned(),
             ),
-            item_type: &field_type,
+            item_type,
             default: self.default,
             default_with: self.default_with.clone(),
             extendable: self.extendable,
