@@ -3,9 +3,12 @@ use syn::{parse_quote, spanned::Spanned, Expr, Generics, Ident, Lifetime, Stmt, 
 
 use crate::{
     common::FieldIdent,
-    de::{builders::DeserializeBuilderExt, common::{
-        builder_element_field_visitor, deserialize_option_value_expr, one_stop_field_expression,
-    }},
+    de::{
+        builders::DeserializeBuilderExt,
+        common::{
+            builder_element_field_visitor, deserialize_option_value_expr, one_stop_field_expression,
+        },
+    },
     derive::{DeriveError, DeriveResult},
     options::{
         records::fields::{ChildOpts, FieldValueGroupOpts},
@@ -185,7 +188,7 @@ impl SeqLoopAccessor {
                             let condition: syn::Expr = parse_quote!(
                                 !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_ident)
                             );
-                            
+
                             let deserialize_expr: Expr = parse_quote!(
                                 ::xmlity::de::DeserializationGroupBuilder::contribute_elements(&mut #builder_ident, ::xmlity::de::SeqAccess::sub_access(#seq_access)?)?
                             );
@@ -203,13 +206,16 @@ impl SeqLoopAccessor {
                     Ok((f, condition, deserialize_stmts))
                 }).collect::<Result<Vec<_>, _>>()?;
 
-                let if_statements = field_visits.into_iter().map(|(_f, condition, deserialize_stmts)| {
-                    parse_quote!(
-                        if #condition {
-                            #(#deserialize_stmts)*
-                        }
-                    )
-                });
+                let if_statements =
+                    field_visits
+                        .into_iter()
+                        .map(|(_f, condition, deserialize_stmts)| {
+                            parse_quote!(
+                                if #condition {
+                                    #(#deserialize_stmts)*
+                                }
+                            )
+                        });
 
                 // Bind the if_statements together to if else if else if else
                 let if_statements: Option<proc_macro2::TokenStream> =
