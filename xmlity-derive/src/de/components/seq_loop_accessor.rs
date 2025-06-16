@@ -183,7 +183,7 @@ impl SeqLoopAccessor {
                             let builder_ident = f.field_ident.to_named_ident();
 
                             let condition: syn::Expr = parse_quote!(
-                                ::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_ident)
+                                !::xmlity::de::DeserializationGroupBuilder::elements_done(&#builder_ident)
                             );
                             
                             let deserialize_expr: Expr = parse_quote!(
