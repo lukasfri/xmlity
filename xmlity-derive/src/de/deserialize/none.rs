@@ -228,6 +228,8 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
                 a.access_loop(
                     element_group_fields.clone(),
                     &parse_quote!(&mut #access_ident),
+                    access_type,
+                    visitor_lifetime,
                 )
             })
             .transpose()?

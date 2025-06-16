@@ -1,5 +1,5 @@
 use quote::format_ident;
-use syn::{parse_quote, Expr, Stmt};
+use syn::{parse_quote, Expr, Lifetime, Stmt, Type};
 
 use crate::{
     common::FieldIdent,
@@ -204,21 +204,27 @@ impl ElementLoopAccessor {
     pub fn children_access_loop<F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldOpts>>>(
         &self,
         fields: F,
-        access_expr: &Expr,
+        seq_access: &Expr,
+        seq_access_ty: &Type,
+        visitor_lifetime: &Lifetime,
     ) -> DeriveResult<Vec<Stmt>> {
         let child_group_fields = fields
             .into_iter()
             .flat_map(|a| a.map_options_opt(|a| a.value_group()));
 
-        self.children_loop_accessor
-            .access_loop(child_group_fields, access_expr)
+        self.children_loop_accessor.access_loop(
+            child_group_fields,
+            seq_access,
+            seq_access_ty,
+            visitor_lifetime,
+        )
     }
 
     pub fn value_expressions<F: IntoIterator<Item = FieldWithOpts<FieldIdent, FieldOpts>>>(
         &self,
         fields: F,
-        visitor_lifetime: &syn::Lifetime,
-        error_type: &syn::Type,
+        visitor_lifetime: &Lifetime,
+        error_type: &Type,
     ) -> DeriveResult<Vec<(FieldIdent, Expr)>> {
         let (attribute_fields, child_group_fields) = Self::split_fields(fields);
 
