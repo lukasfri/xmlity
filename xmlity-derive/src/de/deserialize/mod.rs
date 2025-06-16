@@ -3,9 +3,8 @@ use std::{borrow::Cow, ops::Not};
 
 pub use attributes::SimpleDeserializeAttributeBuilder;
 mod elements;
-mod single_child_element;
-pub use single_child_element::DeserializeSingleChildElementBuilder;
 mod none;
+mod single_child_element;
 mod variant;
 use attributes::RecordDeserializeAttributeBuilder;
 use elements::RecordDeserializeElementBuilder;

@@ -21,7 +21,7 @@ use crate::{
 
 use quote::{quote, ToTokens};
 
-use super::deserialize::{DeserializeSingleChildElementBuilder, SimpleDeserializeAttributeBuilder};
+use super::deserialize::SimpleDeserializeAttributeBuilder;
 
 fn attribute_field_deserialize_impl(
     access_expr: &Expr,
@@ -236,33 +236,16 @@ pub fn element_field_deserialize_impl(
     let empty_generics: Generics = parse_quote!();
 
     let wrapper_data = match &options {
-        ChildOpts::Element(
-            opts @ ElementOpts {
-                extendable,
-                group,
-                default,
-                default_with,
-                optional,
-                ..
-            },
-        ) => {
-            let builder = DeserializeSingleChildElementBuilder {
-                ident: &wrapper_ident,
-                generics: &empty_generics,
-                required_expanded_name: Some(
-                    opts.expanded_name(field_ident.to_named_ident().to_string().as_str())
-                        .into_owned(),
-                ),
-                item_type: &field_type,
-                default: *default || *optional,
-                default_with: default_with.clone(),
-                extendable: *extendable,
-                group: *group,
-            };
+        ChildOpts::Element(opts) => {
+            let builder =
+                opts.to_builder(&field_ident, &wrapper_ident, &empty_generics, &field_type);
 
-            let deserialize_unwrapper = |ident: &Ident| {
+            let unwrap_expr = builder.unwrap_expression();
+
+            let deserialize_unwrapper = move |ident: &Ident| {
+                let unwrap_expr = unwrap_expr(&parse_quote!(#ident));
                 quote! {
-                    let mut #ident = #ident.__value;
+                    let mut #ident = #unwrap_expr;
                 }
             };
 
@@ -298,7 +281,7 @@ pub fn element_field_deserialize_impl(
     {
         let loop_temporary_value_ident = Ident::new("__vv", Span::call_site());
         let value_transformer = deserialize_unwrapper
-            .copied()
+            .cloned()
             .map(|a| (a)(&loop_temporary_value_ident));
 
         let extendable_value: Expr = if extendable == Extendable::Iterator {
@@ -421,6 +404,83 @@ pub fn group_field_contribute_elements(
 
         }
     })
+}
+
+pub fn one_stop_field_expression(
+    seq_access_ty: &syn::Type,
+    seq_access: &syn::Expr,
+    visitor_lifetime: &syn::Lifetime,
+    de_type: &syn::Type,
+    missing_field: &str,
+    default_or_else: Option<&Expr>,
+    unwrap_function: Option<impl Fn(&Expr) -> Expr>,
+) -> syn::Expr {
+    let deserialize_expr: Expr = parse_quote!(
+        ::xmlity::de::SeqAccess::next_element_seq::<#de_type>(#seq_access)
+    );
+
+    let option_value: Expr = parse_quote!(
+        ::core::option::Option::flatten(
+            ::core::result::Result::ok(
+                #deserialize_expr
+            )
+        )
+    );
+
+    let mapped_option_value = if let Some(unwrap_function) = unwrap_function.as_ref() {
+        let unwrap_expr = unwrap_function(&parse_quote!(__v));
+        parse_quote!(
+            ::core::option::Option::map(
+                #option_value,
+                |__v| #unwrap_expr
+            )
+        )
+    } else {
+        option_value
+    };
+
+    if let Some(default_or_else) = default_or_else {
+        parse_quote!(
+            ::core::option::Option::unwrap_or_else(
+                #mapped_option_value,
+                #default_or_else
+            )
+        )
+    } else {
+        let deserialize_none_expr: syn::Expr = parse_quote!(
+            <#de_type as ::xmlity::Deserialize<#visitor_lifetime>>::deserialize_seq(
+                ::xmlity::types::utils::NoneDeserializer::<
+                    <#seq_access_ty as ::xmlity::de::SeqAccess<#visitor_lifetime>>::Error
+                >::new()
+            )
+        );
+
+        let deserialize_none_option_expr: syn::Expr = parse_quote!(
+            ::core::result::Result::ok(#deserialize_none_expr)
+        );
+
+        let deserialize_none_option_expr = if let Some(unwrap_function) = unwrap_function {
+            let unwrap_expr = unwrap_function(&parse_quote!(__v));
+            parse_quote!(
+                ::core::option::Option::map(
+                    #deserialize_none_option_expr,
+                    |__v| #unwrap_expr
+                )
+            )
+        } else {
+            deserialize_none_option_expr
+        };
+
+        parse_quote!(::core::option::Option::ok_or_else(
+            ::core::option::Option::or_else(
+                #mapped_option_value,
+                || {
+                    #deserialize_none_option_expr
+                },
+            ),
+            || ::xmlity::de::Error::missing_field(stringify!(#missing_field)),
+        )?)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

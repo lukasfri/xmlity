@@ -91,10 +91,19 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
 
         let children_access_ident = Ident::new("__children", element_access_ident.span());
 
+        let children_access_ty: syn::Type = parse_quote!(
+            <#access_type as ::xmlity::de::ElementAccess<#visitor_lifetime>>::ChildrenAccess
+        );
+
         let children_loop = element_loop_accessor
             .as_ref()
             .map(|a| {
-                a.children_access_loop(fields.clone(), &parse_quote!(&mut #children_access_ident))
+                a.children_access_loop(
+                    fields.clone(),
+                    &parse_quote!(&mut #children_access_ident),
+                    &children_access_ty,
+                    visitor_lifetime,
+                )
             })
             .transpose()?
             .unwrap_or_default();

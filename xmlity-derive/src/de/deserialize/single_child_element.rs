@@ -6,11 +6,12 @@ use proc_macro2::Span;
 use syn::{parse_quote, Ident, Lifetime, LifetimeParam, Stmt, Type};
 
 use crate::{
-    common::{non_bound_generics, ExpandedName, RecordInput, StructTypeWithFields},
+    common::{non_bound_generics, ExpandedName, FieldIdent, RecordInput, StructTypeWithFields},
     de::builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
     options::{
-        records::fields::{ChildOpts, FieldOpts, GroupOpts, ValueOpts},
+        records::fields::{ChildOpts, ElementOpts, FieldOpts, GroupOpts, ValueOpts},
         AllowUnknown, ElementOrder, Extendable, FieldWithOpts, IgnoreWhitespace,
+        WithExpandedNameExt,
     },
     DeriveError,
 };
@@ -28,6 +29,30 @@ pub struct DeserializeSingleChildElementBuilder<'a> {
     pub default_with: Option<syn::Path>,
 }
 
+impl ElementOpts {
+    pub fn to_builder<'a>(
+        &'a self,
+        field_ident: &'a FieldIdent,
+        ident: &'a Ident,
+        generics: &'a syn::Generics,
+        item_type: &'a Type,
+    ) -> DeserializeSingleChildElementBuilder<'a> {
+        DeserializeSingleChildElementBuilder {
+            ident,
+            generics,
+            required_expanded_name: Some(
+                self.expanded_name(field_ident.to_named_ident().to_string().as_str())
+                    .into_owned(),
+            ),
+            item_type,
+            default: self.default,
+            default_with: self.default_with.clone(),
+            extendable: self.extendable,
+            group: self.group,
+        }
+    }
+}
+
 impl DeserializeSingleChildElementBuilder<'_> {
     fn value_access_ident(&self) -> Ident {
         Ident::new("__value", Span::call_site())
@@ -43,6 +68,16 @@ impl DeserializeSingleChildElementBuilder<'_> {
         parse_quote! {
             struct #ident {
                 #value_access_ident: #item_type,
+            }
+        }
+    }
+
+    pub fn unwrap_expression(&self) -> impl Fn(&syn::Expr) -> syn::Expr + Clone {
+        let value_access_ident = self.value_access_ident();
+
+        move |value_expr: &syn::Expr| {
+            parse_quote! {
+                #value_expr.#value_access_ident
             }
         }
     }
