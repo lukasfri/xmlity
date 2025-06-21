@@ -309,3 +309,37 @@ define_test!(
         "<n><o>A</o></n>"
     )]
 );
+
+#[derive(Debug, PartialEq, SerializationGroup, DeserializationGroup)]
+#[xgroup(children_order = "strict")]
+pub struct W {
+    #[xattribute(name = "a", optional, default)]
+    pub a: Option<String>,
+    #[xattribute(name = "b", optional, default)]
+    pub b: Option<String>,
+    #[xattribute(name = "c", optional, default)]
+    pub c: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum X {
+    #[xelement(
+        name = "w",
+        namespace = "http://www.w3.org/2001/XMLSchema",
+        allow_unknown_attributes = "any"
+    )]
+    E(#[xgroup] Box<W>),
+}
+
+define_test!(
+    enum_with_element_attr_group,
+    [(
+        X::E(Box::new(W {
+            a: None,
+            b: Some("bvalue".to_string()),
+            c: None,
+        })),
+        r###"<a0:w xmlns:a0="http://www.w3.org/2001/XMLSchema" b="bvalue"/>"###,
+        r###"<xs:w xmlns:xs="http://www.w3.org/2001/XMLSchema" d="namespace" b="bvalue"/>"###
+    )]
+);
