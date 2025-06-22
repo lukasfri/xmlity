@@ -1,3 +1,4 @@
+use pretty_assertions::assert_eq;
 use xmlity::{
     value::XmlText, DeserializationGroup, Deserialize, LocalName, SerializationGroup, Serialize,
     XmlValue,
@@ -110,12 +111,12 @@ fn total_test() {
                     annotation: vec![I {
                         source: None,
                         particle: vec![XmlValueDocChild {
-                            child_0: XmlValue::Text(XmlText::new("<i>IValue</i>")),
+                            child_0: XmlValue::Text(XmlText::new("IValue")),
                         }],
                     }],
                 })),
             }))],
-            any_attribute: Some(Box::new(D)),
+            any_attribute: None,
         }),
     });
 
@@ -139,7 +140,7 @@ fn compact_test() {
     let expected = I {
         source: None,
         particle: vec![XmlValueDocChild {
-            child_0: XmlValue::Text(XmlText::new("<i>IValue</i>")),
+            child_0: XmlValue::Text(XmlText::new("IValue")),
         }],
     };
 
