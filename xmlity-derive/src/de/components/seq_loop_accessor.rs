@@ -59,7 +59,8 @@ impl SeqLoopAccessor {
                         },
                     };
 
-                    let builder_field_ident = field_ident.to_named_ident();
+                    let mut builder_field_ident = field_ident.to_named_ident().into_owned();
+                    builder_field_ident.set_span(Span::call_site());
                     Ok(parse_quote! {
                         let mut #builder_field_ident = #builder_initializer;
                     })
