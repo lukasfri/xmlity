@@ -560,6 +560,7 @@ pub trait DeserializationGroupBuilderBuilder {
     fn contribute_attributes_fn_body(
         &self,
         attributes_access_ident: &Ident,
+        attributes_access_type: &syn::Type,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
@@ -571,6 +572,7 @@ pub trait DeserializationGroupBuilderBuilder {
     fn contribute_elements_fn_body(
         &self,
         elements_access_ident: &Ident,
+        elements_access_type: &syn::Type,
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError>;
 
@@ -643,19 +645,23 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let attributes_access_ident = syn::Ident::new("__element", proc_macro2::Span::call_site());
+        let attributes_access_type = format_ident!("__XmlityAttributesAccess");
 
-        let content =
-            self.contribute_attributes_fn_body(&attributes_access_ident, deserialize_lifetime)?;
+        let content = self.contribute_attributes_fn_body(
+            &attributes_access_ident,
+            &parse_quote!(#attributes_access_type),
+            deserialize_lifetime,
+        )?;
 
         let Some(content) = content else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn contribute_attributes<A: ::xmlity::de::AttributesAccess<#deserialize_lifetime>>(
+            fn contribute_attributes<#attributes_access_type: ::xmlity::de::AttributesAccess<#deserialize_lifetime>>(
                 &mut self,
-                mut #attributes_access_ident: A,
-            ) -> Result<bool, <A as ::xmlity::de::AttributesAccess<#deserialize_lifetime>>::Error> {
+                mut #attributes_access_ident: #attributes_access_type,
+            ) -> Result<bool, <#attributes_access_type as ::xmlity::de::AttributesAccess<#deserialize_lifetime>>::Error> {
                 #(#content)*
             }
         }))
@@ -683,19 +689,23 @@ impl<T: DeserializationGroupBuilderBuilder> DeserializationGroupBuilderContentEx
         deserialize_lifetime: &Lifetime,
     ) -> Result<Option<ImplItemFn>, DeriveError> {
         let elements_access_ident = syn::Ident::new("__children", proc_macro2::Span::call_site());
+        let elements_access_type = format_ident!("__XmlityElementAccess");
 
-        let content =
-            self.contribute_elements_fn_body(&elements_access_ident, deserialize_lifetime)?;
+        let content = self.contribute_elements_fn_body(
+            &elements_access_ident,
+            &parse_quote!(#elements_access_type),
+            deserialize_lifetime,
+        )?;
 
         let Some(content) = content else {
             return Ok(None);
         };
 
         Ok(Some(parse_quote! {
-            fn contribute_elements<A: ::xmlity::de::SeqAccess<#deserialize_lifetime>>(
+            fn contribute_elements<#elements_access_type: ::xmlity::de::SeqAccess<#deserialize_lifetime>>(
                 &mut self,
-              mut #elements_access_ident: A,
-            ) -> Result<bool, <A as ::xmlity::de::SeqAccess<#deserialize_lifetime>>::Error> {
+              mut #elements_access_ident: #elements_access_type,
+            ) -> Result<bool, <#elements_access_type as ::xmlity::de::SeqAccess<#deserialize_lifetime>>::Error> {
                 #(#content)*
             }
         }))

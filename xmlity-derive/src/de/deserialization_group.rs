@@ -58,6 +58,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
     fn contribute_attributes_fn_body(
         &self,
         attributes_access_ident: &Ident,
+        _attributes_access_type: &syn::Type,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Option<Vec<Stmt>>, DeriveError> {
         let attribute_visit = builder_attribute_field_visitor(
@@ -100,6 +101,7 @@ impl DeserializationGroupBuilderBuilder for DeriveDeserializationGroupStruct<'_>
     fn contribute_elements_fn_body(
         &self,
         elements_access_ident: &Ident,
+        _elements_access_type: &syn::Type,
         _deserialize_lifetime: &Lifetime,
     ) -> DeriveResult<Option<Vec<Stmt>>> {
         let element_visit = builder_element_field_visitor(
