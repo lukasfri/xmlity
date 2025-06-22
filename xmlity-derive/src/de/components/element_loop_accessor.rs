@@ -1,3 +1,4 @@
+use proc_macro2::Span;
 use quote::format_ident;
 use syn::{parse_quote, Expr, Lifetime, Stmt, Type};
 
@@ -98,7 +99,8 @@ impl ElementLoopAccessor {
                          ::core::option::Option::<#field_type>::None
                     };
 
-                    let builder_field_ident = field_ident.to_named_ident();
+                    let mut builder_field_ident = field_ident.to_named_ident().into_owned();
+                    builder_field_ident.set_span(Span::call_site());
 
                     Ok(parse_quote! {
                         let mut #builder_field_ident = #builder_initializer;
