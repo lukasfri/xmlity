@@ -7,7 +7,6 @@ use rstest::rstest;
 use xmlity::{
     DeserializationGroup, Deserialize, SerializationGroup, Serialize, SerializeAttribute,
 };
-use xmlity::{ExpandedName, LocalName};
 
 const SIMPLE_2D_STRUCT_TEST_XML: &str = r###"
 <note to="Tove" from="Jani">

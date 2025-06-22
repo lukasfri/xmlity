@@ -876,13 +876,6 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
             return visitor.visit_none();
         };
 
-        println!(
-            "Deserializing event: {:?} ({:?}, {:?})",
-            event,
-            self.reader.current_depth(),
-            self.limit_depth
-        );
-
         match event {
             Event::Start(bytes_start) => {
                 let element_name = OwnedQuickName(bytes_start.name().0.to_owned());
