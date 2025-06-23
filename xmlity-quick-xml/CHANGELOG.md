@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.6...xmlity-quick-xml-v0.0.7) - 2025-06-23
+
+### Added
+
+- *(derive)* [**breaking**] Rename `loose` value order to `strict`. ([#103](https://github.com/lukasfri/xmlity/pull/103))
+
+### Fixed
+
+- *(quick-xml)* Fixed `xmlity-quick-xml` `Deserializer` to correctly handle sequences. ([#106](https://github.com/lukasfri/xmlity/pull/106))
+- Fixes invalid deserialization of a combination of values ([#102](https://github.com/lukasfri/xmlity/pull/102))
+- Fixed regression in values with group elements. ([#99](https://github.com/lukasfri/xmlity/pull/99))
+- *(derive)* Fixes regression of inline declarations of elements with group child not compiling. ([#96](https://github.com/lukasfri/xmlity/pull/96))
+- Cleanup to pass `cargo clippy`. ([#98](https://github.com/lukasfri/xmlity/pull/98))
+- Fixes recursively empty values not deserializing correctly. ([#94](https://github.com/lukasfri/xmlity/pull/94))
+
 ## [0.0.6](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.5...xmlity-quick-xml-v0.0.6) - 2025-06-04
 
 ### Added

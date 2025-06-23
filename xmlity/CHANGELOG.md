@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.6...xmlity-v0.0.7) - 2025-06-23
+
+### Added
+
+- *(core)* [**breaking**] Adds `(De)serializationGroup` for `()` and cleans up implementation on `Box<T>`. ([#100](https://github.com/lukasfri/xmlity/pull/100))
+
+### Fixed
+
+- Fixes recursively empty values not deserializing correctly. ([#94](https://github.com/lukasfri/xmlity/pull/94))
+
 ## [0.0.6](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.5...xmlity-v0.0.6) - 2025-06-04
 
 ### Added
