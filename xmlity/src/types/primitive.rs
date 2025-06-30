@@ -87,3 +87,54 @@ impl<'de> Deserialize<'de> for bool {
         reader.deserialize_any(BoolVisitor)
     }
 }
+
+macro_rules! impl_serialize_for_nonzero_primitive {
+  ($(($t:ty, $u:ty)),*) => {
+      $(
+          impl Serialize for $t {
+              fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                  serializer.serialize_text(self.get().to_string())
+              }
+          }
+      )*
+  };
+}
+
+impl_serialize_for_nonzero_primitive!(
+    (core::num::NonZeroU8, u8),
+    (core::num::NonZeroU16, u16),
+    (core::num::NonZeroU32, u32),
+    (core::num::NonZeroU64, u64),
+    (core::num::NonZeroU128, u128),
+    (core::num::NonZeroI8, i8),
+    (core::num::NonZeroI16, i16),
+    (core::num::NonZeroI32, i32),
+    (core::num::NonZeroI64, i64),
+    (core::num::NonZeroI128, i128)
+);
+
+macro_rules! impl_deserialize_for_nonzero_primitive {
+  ($(($t:ty, $u:ty)),*) => {
+      $(
+            impl<'de> Deserialize<'de> for $t {
+                fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
+                    let value = <$u as Deserialize<'de>>::deserialize(reader)?;
+                    core::num::NonZero::new(value).ok_or_else(|| de::Error::custom("value cannot be zero"))
+                }
+            }
+      )*
+  };
+}
+
+impl_deserialize_for_nonzero_primitive!(
+    (core::num::NonZeroU8, u8),
+    (core::num::NonZeroU16, u16),
+    (core::num::NonZeroU32, u32),
+    (core::num::NonZeroU64, u64),
+    (core::num::NonZeroU128, u128),
+    (core::num::NonZeroI8, i8),
+    (core::num::NonZeroI16, i16),
+    (core::num::NonZeroI32, i32),
+    (core::num::NonZeroI64, i64),
+    (core::num::NonZeroI128, i128)
+);
