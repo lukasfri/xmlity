@@ -335,31 +335,37 @@ pub mod records {
             }
 
             pub fn serialize_with(&self) -> Option<Expr> {
-                if let Some(serialize_with) = self.serialize_with.as_ref() {
-                    Some(parse_quote! {
-                        #serialize_with
+                self.serialize_with
+                    .as_ref()
+                    .map(|serialize_with| {
+                        parse_quote! {
+                            #serialize_with
+                        }
                     })
-                } else if let Some(with) = &self.with {
-                    Some(parse_quote! {
-                        #with::serialize
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::serialize
+                            }
+                        })
                     })
-                } else {
-                    None
-                }
             }
 
             pub fn deserialize_with(&self) -> Option<Expr> {
-                if let Some(deserialize_with) = self.deserialize_with.as_ref() {
-                    Some(parse_quote! {
-                        #deserialize_with
+                self.deserialize_with
+                    .as_ref()
+                    .map(|deserialize_with| {
+                        parse_quote! {
+                            #deserialize_with
+                        }
                     })
-                } else if let Some(with) = &self.with {
-                    Some(parse_quote! {
-                        #with::deserialize
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::deserialize
+                            }
+                        })
                     })
-                } else {
-                    None
-                }
             }
         }
 
@@ -939,34 +945,41 @@ pub mod enums {
             }
 
             pub fn serialize_with(&self) -> Option<Expr> {
-                if let Some(serialize_with) = self.serialize_with.as_ref() {
-                    Some(parse_quote! {
-                        #serialize_with
+                self.serialize_with
+                    .as_ref()
+                    .map(|serialize_with| {
+                        parse_quote! {
+                            #serialize_with
+                        }
                     })
-                } else if let Some(with) = &self.with {
-                    Some(parse_quote! {
-                        #with::serialize
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::serialize
+                            }
+                        })
                     })
-                } else {
-                    None
-                }
             }
 
             pub fn deserialize_with(&self) -> Option<Expr> {
-                if let Some(deserialize_with) = self.deserialize_with.as_ref() {
-                    Some(parse_quote! {
-                        #deserialize_with
+                self.deserialize_with
+                    .as_ref()
+                    .map(|deserialize_with| {
+                        parse_quote! {
+                            #deserialize_with
+                        }
                     })
-                } else if let Some(with) = &self.with {
-                    Some(parse_quote! {
-                        #with::deserialize
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::deserialize
+                            }
+                        })
                     })
-                } else {
-                    None
-                }
             }
         }
 
+        #[allow(clippy::large_enum_variant)]
         pub enum RootOpts {
             None,
             Value(RootValueOpts),
