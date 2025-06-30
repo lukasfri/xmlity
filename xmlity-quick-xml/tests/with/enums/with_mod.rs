@@ -1,3 +1,4 @@
+use crate::define_test;
 use core::fmt;
 use xmlity::{Deserialize, Serialize};
 
@@ -10,28 +11,22 @@ pub enum ProcessContentsValue {
 }
 
 pub mod with_mod {
-    pub fn deserialize<'de, D>(
-        deserializer: D,
-    ) -> ::core::result::Result<super::ProcessContentsValue, D::Error>
+    use super::ProcessContentsValue;
+    use xmlity::{de, Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<ProcessContentsValue, D::Error>
     where
-        D: ::xmlity::Deserializer<'de>,
+        D: Deserializer<'de>,
     {
-        let text: String = ::xmlity::Deserialize::deserialize(deserializer)?;
-        let value: String = text.parse().map_err(::xmlity::de::Error::custom)?;
-        super::ProcessContentsValue::try_from(value).map_err(::xmlity::de::Error::custom)
+        let text: String = Deserialize::deserialize(deserializer)?;
+        let value: String = text.parse().map_err(de::Error::custom)?;
+        ProcessContentsValue::try_from(value).map_err(de::Error::custom)
     }
-    pub fn serialize<S>(
-        value: &super::ProcessContentsValue,
-        serializer: S,
-    ) -> ::core::result::Result<S::Ok, S::Error>
+    pub fn serialize<S>(value: &ProcessContentsValue, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: ::xmlity::Serializer,
+        S: Serializer,
     {
-        let value: String = (*value).into();
-        ::xmlity::Serialize::serialize(
-            String::as_str(&::std::string::ToString::to_string(&value)),
-            serializer,
-        )
+        Serialize::serialize(&String::from(*value), serializer)
     }
 }
 #[derive(Debug, PartialEq, Clone)]
@@ -40,13 +35,13 @@ pub enum ProcessContentsValueParseError {
 }
 
 impl fmt::Display for ProcessContentsValueParseError {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
 impl TryFrom<String> for ProcessContentsValue {
     type Error = ProcessContentsValueParseError;
-    fn try_from(value: String) -> ::core::result::Result<Self, Self::Error> {
+    fn try_from(value: String) -> Result<Self, Self::Error> {
         match String::as_str(&value) {
             "skip" => Ok(ProcessContentsValue::Skip),
             "lax" => Ok(ProcessContentsValue::Lax),
@@ -64,3 +59,12 @@ impl From<ProcessContentsValue> for String {
         }
     }
 }
+
+define_test!(
+    deserialize_with_test,
+    [
+        (ProcessContentsValue::Skip, "skip"),
+        (ProcessContentsValue::Lax, "lax"),
+        (ProcessContentsValue::Strict, "strict")
+    ]
+);
