@@ -66,6 +66,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
                 ignore_whitespace: opts.ignore_whitespace,
                 allow_unknown_children: opts.allow_unknown,
                 children_order: opts.order,
+                deserialize_with: opts.deserialize_with(),
             }
             .deserialize_fn_body(deserializer_ident, deserialize_lifetime),
             DeserializeRootOpts::None => RecordDeserializeValueBuilder {
@@ -73,6 +74,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
                 ignore_whitespace: Default::default(),
                 allow_unknown_children: Default::default(),
                 children_order: Default::default(),
+                deserialize_with: None,
                 value: None,
             }
             .deserialize_fn_body(deserializer_ident, deserialize_lifetime),

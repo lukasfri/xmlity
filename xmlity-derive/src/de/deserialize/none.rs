@@ -14,7 +14,6 @@ use crate::{
         records::{
             self,
             fields::{FieldOpts, FieldValueGroupOpts},
-            roots::DeserializeRootOpts,
         },
         AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
     },
@@ -29,6 +28,7 @@ pub struct RecordDeserializeValueBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub allow_unknown_children: AllowUnknown,
     pub children_order: ElementOrder,
     pub value: Option<String>,
+    pub deserialize_with: Option<Expr>,
 }
 
 impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeValueBuilder<'a, T> {
@@ -357,6 +357,12 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeValu
         deserializer_ident: &Ident,
         _deserialize_lifetime: &Lifetime,
     ) -> Result<Vec<Stmt>, DeriveError> {
+        if let Some(deserialize_with) = &self.deserialize_with {
+            return Ok(parse_quote! {
+                (#deserialize_with)(#deserializer_ident)
+            });
+        }
+
         let formatter_expecting = format!("struct {}", self.input.impl_for_ident);
 
         let visitor_ident = Ident::new("__Visitor", Span::mixed_site());
@@ -430,8 +436,8 @@ impl<'a> EnumVisitorBuilder<'a> {
 
         let fallible_enum = data.variants.len() > 1;
 
-        let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
-        if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+        let mut variant_opts = enums::variants::DeserializeRootOpts::parse(&variant.attrs)?;
+        if let enums::variants::DeserializeRootOpts::Value(enums::variants::RootValueOpts {
             value: value @ None,
             ..
         }) = &mut variant_opts
@@ -445,7 +451,7 @@ impl<'a> EnumVisitorBuilder<'a> {
 
             *value = Some(ident_value);
         }
-        if let DeserializeRootOpts::None = variant_opts {
+        if let enums::variants::DeserializeRootOpts::None = variant_opts {
             let ident_value = self
                 .value_opts
                 .as_ref()
@@ -453,10 +459,11 @@ impl<'a> EnumVisitorBuilder<'a> {
                 .unwrap_or_default()
                 .apply_to_variant(&variant.ident.to_string());
 
-            variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
-                value: Some(ident_value),
-                ..Default::default()
-            });
+            variant_opts =
+                enums::variants::DeserializeRootOpts::Value(enums::variants::RootValueOpts {
+                    value: Some(ident_value),
+                    ..Default::default()
+                });
         }
 
         let record = parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
@@ -486,8 +493,8 @@ impl<'a> EnumVisitorBuilder<'a> {
 
         let fallible_enum = data.variants.len() > 1;
 
-        let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
-        if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+        let mut variant_opts = enums::variants::DeserializeRootOpts::parse(&variant.attrs)?;
+        if let enums::variants::DeserializeRootOpts::Value(enums::variants::RootValueOpts {
             value: value @ None,
             ..
         }) = &mut variant_opts
@@ -501,7 +508,7 @@ impl<'a> EnumVisitorBuilder<'a> {
 
             *value = Some(ident_value);
         }
-        if let DeserializeRootOpts::None = variant_opts {
+        if let enums::variants::DeserializeRootOpts::None = variant_opts {
             let ident_value = self
                 .value_opts
                 .as_ref()
@@ -509,10 +516,11 @@ impl<'a> EnumVisitorBuilder<'a> {
                 .unwrap_or_default()
                 .apply_to_variant(&variant.ident.to_string());
 
-            variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
-                value: Some(ident_value),
-                ..Default::default()
-            });
+            variant_opts =
+                enums::variants::DeserializeRootOpts::Value(enums::variants::RootValueOpts {
+                    value: Some(ident_value),
+                    ..Default::default()
+                });
         }
 
         let record = parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
@@ -552,8 +560,8 @@ impl<'a> EnumVisitorBuilder<'a> {
 
         let fallible_enum = data.variants.len() > 1;
 
-        let mut variant_opts = records::roots::DeserializeRootOpts::parse(&variant.attrs)?;
-        if let DeserializeRootOpts::Value(records::roots::RootValueOpts {
+        let mut variant_opts = enums::variants::DeserializeRootOpts::parse(&variant.attrs)?;
+        if let enums::variants::DeserializeRootOpts::Value(enums::variants::RootValueOpts {
             value: value @ None,
             ..
         }) = &mut variant_opts
@@ -567,7 +575,7 @@ impl<'a> EnumVisitorBuilder<'a> {
 
             *value = Some(ident_value);
         }
-        if let DeserializeRootOpts::None = variant_opts {
+        if let enums::variants::DeserializeRootOpts::None = variant_opts {
             let ident_value = self
                 .value_opts
                 .as_ref()
@@ -575,10 +583,11 @@ impl<'a> EnumVisitorBuilder<'a> {
                 .unwrap_or_default()
                 .apply_to_variant(&variant.ident.to_string());
 
-            variant_opts = DeserializeRootOpts::Value(records::roots::RootValueOpts {
-                value: Some(ident_value),
-                ..Default::default()
-            });
+            variant_opts =
+                enums::variants::DeserializeRootOpts::Value(enums::variants::RootValueOpts {
+                    value: Some(ident_value),
+                    ..Default::default()
+                });
         }
 
         let record = parse_enum_variant_derive_input(ident, generics, variant, fallible_enum)?;
@@ -713,6 +722,12 @@ impl DeserializeBuilder for EnumVisitorBuilder<'_> {
         else {
             unreachable!("Should already have been checked.")
         };
+
+        if let Some(deserialize_with) = self.value_opts.and_then(|a| a.deserialize_with()) {
+            return Ok(parse_quote! {
+                (#deserialize_with)(#deserializer_ident)
+            });
+        }
 
         let formatter_expecting = format!("enum {}", self.ast.ident);
 

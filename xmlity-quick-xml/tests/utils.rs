@@ -89,7 +89,7 @@ macro_rules! define_serialize_test {
             #[case($value, $xml)]
         )*
         #[ntest::timeout(1000)]
-        fn serialize<T: xmlity::Serialize + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] to: T, #[case] expected: U) {
+        fn $name<T: xmlity::Serialize + std::fmt::Debug + PartialEq, U: AsRef<str>>(#[case] to: T, #[case] expected: U) {
             let actual = $crate::utils::quick_xml_serialize_test(to).unwrap();
 
             pretty_assertions::assert_eq!(actual, expected.as_ref());

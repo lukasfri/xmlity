@@ -42,6 +42,12 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeValueBui
         serializer_access: &Ident,
         _serializer_type: &syn::Type,
     ) -> Result<Vec<Stmt>, DeriveError> {
+        if let Some(serialize_with) = self.options.as_ref().and_then(|a| a.serialize_with()) {
+            return Ok(parse_quote! {
+                (#serialize_with)(self, #serializer_access)
+            });
+        }
+
         let seq_access_ident = Ident::new("__seq_access", proc_macro2::Span::call_site());
 
         let fields: Vec<_> = match (&self.input.fields, &self.options) {
@@ -109,12 +115,15 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeValueBui
 
 pub struct DeriveEnum<'a> {
     ast: &'a syn::DeriveInput,
-    value_opts: Option<&'a EnumRootVolueOpts>,
+    opts: Option<&'a EnumRootVolueOpts>,
 }
 
 impl<'a> DeriveEnum<'a> {
     pub fn new(ast: &'a syn::DeriveInput, value_opts: Option<&'a EnumRootVolueOpts>) -> Self {
-        Self { ast, value_opts }
+        Self {
+            ast,
+            opts: value_opts,
+        }
     }
 }
 
@@ -135,6 +144,12 @@ impl SerializeBuilder for DeriveEnum<'_> {
             unreachable!()
         };
 
+        if let Some(serialize_with) = self.opts.as_ref().and_then(|a| a.serialize_with()) {
+            return Ok(parse_quote! {
+                (#serialize_with)(self, #serializer_access)
+            });
+        }
+
         let variants = variants
             .iter()
             .map::<Result<Arm, DeriveError>, _>(|variant| {
@@ -154,7 +169,7 @@ impl SerializeBuilder for DeriveEnum<'_> {
                 }) = &mut variant_opts
                 {
                     let ident_value = self
-                        .value_opts
+                        .opts
                         .as_ref()
                         .map(|a| a.rename_all)
                         .unwrap_or_default()
@@ -164,7 +179,7 @@ impl SerializeBuilder for DeriveEnum<'_> {
                 }
                 if let SerializeRootOpts::None = variant_opts {
                     let ident_value = self
-                        .value_opts
+                        .opts
                         .as_ref()
                         .map(|a| a.rename_all)
                         .unwrap_or_default()

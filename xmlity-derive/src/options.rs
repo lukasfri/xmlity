@@ -187,13 +187,13 @@ pub mod records {
     use super::*;
 
     pub mod roots {
-        use syn::Attribute;
+        use syn::{parse_quote, Attribute, Path};
 
         use crate::common::Prefix;
 
         use super::*;
 
-        #[derive(FromAttributes)]
+        #[derive(FromAttributes, Clone)]
         #[darling(attributes(xelement))]
         pub struct RootElementOpts {
             #[darling(default)]
@@ -258,7 +258,7 @@ pub mod records {
             }
         }
 
-        #[derive(FromAttributes)]
+        #[derive(FromAttributes, Clone)]
         #[darling(attributes(xattribute))]
         pub struct RootAttributeOpts {
             #[darling(default)]
@@ -316,6 +316,12 @@ pub mod records {
             pub allow_unknown: AllowUnknown,
             #[darling(default)]
             pub order: ElementOrder,
+            #[darling(default)]
+            pub with: Option<Path>,
+            #[darling(default)]
+            pub serialize_with: Option<Expr>,
+            #[darling(default)]
+            pub deserialize_with: Option<Expr>,
         }
 
         impl RootValueOpts {
@@ -326,6 +332,40 @@ pub mod records {
 
                 let opts = Self::from_attributes(&[attr.clone()])?;
                 Ok(Some(opts))
+            }
+
+            pub fn serialize_with(&self) -> Option<Expr> {
+                self.serialize_with
+                    .as_ref()
+                    .map(|serialize_with| {
+                        parse_quote! {
+                            #serialize_with
+                        }
+                    })
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::serialize
+                            }
+                        })
+                    })
+            }
+
+            pub fn deserialize_with(&self) -> Option<Expr> {
+                self.deserialize_with
+                    .as_ref()
+                    .map(|deserialize_with| {
+                        parse_quote! {
+                            #deserialize_with
+                        }
+                    })
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::deserialize
+                            }
+                        })
+                    })
             }
         }
 
@@ -873,6 +913,8 @@ pub mod enums {
     use super::*;
 
     pub mod roots {
+        use syn::{parse_quote, Path};
+
         use super::*;
 
         #[derive(FromAttributes, Default)]
@@ -883,6 +925,12 @@ pub mod enums {
             #[darling(default)]
             #[allow(dead_code)]
             pub serialization_format: TextSerializationFormat,
+            #[darling(default)]
+            pub with: Option<Path>,
+            #[darling(default)]
+            pub serialize_with: Option<Expr>,
+            #[darling(default)]
+            pub deserialize_with: Option<Expr>,
         }
 
         impl RootValueOpts {
@@ -895,8 +943,43 @@ pub mod enums {
                 let opts = Self::from_attributes(&[attr.clone()])?;
                 Ok(Some(opts))
             }
+
+            pub fn serialize_with(&self) -> Option<Expr> {
+                self.serialize_with
+                    .as_ref()
+                    .map(|serialize_with| {
+                        parse_quote! {
+                            #serialize_with
+                        }
+                    })
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::serialize
+                            }
+                        })
+                    })
+            }
+
+            pub fn deserialize_with(&self) -> Option<Expr> {
+                self.deserialize_with
+                    .as_ref()
+                    .map(|deserialize_with| {
+                        parse_quote! {
+                            #deserialize_with
+                        }
+                    })
+                    .or_else(|| {
+                        self.with.as_ref().map(|with| {
+                            parse_quote! {
+                                #with::deserialize
+                            }
+                        })
+                    })
+            }
         }
 
+        #[allow(clippy::large_enum_variant)]
         pub enum RootOpts {
             None,
             Value(RootValueOpts),
@@ -909,6 +992,62 @@ pub mod enums {
                 match value_opts {
                     Some(value_opts) => Ok(RootOpts::Value(value_opts)),
                     None => Ok(RootOpts::None),
+                }
+            }
+        }
+    }
+
+    pub mod variants {
+        use syn::Attribute;
+
+        use crate::options::records::roots::{RootAttributeOpts, RootElementOpts};
+
+        use super::*;
+
+        #[derive(Default, FromAttributes, Clone)]
+        #[darling(attributes(xvalue))]
+        pub struct RootValueOpts {
+            pub value: Option<String>,
+            #[darling(default)]
+            /// Deserialize only
+            pub ignore_whitespace: IgnoreWhitespace,
+            #[darling(default)]
+            /// Deserialize only
+            pub allow_unknown: AllowUnknown,
+            #[darling(default)]
+            pub order: ElementOrder,
+        }
+
+        impl RootValueOpts {
+            pub fn parse(attrs: &[Attribute]) -> Result<Option<Self>, DeriveError> {
+                let Some(attr) = attrs.iter().find(|attr| attr.path().is_ident("xvalue")) else {
+                    return Ok(None);
+                };
+
+                let opts = Self::from_attributes(&[attr.clone()])?;
+                Ok(Some(opts))
+            }
+        }
+
+        pub enum DeserializeRootOpts {
+            None,
+            Element(RootElementOpts),
+            Attribute(RootAttributeOpts),
+            Value(RootValueOpts),
+        }
+
+        impl DeserializeRootOpts {
+            pub fn parse(attrs: &[Attribute]) -> Result<Self, DeriveError> {
+                let element_opts = RootElementOpts::parse(attrs)?;
+                let attribute_opts = RootAttributeOpts::parse(attrs)?;
+                let value_opts = RootValueOpts::parse(attrs)?;
+
+                match (element_opts, attribute_opts, value_opts) {
+                    (Some(element_opts), None, None) => Ok(Self::Element(element_opts)),
+                    (None, Some(attribute_opts), None) => Ok(Self::Attribute(attribute_opts)),
+                    (None, None, Some(value_opts)) => Ok(Self::Value(value_opts)),
+                    (None, None, None) => Ok(Self::None),
+                    _ => Err(DeriveError::custom("Wrong options. Only one of `xelement`, `xattribute`, or `xvalue` can be used for root elements.")),
                 }
             }
         }
