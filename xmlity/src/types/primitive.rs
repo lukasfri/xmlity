@@ -110,7 +110,9 @@ impl_serialize_for_nonzero_primitive!(
     core::num::NonZeroI16,
     core::num::NonZeroI32,
     core::num::NonZeroI64,
-    core::num::NonZeroI128
+    core::num::NonZeroI128,
+    core::num::NonZeroUsize,
+    core::num::NonZeroIsize
 );
 
 macro_rules! impl_deserialize_for_nonzero_primitive {
@@ -136,7 +138,9 @@ impl_deserialize_for_nonzero_primitive!(
     core::num::NonZeroI16,
     core::num::NonZeroI32,
     core::num::NonZeroI64,
-    core::num::NonZeroI128
+    core::num::NonZeroI128,
+    core::num::NonZeroUsize,
+    core::num::NonZeroIsize
 );
 
 #[cfg(test)]
