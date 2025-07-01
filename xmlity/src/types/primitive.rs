@@ -89,7 +89,7 @@ impl<'de> Deserialize<'de> for bool {
 }
 
 macro_rules! impl_serialize_for_nonzero_primitive {
-  ($(($t:ty, $u:ty)),*) => {
+  ($($t:ty),*) => {
       $(
           impl Serialize for $t {
               fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -101,25 +101,25 @@ macro_rules! impl_serialize_for_nonzero_primitive {
 }
 
 impl_serialize_for_nonzero_primitive!(
-    (core::num::NonZeroU8, u8),
-    (core::num::NonZeroU16, u16),
-    (core::num::NonZeroU32, u32),
-    (core::num::NonZeroU64, u64),
-    (core::num::NonZeroU128, u128),
-    (core::num::NonZeroI8, i8),
-    (core::num::NonZeroI16, i16),
-    (core::num::NonZeroI32, i32),
-    (core::num::NonZeroI64, i64),
-    (core::num::NonZeroI128, i128)
+    core::num::NonZeroU8,
+    core::num::NonZeroU16,
+    core::num::NonZeroU32,
+    core::num::NonZeroU64,
+    core::num::NonZeroU128,
+    core::num::NonZeroI8,
+    core::num::NonZeroI16,
+    core::num::NonZeroI32,
+    core::num::NonZeroI64,
+    core::num::NonZeroI128
 );
 
 macro_rules! impl_deserialize_for_nonzero_primitive {
-  ($(($t:ty, $u:ty)),*) => {
+  ($($t:ty),*) => {
       $(
             impl<'de> Deserialize<'de> for $t {
                 fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-                    let value = <$u as Deserialize<'de>>::deserialize(reader)?;
-                    core::num::NonZero::new(value).ok_or_else(|| de::Error::custom("value cannot be zero"))
+                    let value = Deserialize::<'de>::deserialize(reader)?;
+                    <$t>::new(value).ok_or_else(|| de::Error::custom("value cannot be zero"))
                 }
             }
       )*
@@ -127,14 +127,14 @@ macro_rules! impl_deserialize_for_nonzero_primitive {
 }
 
 impl_deserialize_for_nonzero_primitive!(
-    (core::num::NonZeroU8, u8),
-    (core::num::NonZeroU16, u16),
-    (core::num::NonZeroU32, u32),
-    (core::num::NonZeroU64, u64),
-    (core::num::NonZeroU128, u128),
-    (core::num::NonZeroI8, i8),
-    (core::num::NonZeroI16, i16),
-    (core::num::NonZeroI32, i32),
-    (core::num::NonZeroI64, i64),
-    (core::num::NonZeroI128, i128)
+    core::num::NonZeroU8,
+    core::num::NonZeroU16,
+    core::num::NonZeroU32,
+    core::num::NonZeroU64,
+    core::num::NonZeroU128,
+    core::num::NonZeroI8,
+    core::num::NonZeroI16,
+    core::num::NonZeroI32,
+    core::num::NonZeroI64,
+    core::num::NonZeroI128
 );
