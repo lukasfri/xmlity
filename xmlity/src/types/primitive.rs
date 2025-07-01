@@ -138,3 +138,29 @@ impl_deserialize_for_nonzero_primitive!(
     core::num::NonZeroI64,
     core::num::NonZeroI128
 );
+
+#[cfg(test)]
+mod tests {
+    use crate::value::XmlText;
+
+    use super::*;
+
+    #[test]
+    fn test_de_serialize_non_zero_i8() {
+        let value = XmlText::new("42");
+
+        let result = <core::num::NonZeroI8>::deserialize(&value);
+
+        let result = result.expect("deserialize should not fail");
+        assert_eq!(result.get(), 42);
+    }
+
+    #[test]
+    fn test_de_serialize_non_zero_i8_zero_value() {
+        let value = XmlText::new("0");
+
+        let result = <core::num::NonZeroI8>::deserialize(&value);
+
+        let _err = result.expect_err("deserialize should fail");
+    }
+}
