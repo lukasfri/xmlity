@@ -87,3 +87,80 @@ impl<'de> Deserialize<'de> for bool {
         reader.deserialize_any(BoolVisitor)
     }
 }
+
+macro_rules! impl_serialize_for_nonzero_primitive {
+  ($($t:ty),*) => {
+      $(
+          impl Serialize for $t {
+              fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                  serializer.serialize_text(self.get().to_string())
+              }
+          }
+      )*
+  };
+}
+
+impl_serialize_for_nonzero_primitive!(
+    core::num::NonZeroU8,
+    core::num::NonZeroU16,
+    core::num::NonZeroU32,
+    core::num::NonZeroU64,
+    core::num::NonZeroU128,
+    core::num::NonZeroI8,
+    core::num::NonZeroI16,
+    core::num::NonZeroI32,
+    core::num::NonZeroI64,
+    core::num::NonZeroI128
+);
+
+macro_rules! impl_deserialize_for_nonzero_primitive {
+  ($($t:ty),*) => {
+      $(
+            impl<'de> Deserialize<'de> for $t {
+                fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
+                    let value = Deserialize::<'de>::deserialize(reader)?;
+                    <$t>::new(value).ok_or_else(|| de::Error::custom("value cannot be zero"))
+                }
+            }
+      )*
+  };
+}
+
+impl_deserialize_for_nonzero_primitive!(
+    core::num::NonZeroU8,
+    core::num::NonZeroU16,
+    core::num::NonZeroU32,
+    core::num::NonZeroU64,
+    core::num::NonZeroU128,
+    core::num::NonZeroI8,
+    core::num::NonZeroI16,
+    core::num::NonZeroI32,
+    core::num::NonZeroI64,
+    core::num::NonZeroI128
+);
+
+#[cfg(test)]
+mod tests {
+    use crate::value::XmlText;
+
+    use super::*;
+
+    #[test]
+    fn test_de_serialize_non_zero_i8() {
+        let value = XmlText::new("42");
+
+        let result = <core::num::NonZeroI8>::deserialize(&value);
+
+        let result = result.expect("deserialize should not fail");
+        assert_eq!(result.get(), 42);
+    }
+
+    #[test]
+    fn test_de_serialize_non_zero_i8_zero_value() {
+        let value = XmlText::new("0");
+
+        let result = <core::num::NonZeroI8>::deserialize(&value);
+
+        let _err = result.expect_err("deserialize should fail");
+    }
+}
