@@ -348,19 +348,49 @@ pub struct AttributeSerializer<'t, W: Write> {
 
 /// The text serializer for the `quick-xml` crate. Used when serializing to an attribute value.
 pub struct TextSerializer {
-    value: Vec<u8>,
+    value: Option<String>,
 }
 
-impl ser::Serializer for &mut TextSerializer {
+impl ser::SerializeSeq for &mut TextSerializer {
+    type Ok = ();
+    type Error = Error;
+
+    fn serialize_element<V: Serialize>(&mut self, value: &V) -> Result<Self::Ok, Self::Error> {
+        if self.value.is_some() {
+            return Err(Error::unexpected_serialize(Unexpected::Text));
+        }
+
+        let mut text_ser = TextSerializer { value: None };
+        value.serialize(&mut text_ser)?;
+
+        if let Some(value) = text_ser.value {
+            self.value = Some(value);
+        } else {
+            return Err(Error::unexpected_serialize(Unexpected::None));
+        }
+
+        Ok(())
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+}
+
+impl<'a> ser::Serializer for &'a mut TextSerializer {
     type Ok = ();
     type Error = Error;
 
     type SerializeElement = NoopDeSerializer<Self::Ok, Self::Error>;
 
-    type SerializeSeq = NoopDeSerializer<Self::Ok, Self::Error>;
+    type SerializeSeq = &'a mut TextSerializer;
 
     fn serialize_text<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
-        self.value.extend_from_slice(text.as_ref().as_bytes());
+        if self.value.is_some() {
+            return Err(Error::unexpected_serialize(Unexpected::Text));
+        }
+
+        self.value = Some(text.as_ref().to_string());
 
         Ok(())
     }
@@ -381,7 +411,7 @@ impl ser::Serializer for &mut TextSerializer {
     }
 
     fn serialize_seq(self) -> Result<Self::SerializeSeq, Self::Error> {
-        Err(Error::unexpected_serialize(Unexpected::Seq))
+        Ok(self)
     }
 
     fn serialize_decl<S: AsRef<str>>(
@@ -447,11 +477,17 @@ impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
             self.serializer.push_decl_attr(decl);
         }
 
-        let mut text_ser = TextSerializer { value: Vec::new() };
+        let mut text_ser = TextSerializer { value: None };
 
         value.serialize(&mut text_ser)?;
 
-        self.serializer.push_attr(qname, text_ser.value);
+        self.serializer.push_attr(
+            qname,
+            text_ser
+                .value
+                .expect("TextSerializer should have a value")
+                .into_bytes(),
+        );
 
         Ok(())
     }
