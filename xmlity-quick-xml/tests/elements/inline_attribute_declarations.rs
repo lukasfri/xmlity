@@ -83,18 +83,23 @@ define_test!(
 );
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
+enum H {
+    F(F),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "g")]
-pub struct G {
+struct G {
     #[xattribute(name = "f", optional, default)]
-    pub f: Option<Box<F>>,
+    pub f: Option<H>,
 }
 
 define_test!(
-    element_with_optional_attribute,
+    element_with_optional_attribute_of_enum,
     [
         (
             G {
-                f: Some(Box::new(F("A".to_string())))
+                f: Some(H::F(F("A".to_string())))
             },
             r#"<g f="A"/>"#
         ),
