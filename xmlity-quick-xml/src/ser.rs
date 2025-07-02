@@ -351,7 +351,7 @@ pub struct TextSerializer {
     value: Option<String>,
 }
 
-impl<'a> ser::SerializeSeq for &'a mut TextSerializer {
+impl ser::SerializeSeq for &mut TextSerializer {
     type Ok = ();
     type Error = Error;
 
