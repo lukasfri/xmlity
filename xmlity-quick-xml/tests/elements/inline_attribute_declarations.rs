@@ -17,7 +17,7 @@ struct F(pub String);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "c")]
-pub struct C {
+struct C {
     #[xattribute(name = "b")]
     pub c: F,
 }
@@ -34,7 +34,7 @@ define_test!(
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "d")]
-pub struct D {
+struct D {
     #[xattribute(name = "b")]
     pub b: String,
     pub c: C,
@@ -55,7 +55,7 @@ define_test!(
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "e")]
-pub struct E {
+struct E {
     pub d: Vec<D>,
 }
 

@@ -355,6 +355,7 @@ impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_, 'de> {
         T::deserialize(TextDeserializer {
             value: self.value,
             deserializer: self.deserializer,
+            used_up: false,
         })
     }
 }
@@ -362,6 +363,7 @@ impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_, 'de> {
 struct TextDeserializer<'a, 'v> {
     value: Cow<'v, [u8]>,
     deserializer: &'a Deserializer<'a>,
+    used_up: bool,
 }
 
 impl<'de> de::XmlText<'de> for TextDeserializer<'_, 'de> {
@@ -394,6 +396,61 @@ impl<'de> de::XmlText<'de> for TextDeserializer<'_, 'de> {
     }
 }
 
+impl<'de> de::SeqAccess<'de> for TextDeserializer<'_, 'de> {
+    type Error = Error;
+
+    type SubAccess<'g>
+        = TextDeserializer<'g, 'de>
+    where
+        Self: 'g;
+
+    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'de>,
+    {
+        if self.used_up {
+            return Ok(None);
+        }
+
+        T::deserialize(TextDeserializer {
+            value: self.value.clone(),
+            deserializer: self.deserializer,
+            used_up: false,
+        })
+        .map(|value| {
+            self.used_up = true;
+            Some(value)
+        })
+    }
+
+    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'de>,
+    {
+        if self.used_up {
+            return Ok(None);
+        }
+
+        T::deserialize_seq(TextDeserializer {
+            value: self.value.clone(),
+            deserializer: self.deserializer,
+            used_up: false,
+        })
+        .map(|value| {
+            self.used_up = true;
+            Some(value)
+        })
+    }
+
+    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
+        Ok(TextDeserializer {
+            value: self.value.clone(),
+            deserializer: self.deserializer,
+            used_up: self.used_up,
+        })
+    }
+}
+
 impl<'de> de::Deserializer<'de> for TextDeserializer<'_, 'de> {
     type Error = Error;
 
@@ -408,7 +465,7 @@ impl<'de> de::Deserializer<'de> for TextDeserializer<'_, 'de> {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_text(self)
+        visitor.visit_seq(self)
     }
 }
 
