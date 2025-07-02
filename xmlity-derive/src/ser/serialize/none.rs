@@ -150,6 +150,12 @@ impl SerializeBuilder for DeriveEnum<'_> {
             });
         }
 
+        if variants.is_empty() {
+            return Ok(parse_quote! {
+                unreachable!("Enum {} has no variants", stringify!(#enum_ident))
+            });
+        }
+
         let variants = variants
             .iter()
             .map::<Result<Arm, DeriveError>, _>(|variant| {
