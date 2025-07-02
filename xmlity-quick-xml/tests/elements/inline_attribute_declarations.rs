@@ -2,16 +2,34 @@ use crate::define_test;
 
 use xmlity::{Deserialize, Serialize};
 
+fn f_serialize<T: xmlity::Serializer>(f: &F, serializer: T) -> Result<T::Ok, T::Error> {
+    serializer.serialize_text(&f.0)
+}
+
+fn f_deserialize<'de, T: xmlity::Deserializer<'de>>(deserializer: T) -> Result<F, T::Error> {
+    let s = String::deserialize(deserializer)?;
+    Ok(F(s))
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xvalue(serialize_with = "f_serialize", deserialize_with = "f_deserialize")]
+struct F(pub String);
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "c")]
 pub struct C {
     #[xattribute(name = "b")]
-    pub c: String,
+    pub c: F,
 }
 
 define_test!(
     element_with_single_child,
-    [(C { c: "A".to_string() }, r#"<c b="A"/>"#)]
+    [(
+        C {
+            c: F("A".to_string())
+        },
+        r#"<c b="A"/>"#
+    )]
 );
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -27,7 +45,9 @@ define_test!(
     [(
         D {
             b: "A".to_string(),
-            c: C { c: "B".to_string() }
+            c: C {
+                c: F("B".to_string())
+            }
         },
         r#"<d b="A"><c b="B"/></d>"#
     )]
@@ -46,14 +66,38 @@ define_test!(
             d: vec![
                 D {
                     b: "A".to_string(),
-                    c: C { c: "B".to_string() }
+                    c: C {
+                        c: F("B".to_string())
+                    }
                 },
                 D {
                     b: "C".to_string(),
-                    c: C { c: "D".to_string() }
+                    c: C {
+                        c: F("D".to_string())
+                    }
                 }
             ]
         },
         r#"<e><d b="A"><c b="B"/></d><d b="C"><c b="D"/></d></e>"#
     )]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "g")]
+pub struct G {
+    #[xattribute(name = "f", optional, default)]
+    pub f: Option<Box<F>>,
+}
+
+define_test!(
+    element_with_optional_attribute,
+    [
+        (
+            G {
+                f: Some(Box::new(F("A".to_string())))
+            },
+            r#"<g f="A"/>"#
+        ),
+        (G { f: None }, r#"<g/>"#)
+    ]
 );
