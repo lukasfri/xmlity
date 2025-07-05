@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.7...xmlity-v0.0.8) - 2025-07-05
+
+### Added
+
+- *(core)* Add `(De)serialize` impl for `isize`/`usize` non-zero types. ([#112](https://github.com/lukasfri/xmlity/pull/112))
+- *(core)* Add `(De)serialize` impls for non-zero primitives. ([#111](https://github.com/lukasfri/xmlity/pull/111))
+
+### Fixed
+
+- *(core)* [**breaking**] Change `SerializeSeq` trait to return `()` for each individual element. ([#115](https://github.com/lukasfri/xmlity/pull/115))
+
 ## [0.0.7](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.6...xmlity-v0.0.7) - 2025-06-23
 
 ### Added
