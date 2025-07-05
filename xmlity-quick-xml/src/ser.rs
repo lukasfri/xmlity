@@ -385,7 +385,7 @@ impl<'a> ser::Serializer for &'a mut TextSerializer {
 
     type SerializeSeq = &'a mut TextSerializer;
 
-    fn serialize_text<S: AsRef<str>>(self, text: S) -> Result<Self::Ok, Self::Error> {
+    fn serialize_text<S: AsRef<str>>(self, text: S) -> Result<(), Self::Error> {
         if self.value.is_some() {
             return Err(Error::unexpected_serialize(Unexpected::Text));
         }
@@ -663,7 +663,7 @@ impl<W: Write> ser::SerializeSeq for ChildrenSerializeSeq<'_, W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<V: Serialize>(&mut self, value: &V) -> Result<Self::Ok, Self::Error> {
+    fn serialize_element<V: Serialize>(&mut self, value: &V) -> Result<(), Self::Error> {
         value.serialize(self.serializer.deref_mut())
     }
 
@@ -701,7 +701,7 @@ impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, W> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error> {
+    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<(), Self::Error> {
         v.serialize(self.serializer.deref_mut())
     }
 

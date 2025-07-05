@@ -133,7 +133,7 @@ pub trait SerializeSeq {
     type Error: Error;
 
     /// Serialize an element in the sequence.
-    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error>;
+    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<(), Self::Error>;
 
     /// End the serialization of the sequence.
     fn end(self) -> Result<Self::Ok, Self::Error>;
