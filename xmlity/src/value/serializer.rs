@@ -338,7 +338,7 @@ impl crate::ser::SerializeSeq for &mut XmlSeq<XmlValue> {
 
     type Error = XmlValueSerializerError;
 
-    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error> {
+    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<(), Self::Error> {
         v.serialize(self)
     }
 
@@ -352,7 +352,7 @@ impl crate::ser::SerializeSeq for &mut XmlSeq<XmlChild> {
 
     type Error = XmlValueSerializerError;
 
-    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<Self::Ok, Self::Error> {
+    fn serialize_element<V: Serialize>(&mut self, v: &V) -> Result<(), Self::Error> {
         v.serialize(self)?;
         Ok(())
     }

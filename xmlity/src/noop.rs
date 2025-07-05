@@ -13,7 +13,7 @@ impl<Ok, Err: ser::Error> crate::ser::SerializeSeq for NoopDeSerializer<Ok, Err>
 
     type Error = Err;
 
-    fn serialize_element<V: ser::Serialize>(&mut self, _: &V) -> Result<Self::Ok, Self::Error> {
+    fn serialize_element<V: ser::Serialize>(&mut self, _: &V) -> Result<(), Self::Error> {
         unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }
 
