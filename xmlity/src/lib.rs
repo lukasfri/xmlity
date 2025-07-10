@@ -19,13 +19,13 @@ use fmt::Display;
 use std::{borrow::Cow, str::FromStr};
 
 pub mod de;
-pub use de::{DeserializationGroup, Deserialize, DeserializeOwned, Deserializer};
+pub use de::{Deserialize, DeserializeOwned, Deserializer};
 pub mod ser;
 pub use ser::{AttributeSerializer, SerializationGroup, Serialize, SerializeAttribute, Serializer};
-mod macros;
-pub mod types;
-pub mod value;
-pub use value::XmlValue;
+// mod macros;
+// pub mod types;
+// pub mod value;
+// pub use value::XmlValue;
 mod noop;
 pub use noop::NoopDeSerializer;
 
@@ -331,14 +331,14 @@ impl Serialize for XmlNamespace<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for XmlNamespace<'_> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_any(types::string::FromStrVisitor::default())
-    }
-}
+// impl<'de> Deserialize<'de> for XmlNamespace<'_> {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+//     }
+// }
 
 /// # XML Prefix
 /// A namespace [`Prefix`] used to map a [`LocalName`] to a [`XmlNamespace`] within an XML document.
@@ -435,14 +435,14 @@ impl Serialize for Prefix<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for Prefix<'_> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_any(types::string::FromStrVisitor::default())
-    }
-}
+// impl<'de> Deserialize<'de> for Prefix<'_> {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+//     }
+// }
 
 /// # XML Local Name
 /// A local name of an XML element or attribute within a [`XmlNamespace`].
@@ -510,14 +510,14 @@ impl Serialize for LocalName<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for LocalName<'_> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_any(types::string::FromStrVisitor::default())
-    }
-}
+// impl<'de> Deserialize<'de> for LocalName<'_> {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

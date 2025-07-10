@@ -1,9 +1,8 @@
 //! This module contains the [`Deserialize`], [`Deserializer`] and [`DeserializationGroup`] traits and associated types.
 
 use std::{
-    borrow::Cow,
     error::Error as StdError,
-    fmt::{self, Debug, Display},
+    fmt::{Debug, Display},
 };
 
 use crate::{ExpandedName, Prefix, XmlNamespace};
@@ -79,8 +78,55 @@ pub enum Unexpected {
     None,
 }
 
+#[derive(Debug)]
+pub enum Event<'a> {
+    StartElementOpened {
+        name: &'a ExpandedName<'static>,
+    },
+    StartElementAttribute {
+        name: &'a ExpandedName<'static>,
+        value: &'a str,
+    },
+    StartElementClosed,
+    EndElement {
+        name: &'a ExpandedName<'static>,
+    },
+    Text {
+        text: &'a str,
+    },
+    CData {
+        text: &'a str,
+    },
+    Comment {
+        text: &'a str,
+    },
+    PI {
+        target: &'a str,
+        data: &'a str,
+    },
+    Decl {
+        version: &'a str,
+        encoding: Option<&'a str>,
+        standalone: Option<&'a str>,
+    },
+    DocType {
+        name: &'a str,
+        public_id: Option<&'a str>,
+        system_id: Option<&'a str>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorA;
+
+/// A type that can be used to deserialize XML documents.
+pub trait Deserializer<'de>: Sized {
+    /// The error type that can be returned from the deserializer.
+    type Error: Error;
+}
+
 /// Trait that lets you access the namespaces declared on an XML node.
-pub trait NamespaceContext {
+pub trait DeserializeContext {
     /// Get the default namespace.
     fn default_namespace(&self) -> Option<XmlNamespace<'_>>;
 
@@ -88,457 +134,420 @@ pub trait NamespaceContext {
     fn resolve_prefix(&self, prefix: Prefix<'_>) -> Option<XmlNamespace<'_>>;
 }
 
-/// Trait that lets you access the attributes of an XML node.
-pub trait AttributesAccess<'de> {
-    /// The error type for this attributes access.
-    type Error: Error;
-    /// The type of the sub access for this attributes access returned by [`AttributesAccess::sub_access`].
-    type SubAccess<'a>: AttributesAccess<'de, Error = Self::Error> + 'a
-    where
-        Self: 'a;
-
-    /// Get the next attribute.
-    fn next_attribute<T>(&mut self) -> Result<Option<T>, Self::Error>
-    where
-        T: Deserialize<'de>;
-
-    /// Get a sub access to the attributes.
-    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EventControl {
+    Advance(usize),
+    Rewind(usize),
+    Done(usize),
 }
 
-impl<'de, T: AttributesAccess<'de>> AttributesAccess<'de> for &mut T {
-    type Error = T::Error;
-    type SubAccess<'a>
-        = T::SubAccess<'a>
-    where
-        Self: 'a;
+/// A builder for a deserialization group. When completed (through [`DeserializationGroupBuilder::finish`]), the builder is converted into the deserialization group type that initated the builder.
+pub trait DeserializeBuilder<'de>: Sized {
+    /// The type of the deserialization group that this builder builds when finished through [`DeserializationGroupBuilder::finish`].
+    type Value;
 
-    fn next_attribute<D>(&mut self) -> Result<Option<D>, Self::Error>
-    where
-        D: Deserialize<'de>,
-    {
-        (*self).next_attribute()
+    /// Returns true if the deserializer made progress
+    fn read_events(
+        &mut self,
+        context: &dyn DeserializeContext,
+        packets: &[Event<'de>],
+    ) -> Result<EventControl, ErrorA> {
+        let _ = context;
+        let _ = packets;
+
+        Ok(EventControl::Done(0))
     }
 
-    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
-        (*self).sub_access()
-    }
-}
-
-/// A trait for accessing properties of an element. This is the first stage of element deserialization, where the element's name and attributes are accessed. The second stage is accessing the element's children, which is done by calling [`ElementAccess::children`].
-pub trait ElementAccess<'de>: AttributesAccess<'de> {
-    /// The type of the children accessor returned by [`ElementAccess::children`].
-    type ChildrenAccess: SeqAccess<'de, Error = Self::Error>;
-
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
-    /// Returns the name of the element.
-    fn name(&self) -> ExpandedName<'_>;
-
-    /// Returns an accessor for the element's children.
-    fn children(self) -> Result<Self::ChildrenAccess, Self::Error>;
-
-    /// Returns the namespace context for this attribute.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
-}
-
-/// An extension trait for [`ElementAccess`] that provides additional methods.
-pub trait ElementAccessExt<'de>: ElementAccess<'de> {
-    /// Ensures that the element has the given name. If it does not, returns an error.
-    fn ensure_name<E: Error>(&self, name: &ExpandedName) -> Result<(), E>;
-}
-
-impl<'de, T: ElementAccess<'de>> ElementAccessExt<'de> for T {
-    fn ensure_name<E: Error>(&self, name: &ExpandedName) -> Result<(), E> {
-        if self.name() == *name {
-            Ok(())
-        } else {
-            Err(Error::wrong_name(&self.name(), name))
-        }
-    }
-}
-
-/// A trait for accessing properties of an attribute.
-pub trait AttributeAccess<'de> {
-    /// The error type for this attribute access.
-    type Error: Error;
-
-    /// Returns the name of the attribute.
-    fn name(&self) -> ExpandedName<'_>;
-
-    /// Deserializes the value of the attribute.
-    fn value<T>(self) -> Result<T, Self::Error>
-    where
-        T: Deserialize<'de>;
-}
-
-/// An extension trait for [`AttributeAccess`] that provides additional methods.
-pub trait AttributeAccessExt<'de>: AttributeAccess<'de> {
-    /// Ensures that the attribute has the given name.
-    fn ensure_name<E: Error>(&self, name: &ExpandedName) -> Result<(), E>;
-}
-
-impl<'de, T: AttributeAccess<'de>> AttributeAccessExt<'de> for T {
-    fn ensure_name<E: Error>(&self, name: &ExpandedName) -> Result<(), E> {
-        if self.name() == *name {
-            Ok(())
-        } else {
-            Err(Error::wrong_name(&self.name(), name))
-        }
-    }
-}
-
-/// A trait for accessing a sequence of nodes, which could include a mix of elements and text nodes.
-pub trait SeqAccess<'de> {
-    /// The error type for this sequence access.
-    type Error: Error;
-
-    /// The type of the sub-access for this sequence access returned by [`SeqAccess::sub_access`].
-    type SubAccess<'g>: SeqAccess<'de, Error = Self::Error>
-    where
-        Self: 'g;
-
-    /// Gets the next element in the sequence.
-    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
-    where
-        T: Deserialize<'de>;
-
-    /// Gets the next element by trying to deserialize it as a sequence.
-    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
-    where
-        T: Deserialize<'de>;
-
-    /// Gets the sub-access for the current sequence access.
-    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error>;
-}
-
-impl<'de, T: SeqAccess<'de>> SeqAccess<'de> for &mut T {
-    type Error = T::Error;
-    type SubAccess<'g>
-        = T::SubAccess<'g>
-    where
-        Self: 'g;
-
-    fn next_element<U>(&mut self) -> Result<Option<U>, Self::Error>
-    where
-        U: Deserialize<'de>,
-    {
-        (*self).next_element()
-    }
-
-    fn next_element_seq<U>(&mut self) -> Result<Option<U>, Self::Error>
-    where
-        U: Deserialize<'de>,
-    {
-        (*self).next_element_seq()
-    }
-
-    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
-        (*self).sub_access()
-    }
-}
-
-/// Trait for XML text.
-pub trait XmlText<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
-    /// Returns the owned byte representation of the text.
-    fn into_bytes(self) -> Cow<'de, [u8]>;
-
-    /// Returns the byte representation of the text.
-    fn as_bytes(&self) -> &[u8];
-
-    /// Returns the owned string representation of the text.
-    fn into_string(self) -> Cow<'de, str>;
-
-    /// Returns the string representation of the text.
-    fn as_str(&self) -> &str;
-
-    /// Returns the namespace context of the text.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
-}
-
-/// Trait for XML CDATA.
-pub trait XmlCData<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
-    /// Returns the owned byte representation of the CDATA.
-    fn into_bytes(self) -> Cow<'de, [u8]>;
-
-    /// Returns the byte representation of the CDATA.
-    fn as_bytes(&self) -> &[u8];
-
-    /// Returns the owned string representation of the CDATA.
-    fn into_string(self) -> Cow<'de, str>;
-
-    /// Returns the string representation of the CDATA.
-    fn as_str(&self) -> &str;
-
-    /// Returns the namespace context of the CDATA.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
-}
-
-/// Trait for XML processing instructions.
-pub trait XmlProcessingInstruction {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
-    /// Returns the target of the PI.
-    fn target(&self) -> &[u8];
-
-    /// Returns the content of the PI.
-    fn content(&self) -> &[u8];
-
-    /// Returns the namespace context of the PI.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
-}
-
-/// Trait for XML declarations.
-pub trait XmlDeclaration {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
-    /// Returns the version value of the declaration.
-    fn version(&self) -> &[u8];
-
-    /// Returns the encoding value of the declaration.
-    fn encoding(&self) -> Option<&[u8]>;
-
-    /// Returns the standalone value of the declaration.
-    fn standalone(&self) -> Option<&[u8]>;
-
-    /// Returns the namespace context of the declaration.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
-}
-
-/// Trait for XML comments.
-pub trait XmlComment<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
-    /// Returns the owned byte representation of the comment.
-    fn into_bytes(self) -> Cow<'de, [u8]>;
-
-    /// Returns the byte representation of the comment.
-    fn as_bytes(&self) -> &[u8];
-
-    /// Returns the namespace context of the comment.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
-}
-
-/// Trait for XML doctypes.
-pub trait XmlDoctype<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
-    where
-        Self: 'a;
-
-    /// Returns the owned byte representation of the doctype.
-    fn into_bytes(self) -> Cow<'de, [u8]>;
-
-    /// Returns the byte representation of the doctype.
-    fn as_bytes(&self) -> &[u8];
-
-    /// Returns the namespace context of the doctype.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
-}
-
-/// Visitor trait that lets you define how to handle different types of XML nodes.
-pub trait Visitor<'de>: Sized {
-    /// The type of value that this visitor will produce.
-    type Value: Deserialize<'de>;
-
-    /// Returns a description of the type that this visitor expects.
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result;
-
-    /// Visits an XML text node.
-    fn visit_text<E, V>(self, value: V) -> Result<Self::Value, E>
-    where
-        E: Error,
-        V: XmlText<'de>,
-    {
-        let _ = value;
-        Err(Error::unexpected_visit(Unexpected::Text, &self))
-    }
-
-    /// Visits an XML CDATA node.
-    fn visit_cdata<E, V>(self, value: V) -> Result<Self::Value, E>
-    where
-        E: Error,
-        V: XmlCData<'de>,
-    {
-        let _ = value;
-        Err(Error::unexpected_visit(Unexpected::CData, &self))
-    }
-
-    /// Visits an XML element.
-    fn visit_element<A>(self, element: A) -> Result<Self::Value, A::Error>
-    where
-        A: ElementAccess<'de>,
-    {
-        let _ = element;
-        Err(Error::unexpected_visit(Unexpected::ElementStart, &self))
-    }
-
-    /// Visits an XML attribute.
-    fn visit_attribute<A>(self, attribute: A) -> Result<Self::Value, A::Error>
-    where
-        A: AttributeAccess<'de>,
-    {
-        let _ = attribute;
-        Err(Error::unexpected_visit(Unexpected::Attribute, &self))
-    }
-
-    /// Visits a sequence of values.
-    fn visit_seq<S>(self, mut sequence: S) -> Result<Self::Value, S::Error>
-    where
-        S: SeqAccess<'de>,
-    {
-        sequence
-            .next_element::<Self::Value>()?
-            .ok_or_else(Error::missing_data)
-    }
-
-    /// Visits an XML PI node.
-    fn visit_pi<E, V>(self, pi: V) -> Result<Self::Value, E>
-    where
-        E: Error,
-        V: XmlProcessingInstruction,
-    {
-        let _ = pi;
-        Err(Error::unexpected_visit(Unexpected::PI, &self))
-    }
-
-    /// Visits a declaration.
-    fn visit_decl<E, V>(self, declaration: V) -> Result<Self::Value, E>
-    where
-        E: Error,
-        V: XmlDeclaration,
-    {
-        let _ = declaration;
-        Err(Error::unexpected_visit(Unexpected::Decl, &self))
-    }
-
-    /// Visits a comment.
-    fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
-    where
-        E: Error,
-        V: XmlComment<'de>,
-    {
-        let _ = comment;
-        Err(Error::unexpected_visit(Unexpected::Comment, &self))
-    }
-
-    /// Visits a doctype declaration.
-    fn visit_doctype<E, V>(self, doctype: V) -> Result<Self::Value, E>
-    where
-        E: Error,
-        V: XmlDoctype<'de>,
-    {
-        let _ = doctype;
-        Err(Error::unexpected_visit(Unexpected::DocType, &self))
-    }
-
-    /// Visits nothing. This is used when a value is not present.
-    fn visit_none<E>(self) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        Err(Error::unexpected_visit(Unexpected::None, &self))
-    }
-}
-
-/// A type that can be used to deserialize XML documents.
-pub trait Deserializer<'de>: Sized {
-    /// The error type that can be returned from the deserializer.
-    type Error: Error;
-
-    /// Deserializes a value from the deserializer.
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>;
-
-    /// Deserializes a value from the deserializer, but tries to do it from a sequence of values.
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>;
+    /// This function is called after all attributes and elements have been contributed.
+    fn finish(self) -> Result<Self::Value, ErrorA>;
 }
 
 /// A type that can be deserialized from a deserializer. This type has two methods: [`Deserialize::deserialize`] and [`Deserialize::deserialize_seq`]. The latter is used in cases where types can be constructed from multiple nodes, such as constructing a [`std::vec::Vec`] from multiple elements, or a [`std::string::String`] from multiple text nodes that are concatenated together.
 ///
 /// To see the documentation for the derive macro, see [`xmlity_derive::Deserialize`].
 pub trait Deserialize<'de>: Sized {
-    /// Deserializes a value from a deserializer.
-    fn deserialize<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error>;
+    type Builder: DeserializeBuilder<'de, Value = Self>;
 
-    /// Deserializes a value from a deserializer, but tries to do it from a sequence of values.
-    fn deserialize_seq<D: Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
-        Self::deserialize(reader)
-    }
+    fn builder() -> Self::Builder;
 }
 
 /// A utility type for easier use of [`Deserialize`] trait without needing to specify the lifetime.
 pub trait DeserializeOwned: for<'de> Deserialize<'de> {}
 impl<T> DeserializeOwned for T where T: for<'de> Deserialize<'de> {}
 
-/// A group of types that can be deserialized together. While this is being built, the type of a [`DeserializationGroup`] is the [`DeserializationGroup::Builder`] type.
-///
-/// To see the documentation for the derive macro, see [`xmlity_derive::DeserializationGroup`].
-pub trait DeserializationGroup<'de> {
-    /// The type of the builder for this deserialization group returned by [`DeserializationGroup::builder`].
-    type Builder: DeserializationGroupBuilder<'de, Value = Self>;
-
-    /// Initializes the deserialization group builder.
-    fn builder() -> Self::Builder;
+enum BuildState<'de, T: DeserializeBuilder<'de>> {
+    Waiting,
+    Building { builder: T, read_count: usize },
+    Finishing,
+    Done(T::Value),
 }
 
-/// A builder for a deserialization group. When completed (through [`DeserializationGroupBuilder::finish`]), the builder is converted into the deserialization group type that initated the builder.
-pub trait DeserializationGroupBuilder<'de>: Sized {
-    /// The type of the deserialization group that this builder builds when finished through [`DeserializationGroupBuilder::finish`].
-    type Value;
+impl<'de, T: DeserializeBuilder<'de>> BuildState<'de, T> {
+    fn finish(&mut self) -> Result<(), ErrorA> {
+        if matches!(self, BuildState::Done(_)) {
+            return Ok(());
+        }
 
-    /// Returns true if the deserializer made progress
-    fn contribute_attributes<D: AttributesAccess<'de>>(
-        &mut self,
-        access: D,
-    ) -> Result<bool, D::Error> {
-        let _ = access;
+        let BuildState::Building { builder, .. } = core::mem::replace(self, BuildState::Finishing)
+        else {
+            panic!("Cannot finish a BuildState that is not Building");
+        };
 
-        Ok(false)
+        *self = BuildState::Done(builder.finish()?);
+
+        Ok(())
     }
 
-    /// This hint function is used to avoid calling [`DeserializationGroupBuilder::contribute_attributes`] unnecessarily.
-    fn attributes_done(&self) -> bool {
-        false
+    fn expect_finish(mut self) -> Result<T::Value, ErrorA> {
+        self.finish()?;
+
+        match self {
+            BuildState::Done(value) => Ok(value),
+            _ => unreachable!("After calling `finish`, the state must be Done"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::LocalName;
+
+    use super::*;
+
+    impl<'de> Deserialize<'de> for String {
+        type Builder = String;
+
+        fn builder() -> Self::Builder {
+            String::new()
+        }
     }
 
-    /// Returns true if the deserializer made progress
-    fn contribute_elements<D: SeqAccess<'de>>(&mut self, access: D) -> Result<bool, D::Error> {
-        let _ = access;
+    impl<'de> DeserializeBuilder<'de> for String {
+        type Value = String;
 
-        Ok(false)
+        fn read_events(
+            &mut self,
+            _context: &dyn DeserializeContext,
+            packets: &[Event<'de>],
+        ) -> Result<EventControl, ErrorA> {
+            for (i, packet) in packets.iter().enumerate() {
+                match packet {
+                    Event::Text { text } => {
+                        self.push_str(text);
+                    }
+                    _ => return Ok(EventControl::Done(i)),
+                }
+            }
+            Ok(EventControl::Advance(packets.len()))
+        }
+
+        fn finish(self) -> Result<Self::Value, ErrorA> {
+            Ok(self)
+        }
     }
 
-    /// This hint function is used to avoid calling [`DeserializationGroupBuilder::contribute_elements`] unnecessarily.
-    fn elements_done(&self) -> bool {
-        false
+    #[derive(Debug, PartialEq)]
+    struct ElemA {
+        text: String,
+    }
+    enum ElemABuilder<'de> {
+        AwaitingStart,
+        AwaitingEndStart,
+        Content {
+            text: BuildState<'de, <String as Deserialize<'de>>::Builder>,
+        },
+        Finished(ElemA),
     }
 
-    /// This function is called after all attributes and elements have been contributed.
-    fn finish<E: Error>(self) -> Result<Self::Value, E>;
+    impl<'de> Deserialize<'de> for ElemA {
+        type Builder = ElemABuilder<'de>;
+
+        fn builder() -> Self::Builder {
+            ElemABuilder::AwaitingStart
+        }
+    }
+
+    impl<'de> DeserializeBuilder<'de> for ElemABuilder<'de> {
+        type Value = ElemA;
+
+        fn read_events(
+            &mut self,
+            context: &dyn DeserializeContext,
+            packets: &[Event<'de>],
+        ) -> Result<EventControl, ErrorA> {
+            let mut remaining_packets = packets;
+            while let Some(packet) = remaining_packets.first() {
+                match self {
+                    ElemABuilder::AwaitingStart => {
+                        if let Event::StartElementOpened { name } = packet {
+                            if **name == ExpandedName::new(LocalName::new_dangerous("ElemA"), None)
+                            {
+                                remaining_packets = &remaining_packets[1..];
+                                *self = ElemABuilder::AwaitingEndStart;
+                            } else {
+                                return Err(ErrorA);
+                            }
+                        } else {
+                            return Err(ErrorA);
+                        }
+                    }
+                    ElemABuilder::AwaitingEndStart => {
+                        if let Event::StartElementClosed = packet {
+                            remaining_packets = &remaining_packets[1..];
+                            *self = ElemABuilder::Content {
+                                text: BuildState::Building {
+                                    builder: <String as Deserialize<'de>>::builder(),
+                                    read_count: 0,
+                                },
+                            };
+                        } else {
+                            return Err(ErrorA);
+                        }
+                    }
+                    ElemABuilder::Content { text } => {
+                        if let Event::EndElement { name } = packet {
+                            if **name == ExpandedName::new(LocalName::new_dangerous("ElemA"), None)
+                            {
+                                let text = std::mem::replace(text, BuildState::Finishing);
+
+                                remaining_packets = &remaining_packets[1..];
+
+                                *self = ElemABuilder::Finished(ElemA {
+                                    text: text.expect_finish()?,
+                                });
+
+                                return Ok(EventControl::Done(
+                                    packets.len() - remaining_packets.len(),
+                                ));
+                            } else {
+                                return Err(ErrorA);
+                            }
+                        }
+
+                        if let BuildState::Building { builder, .. } = text {
+                            match builder.read_events(context, remaining_packets)? {
+                                EventControl::Advance(adv) => {
+                                    remaining_packets = &remaining_packets[adv..];
+                                }
+                                EventControl::Rewind(adv) => {
+                                    // This will try to rewind the used packets. If the amount rewinded is more than the amount of packets used in this call, it will return rewind to the parent minus the amount of packets used in this call.
+                                    let used_packets = packets.len() - remaining_packets.len();
+                                    if adv > used_packets {
+                                        return Ok(EventControl::Rewind(adv - used_packets));
+                                    }
+
+                                    remaining_packets = &packets[(used_packets - adv)..];
+                                }
+                                EventControl::Done(adv) => {
+                                    remaining_packets = &remaining_packets[adv..];
+
+                                    text.finish()?;
+                                }
+                            }
+                        }
+                    }
+                    ElemABuilder::Finished { .. } => {
+                        return Err(ErrorA);
+                    }
+                }
+            }
+
+            Ok(EventControl::Advance(packets.len()))
+        }
+
+        fn finish(self) -> Result<Self::Value, ErrorA> {
+            match self {
+                ElemABuilder::Finished(a) => Ok(a),
+                _ => Err(ErrorA),
+            }
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum EnumB {
+        VariantA(ElemA),
+        VariantB(String),
+    }
+
+    enum EnumBBuilder<'de> {
+        VariantA {
+            read_count: usize,
+            builder: <ElemA as Deserialize<'de>>::Builder,
+        },
+        VariantAEnd(ElemA),
+        VariantB {
+            read_count: usize,
+            builder: <String as Deserialize<'de>>::Builder,
+        },
+        VariantBEnd(String),
+        Finishing,
+    }
+
+    impl<'de> DeserializeBuilder<'de> for EnumBBuilder<'de> {
+        type Value = EnumB;
+
+        fn read_events(
+            &mut self,
+            context: &dyn DeserializeContext,
+            packets: &[Event<'de>],
+        ) -> Result<EventControl, ErrorA> {
+            match self {
+                EnumBBuilder::VariantA {
+                    read_count,
+                    builder,
+                } => {
+                    let Ok(control) = builder.read_events(context, packets) else {
+                        let rewind = *read_count;
+                        *self = EnumBBuilder::VariantB {
+                            read_count: 0,
+                            builder: String::builder(),
+                        };
+                        return Ok(EventControl::Rewind(rewind));
+                    };
+
+                    match control {
+                        EventControl::Advance(advance) => {
+                            *read_count += advance;
+                            Ok(EventControl::Advance(advance))
+                        }
+                        EventControl::Rewind(rewind) => Ok(EventControl::Rewind(rewind)),
+                        EventControl::Done(used) => {
+                            let EnumBBuilder::VariantA { builder, .. } =
+                                std::mem::replace(self, EnumBBuilder::Finishing)
+                            else {
+                                unreachable!()
+                            };
+                            *self = EnumBBuilder::VariantAEnd(builder.finish()?);
+                            Ok(EventControl::Done(used))
+                        }
+                    }
+                }
+                EnumBBuilder::VariantB {
+                    builder,
+                    read_count,
+                } => {
+                    let Ok(control) = builder.read_events(context, packets) else {
+                        return Err(ErrorA);
+                    };
+
+                    match control {
+                        EventControl::Advance(advance) => {
+                            *read_count += advance;
+                            Ok(EventControl::Advance(advance))
+                        }
+                        EventControl::Rewind(rewind) => Ok(EventControl::Rewind(rewind)),
+                        EventControl::Done(used) => {
+                            let EnumBBuilder::VariantB { builder, .. } =
+                                std::mem::replace(self, EnumBBuilder::Finishing)
+                            else {
+                                unreachable!()
+                            };
+                            *self = EnumBBuilder::VariantBEnd(builder.finish()?);
+                            Ok(EventControl::Done(used))
+                        }
+                    }
+                }
+                EnumBBuilder::VariantAEnd(_) | EnumBBuilder::VariantBEnd(_) => {
+                    Ok(EventControl::Done(0))
+                }
+                EnumBBuilder::Finishing => unreachable!(),
+            }
+        }
+
+        fn finish(self) -> Result<Self::Value, ErrorA> {
+            match self {
+                EnumBBuilder::VariantAEnd(a) => Ok(EnumB::VariantA(a)),
+                EnumBBuilder::VariantBEnd(b) => Ok(EnumB::VariantB(b)),
+                EnumBBuilder::VariantA { builder, .. } => builder.finish().map(EnumB::VariantA),
+                EnumBBuilder::VariantB { builder, .. } => builder.finish().map(EnumB::VariantB),
+                EnumBBuilder::Finishing => unreachable!(),
+            }
+        }
+    }
+    impl<'de> Deserialize<'de> for EnumB {
+        type Builder = EnumBBuilder<'de>;
+
+        fn builder() -> Self::Builder {
+            EnumBBuilder::VariantA {
+                read_count: 0,
+                builder: ElemA::builder(),
+            }
+        }
+    }
+
+    struct DevContext;
+
+    impl DeserializeContext for DevContext {
+        fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
+            None
+        }
+
+        fn resolve_prefix(&self, _prefix: Prefix<'_>) -> Option<XmlNamespace<'_>> {
+            None
+        }
+    }
+
+    #[test]
+    fn text_deserialize() {
+        let events = vec![Event::Text { text: "Hello" }];
+
+        let mut text = String::builder();
+        text.read_events(&DevContext, &events)
+            .expect("Failed to read events");
+
+        let val = text.finish().expect("Failed to finish deserialization");
+
+        assert_eq!(val, "Hello");
+    }
+
+    #[test]
+    fn elem_deserialize() {
+        let name = ExpandedName::new(LocalName::new_dangerous("ElemA"), None);
+
+        let events = vec![
+            Event::StartElementOpened { name: &name },
+            Event::StartElementClosed,
+            Event::Text { text: "Hello" },
+            Event::EndElement { name: &name },
+        ];
+
+        let mut builder = ElemA::builder();
+
+        builder
+            .read_events(&DevContext, &events)
+            .expect("Failed to read events");
+
+        let val = builder.finish().expect("Failed to finish deserialization");
+
+        assert_eq!(
+            val,
+            ElemA {
+                text: "Hello".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn enum_deserialize() {
+        let events = vec![Event::Text { text: "Hello" }];
+
+        let mut builder = EnumB::builder();
+
+        let ctrl = builder
+            .read_events(&DevContext, &events)
+            .expect("Failed to read events");
+
+        assert_eq!(ctrl, EventControl::Rewind(0));
+
+        let ctrl = builder
+            .read_events(&DevContext, &events)
+            .expect("Failed to read events");
+
+        assert_eq!(ctrl, EventControl::Advance(1));
+
+        let val = builder.finish().expect("Failed to finish deserialization");
+
+        assert_eq!(val, EnumB::VariantB("Hello".to_string()));
+    }
 }
