@@ -80,12 +80,17 @@ pub enum Unexpected {
 }
 
 /// Trait that lets you access the namespaces declared on an XML node.
-pub trait NamespaceContext {
+pub trait DeserializeContext {
     /// Get the default namespace.
     fn default_namespace(&self) -> Option<XmlNamespace<'_>>;
 
     /// Resolve a prefix to a namespace.
     fn resolve_prefix(&self, prefix: Prefix<'_>) -> Option<XmlNamespace<'_>>;
+
+    /// Get a reference to external data associated with this context.
+    fn external_data<T>(&self) -> Option<&T>
+    where
+        T: core::any::Any;
 }
 
 /// Trait that lets you access the attributes of an XML node.
@@ -130,8 +135,8 @@ pub trait ElementAccess<'de>: AttributesAccess<'de> {
     /// The type of the children accessor returned by [`ElementAccess::children`].
     type ChildrenAccess: SeqAccess<'de, Error = Self::Error>;
 
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
+    /// The type of the namespace context returned by [`ElementAccess::context`].
+    type DeserializeContext<'a>: DeserializeContext + 'a
     where
         Self: 'a;
 
@@ -142,7 +147,7 @@ pub trait ElementAccess<'de>: AttributesAccess<'de> {
     fn children(self) -> Result<Self::ChildrenAccess, Self::Error>;
 
     /// Returns the namespace context for this attribute.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    fn context(&self) -> Self::DeserializeContext<'_>;
 }
 
 /// An extension trait for [`ElementAccess`] that provides additional methods.
@@ -243,8 +248,8 @@ impl<'de, T: SeqAccess<'de>> SeqAccess<'de> for &mut T {
 
 /// Trait for XML text.
 pub trait XmlText<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
+    /// The type of the namespace context returned by [`XmlText::context`].
+    type DeserializeContext<'a>: DeserializeContext + 'a
     where
         Self: 'a;
 
@@ -261,13 +266,13 @@ pub trait XmlText<'de> {
     fn as_str(&self) -> &str;
 
     /// Returns the namespace context of the text.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    fn context(&self) -> Self::DeserializeContext<'_>;
 }
 
 /// Trait for XML CDATA.
 pub trait XmlCData<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
+    /// The type of the namespace context returned by [`XmlCData::context`].
+    type DeserializeContext<'a>: DeserializeContext + 'a
     where
         Self: 'a;
 
@@ -284,13 +289,13 @@ pub trait XmlCData<'de> {
     fn as_str(&self) -> &str;
 
     /// Returns the namespace context of the CDATA.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    fn context(&self) -> Self::DeserializeContext<'_>;
 }
 
 /// Trait for XML processing instructions.
 pub trait XmlProcessingInstruction {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
+    /// The type of the namespace context returned by [`XmlProcessingInstruction::context`].
+    type DeserializeContext<'a>: DeserializeContext + 'a
     where
         Self: 'a;
 
@@ -301,13 +306,13 @@ pub trait XmlProcessingInstruction {
     fn content(&self) -> &[u8];
 
     /// Returns the namespace context of the PI.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    fn context(&self) -> Self::DeserializeContext<'_>;
 }
 
 /// Trait for XML declarations.
 pub trait XmlDeclaration {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
+    /// The type of the namespace context returned by [`XmlDeclaration::context`].
+    type DeserializeContext<'a>: DeserializeContext + 'a
     where
         Self: 'a;
 
@@ -321,13 +326,13 @@ pub trait XmlDeclaration {
     fn standalone(&self) -> Option<&[u8]>;
 
     /// Returns the namespace context of the declaration.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    fn context(&self) -> Self::DeserializeContext<'_>;
 }
 
 /// Trait for XML comments.
 pub trait XmlComment<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
+    /// The type of the namespace context returned by [`XmlComment::context`].
+    type DeserializeContext<'a>: DeserializeContext + 'a
     where
         Self: 'a;
 
@@ -338,13 +343,13 @@ pub trait XmlComment<'de> {
     fn as_bytes(&self) -> &[u8];
 
     /// Returns the namespace context of the comment.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    fn context(&self) -> Self::DeserializeContext<'_>;
 }
 
 /// Trait for XML doctypes.
 pub trait XmlDoctype<'de> {
-    /// The type of the namespace context returned by [`AttributeAccess::namespace_context`].
-    type NamespaceContext<'a>: NamespaceContext + 'a
+    /// The type of the namespace context returned by [`XmlDoctype::context`].
+    type DeserializeContext<'a>: DeserializeContext + 'a
     where
         Self: 'a;
 
@@ -355,7 +360,7 @@ pub trait XmlDoctype<'de> {
     fn as_bytes(&self) -> &[u8];
 
     /// Returns the namespace context of the doctype.
-    fn namespace_context(&self) -> Self::NamespaceContext<'_>;
+    fn context(&self) -> Self::DeserializeContext<'_>;
 }
 
 /// Visitor trait that lets you define how to handle different types of XML nodes.

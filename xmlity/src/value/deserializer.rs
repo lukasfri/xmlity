@@ -101,7 +101,7 @@ impl<'de> Deserializer<'de> for &'de XmlCData {
 }
 
 impl<'de> de::XmlCData<'de> for &'de XmlCData {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = ()
     where
         Self: 'a;
@@ -122,7 +122,7 @@ impl<'de> de::XmlCData<'de> for &'de XmlCData {
         std::str::from_utf8(&self.0).unwrap()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+    fn context(&self) -> Self::DeserializeContext<'_> {}
 }
 
 impl<'de> Deserializer<'de> for &'de XmlChild {
@@ -379,7 +379,7 @@ impl<'de> AttributesAccess<'de> for XmlElementAccess<'de, '_> {
 
 impl<'de> ElementAccess<'de> for XmlElementAccess<'de, '_> {
     type ChildrenAccess = XmlSeqAccess<'de, 'static, XmlChild>;
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = ()
     where
         Self: 'a;
@@ -396,7 +396,7 @@ impl<'de> ElementAccess<'de> for XmlElementAccess<'de, '_> {
         })
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+    fn context(&self) -> Self::DeserializeContext<'_> {}
 }
 
 // Seq
@@ -497,7 +497,7 @@ impl<'de> de::SeqAccess<'de> for XmlSeqAccess<'de, '_, XmlValue> {
 }
 
 impl de::XmlProcessingInstruction for &XmlProcessingInstruction {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = ()
     where
         Self: 'a;
@@ -509,11 +509,11 @@ impl de::XmlProcessingInstruction for &XmlProcessingInstruction {
     fn target(&self) -> &[u8] {
         self.target.as_slice()
     }
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+    fn context(&self) -> Self::DeserializeContext<'_> {}
 }
 
 impl de::XmlDeclaration for &XmlDecl {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = ()
     where
         Self: 'a;
@@ -530,11 +530,11 @@ impl de::XmlDeclaration for &XmlDecl {
         self.standalone.as_deref().map(|s| s.as_bytes())
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+    fn context(&self) -> Self::DeserializeContext<'_> {}
 }
 
 impl<'de> de::XmlComment<'de> for &'de XmlComment {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = ()
     where
         Self: 'a;
@@ -547,11 +547,11 @@ impl<'de> de::XmlComment<'de> for &'de XmlComment {
         &self.0
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+    fn context(&self) -> Self::DeserializeContext<'_> {}
 }
 
 impl<'de> de::XmlDoctype<'de> for &'de XmlDoctype {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = ()
     where
         Self: 'a;
@@ -564,11 +564,11 @@ impl<'de> de::XmlDoctype<'de> for &'de XmlDoctype {
         &self.0
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+    fn context(&self) -> Self::DeserializeContext<'_> {}
 }
 
 impl<'de> de::XmlText<'de> for &'de XmlText {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = ()
     where
         Self: 'a;
@@ -589,7 +589,7 @@ impl<'de> de::XmlText<'de> for &'de XmlText {
         std::str::from_utf8(&self.0).unwrap()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {}
+    fn context(&self) -> Self::DeserializeContext<'_> {}
 }
 
 impl<'de> de::SeqAccess<'de> for Option<&'de XmlText> {

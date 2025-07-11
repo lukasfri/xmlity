@@ -1,4 +1,4 @@
-use xmlity::de::NamespaceContext;
+use xmlity::de::DeserializeContext;
 
 use crate::define_deserialize_test;
 use xmlity::XmlNamespace;
@@ -24,7 +24,7 @@ impl<'de> Deserialize<'de> for InternalReference {
                 })?;
 
                 let namespace = value
-                    .namespace_context()
+                    .context()
                     .resolve_prefix(prefix.as_ref())
                     .ok_or_else(|| E::custom(format!("Prefix {prefix:?} is not defined")))?
                     .into_owned();
@@ -72,7 +72,7 @@ impl<'de> Deserialize<'de> for DefaultNamespace {
                 V: xmlity::de::XmlText<'de>,
             {
                 let namespace = value
-                    .namespace_context()
+                    .context()
                     .default_namespace()
                     .map(XmlNamespace::into_owned);
 

@@ -1,5 +1,5 @@
 use crate::{
-    de::{self, NamespaceContext, SeqAccess, Visitor},
+    de::{self, DeserializeContext, SeqAccess, Visitor},
     Deserialize, Deserializer, ExpandedName, Prefix, XmlNamespace,
 };
 use core::marker::PhantomData;
@@ -146,12 +146,19 @@ impl<'v> crate::de::Visitor<'v> for XmlTextVisitor<'v> {
     }
 }
 
-impl NamespaceContext for () {
+impl DeserializeContext for () {
     fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
         None
     }
 
     fn resolve_prefix(&self, _prefix: Prefix<'_>) -> Option<XmlNamespace<'_>> {
+        None
+    }
+
+    fn external_data<T>(&self) -> Option<&T>
+    where
+        T: core::any::Any,
+    {
         None
     }
 }

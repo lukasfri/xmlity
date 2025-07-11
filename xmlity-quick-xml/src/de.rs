@@ -1,7 +1,7 @@
 /// The [`xmlity::de::Deserializer`] implementation for the `quick-xml` crate.
 ///
 /// This deserializer is based upon the [`quick_xml::NsReader`] with the same limits as the underlying reader, including requiring a `[u8]` backing.
-use std::{borrow::Cow, ops::Deref};
+use std::{borrow::Cow, collections::HashMap, ops::Deref};
 
 use quick_xml::{
     events::{attributes::Attribute, BytesCData, BytesDecl, BytesPI, BytesStart, BytesText, Event},
@@ -11,7 +11,7 @@ use quick_xml::{
 
 use xmlity::{
     de::{
-        self, Error as _, NamespaceContext, Visitor, XmlCData, XmlComment, XmlDeclaration,
+        self, DeserializeContext, Error as _, Visitor, XmlCData, XmlComment, XmlDeclaration,
         XmlDoctype, XmlProcessingInstruction, XmlText,
     },
     Deserialize, ExpandedName, LocalName, XmlNamespace,
@@ -210,6 +210,7 @@ pub struct Deserializer<'i> {
     reader: Reader<'i>,
     // Limit depth
     limit_depth: i16,
+    external_data: Option<&'i HashMap<core::any::TypeId, Box<dyn core::any::Any>>>,
 }
 
 impl<'i> From<NsReader<&'i [u8]>> for Deserializer<'i> {
@@ -230,7 +231,17 @@ impl<'i> Deserializer<'i> {
         Self {
             reader: Reader::new(reader),
             limit_depth: 0,
+            external_data: None,
         }
+    }
+
+    /// Set the external data for the deserializer.
+    pub fn with_external_data(
+        mut self,
+        external_data: &'i HashMap<core::any::TypeId, Box<dyn core::any::Any>>,
+    ) -> Self {
+        self.external_data = Some(external_data);
+        self
     }
 
     fn read_until_end(&mut self) -> Result<(), Error> {
@@ -281,6 +292,7 @@ impl<'i> Deserializer<'i> {
         Self {
             reader: self.reader.clone(),
             limit_depth,
+            external_data: self.external_data,
         }
     }
 
@@ -315,7 +327,7 @@ impl<'r> ElementAccess<'_, 'r> {
 
 const PLACEHOLDER_ELEMENT_NAME: &str = "a";
 
-impl NamespaceContext for &Deserializer<'_> {
+impl DeserializeContext for &Deserializer<'_> {
     fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
         let (_, namespace) = self
             .resolve_qname(QuickName(PLACEHOLDER_ELEMENT_NAME.as_bytes()), false)
@@ -331,6 +343,15 @@ impl NamespaceContext for &Deserializer<'_> {
             .into_parts();
 
         namespace.map(XmlNamespace::into_owned)
+    }
+
+    fn external_data<T>(&self) -> Option<&T>
+    where
+        T: core::any::Any,
+    {
+        self.external_data
+            .and_then(|data| data.get(&core::any::TypeId::of::<T>()))
+            .map(|data| data.downcast_ref::<T>().unwrap())
     }
 }
 
@@ -367,7 +388,7 @@ struct TextDeserializer<'a, 'v> {
 }
 
 impl<'de> de::XmlText<'de> for TextDeserializer<'_, 'de> {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
@@ -391,7 +412,7 @@ impl<'de> de::XmlText<'de> for TextDeserializer<'_, 'de> {
         std::str::from_utf8(self.value.as_ref()).unwrap()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer
     }
 }
@@ -617,7 +638,7 @@ impl<'de> de::AttributesAccess<'de> for ElementAccess<'_, 'de> {
 
 impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
     type ChildrenAccess = SeqAccess<'a, 'de>;
-    type NamespaceContext<'b>
+    type DeserializeContext<'b>
         = &'b Deserializer<'de>
     where
         Self: 'b;
@@ -646,7 +667,7 @@ impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
         })
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer()
     }
 }
@@ -757,7 +778,7 @@ impl<'a, T> DataWithD<'a, T> {
 }
 
 impl<'de> XmlText<'de> for DataWithD<'_, BytesText<'de>> {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
@@ -781,13 +802,13 @@ impl<'de> XmlText<'de> for DataWithD<'_, BytesText<'de>> {
         std::str::from_utf8(self.data.deref()).unwrap()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer
     }
 }
 
 impl<'de> XmlCData<'de> for DataWithD<'_, BytesCData<'de>> {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
@@ -811,13 +832,13 @@ impl<'de> XmlCData<'de> for DataWithD<'_, BytesCData<'de>> {
         std::str::from_utf8(self.data.deref()).unwrap()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer
     }
 }
 
 impl<'de> XmlComment<'de> for DataWithD<'_, BytesText<'de>> {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
@@ -830,7 +851,7 @@ impl<'de> XmlComment<'de> for DataWithD<'_, BytesText<'de>> {
         self.data.deref()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer
     }
 }
@@ -862,7 +883,7 @@ impl<'a> TryFrom<&'a BytesDecl<'a>> for ClearedByteDecl<'a> {
 }
 
 impl XmlDeclaration for DataWithD<'_, ClearedByteDecl<'_>> {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
@@ -879,13 +900,13 @@ impl XmlDeclaration for DataWithD<'_, ClearedByteDecl<'_>> {
         self.data.standalone.as_deref()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer
     }
 }
 
 impl XmlProcessingInstruction for DataWithD<'_, BytesPI<'_>> {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
@@ -898,13 +919,13 @@ impl XmlProcessingInstruction for DataWithD<'_, BytesPI<'_>> {
         self.data.content()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer
     }
 }
 
 impl<'de> XmlDoctype<'de> for DataWithD<'_, BytesText<'de>> {
-    type NamespaceContext<'a>
+    type DeserializeContext<'a>
         = &'a Deserializer<'a>
     where
         Self: 'a;
@@ -917,7 +938,7 @@ impl<'de> XmlDoctype<'de> for DataWithD<'_, BytesText<'de>> {
         self.data.deref()
     }
 
-    fn namespace_context(&self) -> Self::NamespaceContext<'_> {
+    fn context(&self) -> Self::DeserializeContext<'_> {
         self.deserializer
     }
 }
