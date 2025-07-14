@@ -1,7 +1,7 @@
 /// The [`xmlity::de::Deserializer`] implementation for the `quick-xml` crate.
 ///
 /// This deserializer is based upon the [`quick_xml::NsReader`] with the same limits as the underlying reader, including requiring a `[u8]` backing.
-use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, ops::Deref, rc::Rc};
 
 use quick_xml::{
     events::{attributes::Attribute, BytesCData, BytesDecl, BytesPI, BytesStart, BytesText, Event},
@@ -232,6 +232,12 @@ impl ExternalData {
     }
 }
 
+impl Default for ExternalData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// The [`xmlity::Deserializer`] for the `quick-xml` crate.
 ///
 /// This currently only supports an underlying reader of type `&[u8]` due to limitations in the `quick-xml` crate.
@@ -240,7 +246,7 @@ pub struct Deserializer<'i> {
     reader: Reader<'i>,
     // Limit depth
     limit_depth: i16,
-    external_data: Option<Arc<ExternalData>>,
+    external_data: Option<Rc<ExternalData>>,
 }
 
 impl<'i> From<NsReader<&'i [u8]>> for Deserializer<'i> {
@@ -267,7 +273,7 @@ impl<'i> Deserializer<'i> {
 
     /// Set the external data for the deserializer.
     pub fn with_external_data(mut self, external_data: ExternalData) -> Self {
-        self.external_data = Some(Arc::new(external_data));
+        self.external_data = Some(Rc::new(external_data));
         self
     }
 
