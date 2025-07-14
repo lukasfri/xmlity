@@ -133,6 +133,12 @@ impl XmlTextVisitor<'_> {
     }
 }
 
+impl Default for XmlTextVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'v> crate::de::Visitor<'v> for XmlTextVisitor<'v> {
     type Value = XmlText;
 
@@ -185,6 +191,12 @@ impl XmlCDataVisitor<'_> {
     }
 }
 
+impl Default for XmlCDataVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'de> Visitor<'de> for XmlCDataVisitor<'de> {
     type Value = XmlCData;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -222,6 +234,12 @@ impl XmlChildVisitor<'_> {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlChildVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -306,6 +324,12 @@ impl XmlElementVisitor<'_> {
     }
 }
 
+impl Default for XmlElementVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'v> crate::de::Visitor<'v> for XmlElementVisitor<'v> {
     type Value = XmlElement;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -366,6 +390,12 @@ impl XmlAttributeVisitor<'_> {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlAttributeVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -439,6 +469,12 @@ impl XmlProcessingInstructionVisitor<'_> {
     }
 }
 
+impl Default for XmlProcessingInstructionVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'v> crate::de::Visitor<'v> for XmlProcessingInstructionVisitor<'v> {
     type Value = XmlProcessingInstruction;
 
@@ -482,6 +518,12 @@ impl XmlDeclVisitor<'_> {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlDeclVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -535,6 +577,12 @@ impl XmlCommentVisitor<'_> {
     }
 }
 
+impl Default for XmlCommentVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'v> crate::de::Visitor<'v> for XmlCommentVisitor<'v> {
     type Value = XmlComment;
 
@@ -575,6 +623,12 @@ impl XmlDoctypeVisitor<'_> {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlDoctypeVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
