@@ -18,7 +18,7 @@ use crate::{
     ExpandedName, Prefix,
 };
 
-mod deserialize;
+pub mod deserialize;
 mod deserializer;
 mod serialize;
 mod serializer;
