@@ -37,7 +37,7 @@ pub enum Error {
 
 impl xmlity::ser::Error for Error {
     fn unexpected_serialize(unexpected: ser::Unexpected) -> Self {
-        Error::Custom(format!("Unexpected serialize: {:?}", unexpected))
+        Error::Custom(format!("Unexpected serialize: {unexpected:?}"))
     }
 
     fn custom<T: ToString>(msg: T) -> Self {
