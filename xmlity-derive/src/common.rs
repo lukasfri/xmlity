@@ -32,7 +32,7 @@ impl FieldIdent {
 impl fmt::Display for FieldIdent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FieldIdent::Named(ident) => write!(f, "{}", ident),
+            FieldIdent::Named(ident) => write!(f, "{ident}"),
             FieldIdent::Indexed(index) => write!(f, "{}", index.index),
         }
     }
