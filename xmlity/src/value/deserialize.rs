@@ -1,3 +1,4 @@
+//! This module contains the deserialization implementations for the XML value types including visitors.
 use crate::{
     de::{self, DeserializeContext, SeqAccess, Visitor},
     Deserialize, Deserializer, ExpandedName, Prefix, XmlNamespace,
@@ -116,17 +117,25 @@ impl<'de> Deserialize<'de> for XmlValue {
 
 // Text
 
-struct XmlTextVisitor<'v> {
+/// A visitor for deserializing to [`XmlText`].
+pub struct XmlTextVisitor<'v> {
     marker: PhantomData<XmlText>,
     lifetime: PhantomData<&'v ()>,
 }
 
 impl XmlTextVisitor<'_> {
-    fn new() -> Self {
+    /// Creates a new [`XmlTextVisitor`].
+    pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlTextVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -174,16 +183,24 @@ impl<'de> Deserialize<'de> for XmlText {
 
 // CData
 
-struct XmlCDataVisitor<'v> {
+/// A visitor for deserializing to [`XmlCData`].
+pub struct XmlCDataVisitor<'v> {
     marker: PhantomData<XmlCData>,
     lifetime: PhantomData<&'v ()>,
 }
 impl XmlCDataVisitor<'_> {
-    fn new() -> Self {
+    /// Creates a new [`XmlCDataVisitor`].
+    pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlCDataVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -212,16 +229,24 @@ impl<'de> Deserialize<'de> for XmlCData {
 
 // Child
 
-struct XmlChildVisitor<'v> {
+/// A visitor for deserializing to [`XmlChild`].
+pub struct XmlChildVisitor<'v> {
     marker: PhantomData<XmlChild>,
     lifetime: PhantomData<&'v ()>,
 }
 impl XmlChildVisitor<'_> {
-    fn new() -> Self {
+    /// Creates a new [`XmlChildVisitor`].
+    pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlChildVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -290,16 +315,25 @@ impl<'de> de::Deserialize<'de> for XmlChild {
 
 // Element
 
-struct XmlElementVisitor<'v> {
+/// A visitor for deserializing to [`XmlElement`].
+pub struct XmlElementVisitor<'v> {
     marker: PhantomData<XmlElement>,
     lifetime: PhantomData<&'v ()>,
 }
+
 impl XmlElementVisitor<'_> {
-    fn new() -> Self {
+    /// Creates a new [`XmlElementVisitor`].
+    pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlElementVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -350,17 +384,25 @@ impl<'de> crate::de::Deserialize<'de> for XmlElement {
 
 // Attribute
 
-struct XmlAttributeVisitor<'v> {
+/// A visitor for deserializing to [`XmlAttribute`].
+pub struct XmlAttributeVisitor<'v> {
     marker: PhantomData<XmlAttribute>,
     lifetime: PhantomData<&'v ()>,
 }
 
 impl XmlAttributeVisitor<'_> {
-    fn new() -> Self {
+    /// Creates a new [`XmlAttributeVisitor`].
+    pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlAttributeVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -418,17 +460,25 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for XmlSeq<T> {
 
 // Processing Instruction
 
-struct XmlProcessingInstructionVisitor<'v> {
+/// A visitor for deserializing to [`XmlProcessingInstruction`].
+pub struct XmlProcessingInstructionVisitor<'v> {
     marker: PhantomData<XmlProcessingInstruction>,
     lifetime: PhantomData<&'v ()>,
 }
 
 impl XmlProcessingInstructionVisitor<'_> {
-    fn new() -> Self {
+    /// Creates a new [`XmlProcessingInstructionVisitor`].
+    pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlProcessingInstructionVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -462,17 +512,25 @@ impl<'de> Deserialize<'de> for XmlProcessingInstruction {
 
 // Xml Decl
 
-struct XmlDeclVisitor<'v> {
+/// A visitor for deserializing to [`XmlDeclVisitor`].
+pub struct XmlDeclVisitor<'v> {
     marker: PhantomData<XmlDecl>,
     lifetime: PhantomData<&'v ()>,
 }
 
 impl XmlDeclVisitor<'_> {
-    fn new() -> Self {
+    /// Creates a new [`XmlDeclVisitor`].
+    pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlDeclVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -510,17 +568,25 @@ impl<'de> Deserialize<'de> for XmlDecl {
 
 // Xml Comment
 
-struct XmlCommentVisitor<'v> {
+/// A visitor for deserializing to [`XmlComment`].
+pub struct XmlCommentVisitor<'v> {
     marker: PhantomData<XmlComment>,
     lifetime: PhantomData<&'v ()>,
 }
 
 impl XmlCommentVisitor<'_> {
+    /// Creates a new [`XmlCommentVisitor`].
     pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlCommentVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -551,17 +617,25 @@ impl<'de> Deserialize<'de> for XmlComment {
 
 // Xml Doctype
 
-struct XmlDoctypeVisitor<'v> {
+/// A visitor for deserializing to [`XmlDoctype`].
+pub struct XmlDoctypeVisitor<'v> {
     marker: PhantomData<XmlDoctype>,
     lifetime: PhantomData<&'v ()>,
 }
 
 impl XmlDoctypeVisitor<'_> {
+    /// Creates a new [`XmlDoctypeVisitor`].
     pub fn new() -> Self {
         Self {
             marker: PhantomData,
             lifetime: PhantomData,
         }
+    }
+}
+
+impl Default for XmlDoctypeVisitor<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
