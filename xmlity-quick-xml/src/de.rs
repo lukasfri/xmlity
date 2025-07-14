@@ -1,7 +1,7 @@
 /// The [`xmlity::de::Deserializer`] implementation for the `quick-xml` crate.
 ///
 /// This deserializer is based upon the [`quick_xml::NsReader`] with the same limits as the underlying reader, including requiring a `[u8]` backing.
-use std::{borrow::Cow, collections::HashMap, ops::Deref};
+use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc};
 
 use quick_xml::{
     events::{attributes::Attribute, BytesCData, BytesDecl, BytesPI, BytesStart, BytesText, Event},
@@ -202,6 +202,36 @@ impl<'i> Reader<'i> {
     }
 }
 
+/// A struct to hold external data that can be used during deserialization.
+#[derive(Debug)]
+pub struct ExternalData {
+    data: HashMap<core::any::TypeId, Box<dyn core::any::Any>>,
+}
+
+impl ExternalData {
+    /// Creates a new [`ExternalData`] instance.
+    pub fn new() -> Self {
+        Self {
+            data: HashMap::new(),
+        }
+    }
+
+    /// Inserts data into the external data map.
+    pub fn insert<T: 'static>(&mut self, data: T) {
+        self.data.insert(
+            core::any::TypeId::of::<T>(),
+            Box::new(data) as Box<dyn core::any::Any>,
+        );
+    }
+
+    /// Retrieves data from the external data map.
+    pub fn get<T: 'static>(&self) -> Option<&T> {
+        self.data
+            .get(&core::any::TypeId::of::<T>())
+            .and_then(|data| data.downcast_ref::<T>())
+    }
+}
+
 /// The [`xmlity::Deserializer`] for the `quick-xml` crate.
 ///
 /// This currently only supports an underlying reader of type `&[u8]` due to limitations in the `quick-xml` crate.
@@ -210,7 +240,7 @@ pub struct Deserializer<'i> {
     reader: Reader<'i>,
     // Limit depth
     limit_depth: i16,
-    external_data: Option<&'i HashMap<core::any::TypeId, Box<dyn core::any::Any>>>,
+    external_data: Option<Arc<ExternalData>>,
 }
 
 impl<'i> From<NsReader<&'i [u8]>> for Deserializer<'i> {
@@ -236,11 +266,8 @@ impl<'i> Deserializer<'i> {
     }
 
     /// Set the external data for the deserializer.
-    pub fn with_external_data(
-        mut self,
-        external_data: &'i HashMap<core::any::TypeId, Box<dyn core::any::Any>>,
-    ) -> Self {
-        self.external_data = Some(external_data);
+    pub fn with_external_data(mut self, external_data: ExternalData) -> Self {
+        self.external_data = Some(Arc::new(external_data));
         self
     }
 
@@ -292,7 +319,7 @@ impl<'i> Deserializer<'i> {
         Self {
             reader: self.reader.clone(),
             limit_depth,
-            external_data: self.external_data,
+            external_data: self.external_data.clone(),
         }
     }
 
@@ -349,9 +376,7 @@ impl DeserializeContext for &Deserializer<'_> {
     where
         T: core::any::Any,
     {
-        self.external_data
-            .and_then(|data| data.get(&core::any::TypeId::of::<T>()))
-            .map(|data| data.downcast_ref::<T>().unwrap())
+        self.external_data.as_ref().and_then(|data| data.get::<T>())
     }
 }
 
