@@ -979,6 +979,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "xmlity-xml-rs"
+version = "0.0.2"
+dependencies = [
+ "pretty_assertions",
+ "rstest",
+ "thiserror",
+ "xml-rs",
+ "xmlity",
+]
+
+[[package]]
 name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
