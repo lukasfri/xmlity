@@ -45,6 +45,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
             DeserializeRootOpts::Element(opts) => RecordDeserializeElementBuilder {
                 input: self.input,
                 ignore_whitespace: opts.ignore_whitespace,
+                ignore_comments: opts.ignore_comments,
                 required_expanded_name: opts.deserialize_any_name.not().then(|| {
                     opts.expanded_name(&deserializer_ident.to_string())
                         .into_owned()
@@ -64,6 +65,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
                 input: self.input,
                 value: opts.value.clone(),
                 ignore_whitespace: opts.ignore_whitespace,
+                ignore_comments: opts.ignore_comments,
                 allow_unknown_children: opts.allow_unknown,
                 children_order: opts.order,
                 deserialize_with: opts.deserialize_with(),
@@ -72,6 +74,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for RecordDeserializeBuil
             DeserializeRootOpts::None => RecordDeserializeValueBuilder {
                 input: self.input,
                 ignore_whitespace: Default::default(),
+                ignore_comments: Default::default(),
                 allow_unknown_children: Default::default(),
                 children_order: Default::default(),
                 deserialize_with: None,

@@ -11,7 +11,7 @@ use crate::{
     derive::DeriveResult,
     options::{
         records::fields::{AttributeOpts, FieldOpts, FieldValueGroupOpts},
-        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
+        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreComments, IgnoreWhitespace,
     },
 };
 
@@ -28,12 +28,14 @@ impl ElementLoopAccessor {
         children_order: ElementOrder,
         attribute_order: ElementOrder,
         ignore_whitespace: IgnoreWhitespace,
+        ignore_comments: IgnoreComments,
     ) -> Self {
         Self {
             children_loop_accessor: SeqLoopAccessor::new(
                 allow_unknown_children,
                 children_order,
                 ignore_whitespace,
+                ignore_comments,
             ),
             allow_unknown_attributes,
             attribute_order,

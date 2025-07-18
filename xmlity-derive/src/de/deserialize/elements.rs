@@ -14,7 +14,7 @@ use crate::{
         builders::{DeserializeBuilder, VisitorBuilder, VisitorBuilderExt},
         components::ElementLoopAccessor,
     },
-    options::{AllowUnknown, ElementOrder, IgnoreWhitespace},
+    options::{AllowUnknown, ElementOrder, IgnoreComments, IgnoreWhitespace},
     DeriveError,
 };
 
@@ -23,6 +23,7 @@ use super::RecordInput;
 pub struct RecordDeserializeElementBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub input: &'a RecordInput<'a, T>,
     pub ignore_whitespace: IgnoreWhitespace,
+    pub ignore_comments: IgnoreComments,
     pub required_expanded_name: Option<ExpandedName<'static>>,
     pub allow_unknown_attributes: AllowUnknown,
     pub allow_unknown_children: AllowUnknown,
@@ -72,6 +73,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeElementB
                 self.children_order,
                 self.attribute_order,
                 self.ignore_whitespace,
+                self.ignore_comments,
             )
         });
 

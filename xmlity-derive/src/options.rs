@@ -147,6 +147,23 @@ impl FromMeta for IgnoreWhitespace {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum IgnoreComments {
+    #[default]
+    Any,
+    None,
+}
+
+impl FromMeta for IgnoreComments {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        match value {
+            "any" => Ok(Self::Any),
+            "none" => Ok(Self::None),
+            _ => Err(darling::Error::unknown_value(value)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, FromMeta, PartialEq)]
 pub enum TextSerializationFormat {
     CData,
@@ -226,6 +243,9 @@ pub mod records {
             #[darling(default)]
             /// Deserialize only
             pub ignore_whitespace: IgnoreWhitespace,
+            #[darling(default)]
+            /// Deserialize only
+            pub ignore_comments: IgnoreComments,
         }
 
         impl RootElementOpts {
@@ -311,6 +331,9 @@ pub mod records {
             #[darling(default)]
             /// Deserialize only
             pub ignore_whitespace: IgnoreWhitespace,
+            #[darling(default)]
+            /// Deserialize only
+            pub ignore_comments: IgnoreComments,
             #[darling(default)]
             /// Deserialize only
             pub allow_unknown: AllowUnknown,
@@ -1011,6 +1034,9 @@ pub mod enums {
             #[darling(default)]
             /// Deserialize only
             pub ignore_whitespace: IgnoreWhitespace,
+            #[darling(default)]
+            /// Deserialize only
+            pub ignore_comments: IgnoreComments,
             #[darling(default)]
             /// Deserialize only
             pub allow_unknown: AllowUnknown,
