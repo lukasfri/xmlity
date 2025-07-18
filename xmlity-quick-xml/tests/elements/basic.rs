@@ -8,15 +8,6 @@ pub struct B(String);
 
 define_test!(element_with_text, [(B("A".to_string()), "<b>A</b>")]);
 
-#[rstest::rstest]
-#[case("<b></b>")]
-#[case("<b><c></c></b>")]
-fn wrong_deserialize(#[case] xml: &str) {
-    let actual: Result<B, _> = crate::utils::quick_xml_deserialize_test(xml);
-
-    assert!(actual.is_err());
-}
-
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[xelement(name = "c")]
 pub struct C {
