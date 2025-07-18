@@ -12,7 +12,7 @@ use crate::{
     derive::{DeriveError, DeriveResult},
     options::{
         records::fields::{ChildOpts, FieldValueGroupOpts},
-        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
+        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreComments, IgnoreWhitespace,
     },
 };
 
@@ -20,6 +20,7 @@ pub struct SeqLoopAccessor {
     allow_unknown_children: AllowUnknown,
     order: ElementOrder,
     ignore_whitespace: IgnoreWhitespace,
+    ignore_comments: IgnoreComments,
 }
 
 impl SeqLoopAccessor {
@@ -27,11 +28,13 @@ impl SeqLoopAccessor {
         allow_unknown_children: AllowUnknown,
         order: ElementOrder,
         ignore_whitespace: IgnoreWhitespace,
+        ignore_comments: IgnoreComments,
     ) -> Self {
         Self {
             allow_unknown_children,
             order,
             ignore_whitespace,
+            ignore_comments,
         }
     }
 
@@ -79,8 +82,8 @@ impl SeqLoopAccessor {
         let Self {
             allow_unknown_children,
             order,
-
             ignore_whitespace,
+            ignore_comments,
         } = self;
 
         let whitespace_ty: syn::Type = parse_quote! {::xmlity::types::utils::Whitespace};
@@ -94,6 +97,21 @@ impl SeqLoopAccessor {
                 }
             }
             IgnoreWhitespace::None => {
+                vec![]
+            }
+        };
+
+        let comment_ty: syn::Type = parse_quote! {::xmlity::value::XmlComment};
+
+        let ignore_comments_expression: Vec<Stmt> = match ignore_comments {
+            IgnoreComments::Any => {
+                parse_quote! {
+                    if let Ok(Some(_)) = ::xmlity::de::SeqAccess::next_element::<#comment_ty>(#seq_access) {
+                        continue;
+                    }
+                }
+            }
+            IgnoreComments::None => {
                 vec![]
             }
         };
@@ -245,6 +263,7 @@ impl SeqLoopAccessor {
                 Ok(parse_quote! {
                     loop {
                         #(#ignore_whitespace_expression)*
+                        #(#ignore_comments_expression)*
                         #(#if_statements)*
                     }
                 })
@@ -317,6 +336,7 @@ impl SeqLoopAccessor {
                 Ok(parse_quote! {
                     loop {
                         #(#ignore_whitespace_expression)*
+                        #(#ignore_comments_expression)*
                         #(#field_visits)*
                         #(#skip_unknown)*
                     }

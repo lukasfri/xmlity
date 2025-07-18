@@ -15,7 +15,7 @@ use crate::{
             self,
             fields::{FieldOpts, FieldValueGroupOpts},
         },
-        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreWhitespace,
+        AllowUnknown, ElementOrder, FieldWithOpts, IgnoreComments, IgnoreWhitespace,
     },
     DeriveError,
 };
@@ -25,6 +25,7 @@ use super::{parse_enum_variant_derive_input, variant::DeserializeVariantBuilder,
 pub struct RecordDeserializeValueBuilder<'a, T: Fn(syn::Expr) -> syn::Expr> {
     pub input: &'a RecordInput<'a, T>,
     pub ignore_whitespace: IgnoreWhitespace,
+    pub ignore_comments: IgnoreComments,
     pub allow_unknown_children: AllowUnknown,
     pub children_order: ElementOrder,
     pub value: Option<String>,
@@ -213,6 +214,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> VisitorBuilder for RecordDeserializeValueBui
                 self.allow_unknown_children,
                 self.children_order,
                 self.ignore_whitespace,
+                self.ignore_comments,
             )
         });
 

@@ -71,6 +71,7 @@ impl<T: Fn(syn::Expr) -> syn::Expr> DeserializeBuilder for DeserializeVariantBui
                     records::roots::DeserializeRootOpts::Value(records::roots::RootValueOpts {
                         value: opts.value,
                         ignore_whitespace: opts.ignore_whitespace,
+                        ignore_comments: opts.ignore_comments,
                         allow_unknown: opts.allow_unknown,
                         order: opts.order,
                         with: None,
