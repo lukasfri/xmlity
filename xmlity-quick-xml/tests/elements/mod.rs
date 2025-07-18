@@ -1,9 +1,12 @@
 pub mod allow_unknown;
 pub mod attribute;
+pub mod attribute_namespace;
 pub mod basic;
 pub mod default;
+pub mod empty_child;
 pub mod extendable;
 pub mod generics;
+pub mod group_element_equivalent;
 pub mod ignore_comments;
 pub mod ignore_whitespace;
 pub mod inline_attribute_declarations;
@@ -16,6 +19,3 @@ pub mod option;
 pub mod single_namespace;
 pub mod skip_serializing_if;
 pub mod strict_order;
-
-pub mod attribute_namespace;
-pub mod group_element_equivalent;
