@@ -18,7 +18,7 @@ define_test!(
 );
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct ExtendableVec(#[xvalue(extendable = true)] Vec<String>);
+pub struct ExtendableVec(#[xvalue(extendable = "iterator")] Vec<String>);
 
 define_test!(
     extendable_vec,
