@@ -66,3 +66,23 @@ define_test!(
         )
     ]
 );
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "e")]
+pub struct E {
+    pub text: Option<String>,
+}
+
+define_test!(
+    option_text,
+    [
+        (
+            E {
+                text: Some("Text".to_string())
+            },
+            "<e>Text</e>"
+        ),
+        (E { text: None }, "<e/>"),
+        (E { text: None }, "<e/>", "<e></e>")
+    ]
+);
