@@ -5,7 +5,7 @@ impl crate::de::Error for Infallible {
     where
         T: std::fmt::Display,
     {
-        panic!("Infallible error: {}", msg);
+        panic!("Infallible error: {msg}");
     }
 
     fn wrong_name(name: &crate::ExpandedName<'_>, expected: &crate::ExpandedName<'_>) -> Self {
@@ -42,7 +42,7 @@ impl crate::ser::Error for Infallible {
     where
         T: std::fmt::Display,
     {
-        panic!("Infallible error: {}", msg);
+        panic!("Infallible error: {msg}");
     }
 
     fn unexpected_serialize(unexpected: crate::ser::Unexpected) -> Self {
