@@ -3,6 +3,7 @@
 //! It also contains some visitors for the types which can be reused, including [`iterator::IteratorVisitor`].
 
 pub mod common;
+mod infallible;
 pub mod iterator;
 mod primitive;
 mod smart;
