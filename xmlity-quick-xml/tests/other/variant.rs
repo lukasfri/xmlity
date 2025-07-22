@@ -15,7 +15,8 @@ define_test!(
         (
             CDataOrText::CData(CData("CData".to_owned())),
             "<![CDATA[CData]]>"
-        )
+        ),
+        (CDataOrText::String("".to_owned()), "")
     ]
 );
 
