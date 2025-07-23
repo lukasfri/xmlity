@@ -623,7 +623,7 @@ impl<'de> de::AttributesAccess<'de> for SubAttributesAccess<'_, 'de> {
             deserializer: self.deserializer,
             bytes_start: self.bytes_start,
             attribute_index: self.attribute_index,
-            write_attribute_to: self.write_attribute_to,
+            write_attribute_to: &mut self.attribute_index,
         })
     }
 }
