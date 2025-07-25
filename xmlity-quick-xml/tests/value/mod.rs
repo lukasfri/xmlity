@@ -1,1 +1,1 @@
-pub mod xbrl_linkbase_ref;
+pub mod indirect_direct_equal;
