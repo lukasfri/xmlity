@@ -4,6 +4,7 @@ pub mod attribute;
 pub mod attribute_namespace;
 pub mod basic;
 pub mod default;
+pub mod empty_child;
 pub mod extendable;
 pub mod generics;
 pub mod group_element_equivalent;

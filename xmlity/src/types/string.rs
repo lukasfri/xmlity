@@ -28,9 +28,11 @@ where
     T: FromStr,
 {
     type Value = Trim<T>;
+
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "a string")
     }
+
     fn visit_text<E, V>(self, v: V) -> Result<Self::Value, E>
     where
         E: Error,
@@ -41,6 +43,13 @@ where
             .parse()
             .map(Trim)
             .map_err(|_| E::custom("invalid value"))
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        "".parse().map(Trim).map_err(|_| E::custom("invalid value"))
     }
 }
 
@@ -91,6 +100,13 @@ where
             .parse()
             .map_err(|_| E::custom("invalid value"))
     }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        "".parse().map_err(|_| E::custom("invalid value"))
+    }
 }
 
 /// This visitor allows for deserializing a string from a text node or CDATA section, using [`std::str::FromStr::from_str`].
@@ -111,6 +127,7 @@ where
     T: FromStr,
 {
     type Value = T;
+
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "a string")
     }
@@ -122,12 +139,20 @@ where
     {
         FromTextVisitor::default().visit_text(v)
     }
+
     fn visit_cdata<E, V>(self, v: V) -> Result<Self::Value, E>
     where
         E: Error,
         V: XmlCData<'de>,
     {
         FromCDataVisitor::default().visit_cdata(v)
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        FromTextVisitor::default().visit_none()
     }
 }
 
@@ -146,13 +171,21 @@ impl Serialize for String {
 impl Serialize for &str {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         //TODO: Change to serialize as CDATA if it contains invalid XML characters
-        serializer.serialize_text(self)
+        if self.is_empty() {
+            serializer.serialize_none()
+        } else {
+            serializer.serialize_text(self)
+        }
     }
 }
 
 impl Serialize for str {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         //TODO: Change to serialize as CDATA if it contains invalid XML characters
-        serializer.serialize_text(self)
+        if self.is_empty() {
+            serializer.serialize_none()
+        } else {
+            serializer.serialize_text(self)
+        }
     }
 }

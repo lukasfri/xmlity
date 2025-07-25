@@ -15,7 +15,8 @@ define_test!(
         (
             CDataOrText::CData(CData("CData".to_owned())),
             "<![CDATA[CData]]>"
-        )
+        ),
+        (CDataOrText::String("".to_owned()), "")
     ]
 );
 
@@ -68,4 +69,34 @@ define_test!(
         mixed_cdata_separated_1(),
         "<mixed>Text1<![CDATA[Text2]]><elem>Text3</elem>Text4</mixed>"
     )]
+);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum NumberOrNoString {
+    Number(i32),
+    NoString(Option<String>),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[xelement(name = "empty_list")]
+pub struct EmptyList {
+    pub text1: Vec<CDataOrText>,
+}
+
+define_test!(
+    empty_list,
+    [
+        (
+            EmptyList {
+                text1: vec![CDataOrText::String("Text1".to_string())]
+            },
+            "<empty_list>Text1</empty_list>"
+        ),
+        (EmptyList { text1: vec![] }, "<empty_list/>"),
+        (
+            EmptyList { text1: vec![] },
+            "<empty_list/>",
+            "<empty_list></empty_list>"
+        )
+    ]
 );

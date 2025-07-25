@@ -10,8 +10,8 @@ define_test!(
     element_with_text_default_option,
     [
         (B("A".to_string()), "<b>A</b>"),
-        (B("".to_string()), "<b></b>"),
-        (B("".to_string()), "<b></b>", "<b/>")
+        (B("".to_string()), "<b/>"),
+        (B("".to_string()), "<b/>", "<b></b>")
     ]
 );
 
@@ -35,14 +35,14 @@ define_test!(
             C {
                 b: B("".to_string())
             },
-            "<c><b></b></c>",
+            "<c><b/></c>",
             "<c/>"
         ),
         (
             C {
                 b: B("".to_string())
             },
-            "<c><b></b></c>"
+            "<c><b/></c>"
         )
     ]
 );

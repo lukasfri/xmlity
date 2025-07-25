@@ -94,7 +94,7 @@ where
         S: SeqAccess<'de>,
     {
         Ok(M::transform(std::iter::from_fn(|| {
-            seq.next_element_seq::<T>().ok().flatten()
+            seq.next_element_seq::<Option<T>>().ok().flatten().flatten()
         })))
     }
 

@@ -42,6 +42,7 @@ pub struct AtEnd {
     b: String,
     #[xelement(name = "d", optional)]
     d: Option<String>,
+    #[xelement(name = "e")]
     e: String,
 }
 
@@ -54,7 +55,7 @@ define_test!(
                 d: None,
                 e: "Text".to_string(),
             },
-            r###"<at_end><b>BVal</b>Text</at_end>"###
+            r###"<at_end><b>BVal</b><e>Text</e></at_end>"###
         ),
         (
             AtEnd {
@@ -62,17 +63,21 @@ define_test!(
                 d: Some("DVal".to_string()),
                 e: "Abc".to_string(),
             },
-            r###"<at_end><b>BVal</b><d>DVal</d>Abc</at_end>"###,
-            r###"<at_end><b>BVal</b><d>DVal</d>Abc<c/></at_end>"###
+            r###"<at_end><b>BVal</b><d>DVal</d><e>Abc</e></at_end>"###,
+            r###"<at_end><b>BVal</b><d>DVal</d><e>Abc</e><c/></at_end>"###
         )
     ]
 );
 
 #[test]
 fn error_child_in_middle() {
-    let xml = r###"<at_end><b>BVal</b><c/><d>DVal</d>Abc</at_end>"###;
+    let xml = r###"<at_end><b>BVal</b><c/><d>DVal</d><e>Abc</e></at_end>"###;
     let result: Result<AtEnd, _> = xmlity_quick_xml::de::from_str(xml);
-    assert!(result.is_err());
+    assert!(
+        result.is_err(),
+        "Expected error for child in middle, got: {:?}",
+        result
+    );
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
