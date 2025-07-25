@@ -96,7 +96,7 @@ impl<'de> Deserializer<'de> for &'de XmlCData {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        visitor.visit_seq(Some(self))
     }
 }
 
@@ -174,7 +174,7 @@ impl<'de> Deserializer<'de> for &'de XmlElement {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        visitor.visit_seq(Some(self))
     }
 }
 
@@ -277,7 +277,7 @@ impl<'de> Deserializer<'de> for &'de XmlProcessingInstruction {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        visitor.visit_seq(Some(self))
     }
 }
 
@@ -294,7 +294,7 @@ impl<'de> Deserializer<'de> for &'de XmlDecl {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        visitor.visit_seq(Some(self))
     }
 }
 
@@ -310,7 +310,7 @@ impl<'de> Deserializer<'de> for &'de XmlComment {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        visitor.visit_seq(Some(self))
     }
 }
 
@@ -328,7 +328,7 @@ impl<'de> Deserializer<'de> for &'de XmlDoctype {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_any(visitor)
+        visitor.visit_seq(Some(self))
     }
 }
 
@@ -590,51 +590,4 @@ impl<'de> de::XmlText<'de> for &'de XmlText {
     }
 
     fn context(&self) -> Self::DeserializeContext<'_> {}
-}
-
-impl<'de> de::SeqAccess<'de> for Option<&'de XmlText> {
-    type Error = XmlValueDeserializerError;
-
-    type SubAccess<'g>
-        = Self
-    where
-        Self: 'g;
-
-    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
-    where
-        T: Deserialize<'de>,
-    {
-        let Some(text) = self.take() else {
-            return Ok(None);
-        };
-
-        match T::deserialize(text) {
-            Ok(value) => Ok(Some(value)),
-            Err(_) => {
-                *self = Some(text);
-                Ok(None)
-            }
-        }
-    }
-
-    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
-    where
-        T: Deserialize<'de>,
-    {
-        let Some(text) = self.take() else {
-            return Ok(None);
-        };
-
-        match T::deserialize_seq(text) {
-            Ok(value) => Ok(Some(value)),
-            Err(_) => {
-                *self = Some(text);
-                Ok(None)
-            }
-        }
-    }
-
-    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
-        Ok(*self)
-    }
 }

@@ -159,6 +159,56 @@ impl<T: SerializationGroup> SerializationGroup for Option<T> {
     }
 }
 
+impl<'de, D> de::SeqAccess<'de> for Option<&'de D>
+where
+    &'de D: de::Deserializer<'de>,
+{
+    type Error = <&'de D as de::Deserializer<'de>>::Error;
+
+    type SubAccess<'g>
+        = Self
+    where
+        Self: 'g;
+
+    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'de>,
+    {
+        let Some(text) = self.take() else {
+            return Ok(None);
+        };
+
+        match T::deserialize(text) {
+            Ok(value) => Ok(Some(value)),
+            Err(_) => {
+                *self = Some(text);
+                Ok(None)
+            }
+        }
+    }
+
+    fn next_element_seq<T>(&mut self) -> Result<Option<T>, Self::Error>
+    where
+        T: Deserialize<'de>,
+    {
+        let Some(text) = self.take() else {
+            return Ok(None);
+        };
+
+        match T::deserialize_seq(text) {
+            Ok(value) => Ok(Some(value)),
+            Err(_) => {
+                *self = Some(text);
+                Ok(None)
+            }
+        }
+    }
+
+    fn sub_access(&mut self) -> Result<Self::SubAccess<'_>, Self::Error> {
+        Ok(*self)
+    }
+}
+
 impl<T: Serialize> Serialize for Box<T> {
     fn serialize<S: crate::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         (**self).serialize(serializer)
