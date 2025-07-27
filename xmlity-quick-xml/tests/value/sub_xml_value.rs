@@ -9,14 +9,14 @@ pub struct A {
     pub values: Vec<XmlValue>,
 }
 define_deserialize_test!(
-    a,
+    a_deserialize,
     [(
         A {
             values: vec![xmlity::xml!(
                 <"b":"http://example.com/test">["\n\t\t"
                     <"c":"http://example.com/test">["Fixed Assets"]</"c">"\n\t\t"
                     <"c":"http://example.com/test">["Change in Retained Earnings"]</"c">"\n\t"
-                ]</"b">
+                ]</"b">"\n"
             )
             .into()],
         },
@@ -68,17 +68,15 @@ fn indirect() {
 
     assert_eq!(
         b_values,
-        vec![
-            B {
-                c: vec![C {
+        vec![B {
+            c: vec![
+                C {
                     value: XmlText::new("Fixed Assets").into()
-                }],
-            },
-            B {
-                c: vec![C {
+                },
+                C {
                     value: XmlText::new("Change in Retained Earnings").into()
-                }],
-            },
-        ]
+                }
+            ],
+        },]
     );
 }

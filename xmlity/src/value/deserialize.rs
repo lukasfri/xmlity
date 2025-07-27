@@ -12,13 +12,32 @@ impl<'de> Deserialize<'de> for XmlValue {
     where
         D: Deserializer<'de>,
     {
+        XmlValueWithoutSeq::deserialize(deserializer).map(From::from)
+    }
+
+    fn deserialize_seq<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer
+            .deserialize_seq(IteratorVisitor::<_, XmlSeq<XmlValueWithoutSeq>>::default())
+            .map(|mut a| match a.values.len() {
+                0 => XmlValue::None,
+                1 => a.values.pop_front().expect("Just checked.").into(),
+                _ => XmlValue::Seq(a.values.into_iter().map(From::from).collect()),
+            })
+    }
+}
+
+impl<'de> Deserialize<'de> for XmlValueWithoutSeq {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
         struct __Visitor<'v> {
-            marker: PhantomData<XmlValue>,
+            marker: PhantomData<XmlValueWithoutSeq>,
             lifetime: PhantomData<&'v ()>,
         }
 
         impl<'v> crate::de::Visitor<'v> for __Visitor<'v> {
-            type Value = XmlValue;
+            type Value = XmlValueWithoutSeq;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a comment")
@@ -29,7 +48,9 @@ impl<'de> Deserialize<'de> for XmlValue {
                 E: de::Error,
                 V: de::XmlText<'v>,
             {
-                XmlTextVisitor::new().visit_text(value).map(XmlValue::Text)
+                XmlTextVisitor::new()
+                    .visit_text(value)
+                    .map(XmlValueWithoutSeq::Text)
             }
 
             fn visit_cdata<E, V>(self, value: V) -> Result<Self::Value, E>
@@ -39,7 +60,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             {
                 XmlCDataVisitor::new()
                     .visit_cdata(value)
-                    .map(XmlValue::CData)
+                    .map(XmlValueWithoutSeq::CData)
             }
 
             fn visit_element<A>(self, element: A) -> Result<Self::Value, A::Error>
@@ -48,16 +69,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             {
                 XmlElementVisitor::new()
                     .visit_element(element)
-                    .map(XmlValue::Element)
-            }
-
-            fn visit_seq<S>(self, sequence: S) -> Result<Self::Value, S::Error>
-            where
-                S: de::SeqAccess<'v>,
-            {
-                IteratorVisitor::<_, XmlSeq<XmlValue>>::default()
-                    .visit_seq(sequence)
-                    .map(XmlValue::Seq)
+                    .map(XmlValueWithoutSeq::Element)
             }
 
             fn visit_pi<E, V>(self, value: V) -> Result<Self::Value, E>
@@ -67,7 +79,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             {
                 XmlProcessingInstructionVisitor::new()
                     .visit_pi(value)
-                    .map(XmlValue::PI)
+                    .map(XmlValueWithoutSeq::PI)
             }
 
             fn visit_decl<E, V>(self, declaration: V) -> Result<Self::Value, E>
@@ -77,7 +89,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             {
                 XmlDeclVisitor::new()
                     .visit_decl(declaration)
-                    .map(XmlValue::Decl)
+                    .map(XmlValueWithoutSeq::Decl)
             }
 
             fn visit_comment<E, V>(self, comment: V) -> Result<Self::Value, E>
@@ -87,7 +99,7 @@ impl<'de> Deserialize<'de> for XmlValue {
             {
                 XmlCommentVisitor::new()
                     .visit_comment(comment)
-                    .map(XmlValue::Comment)
+                    .map(XmlValueWithoutSeq::Comment)
             }
 
             fn visit_doctype<E, V>(self, value: V) -> Result<Self::Value, E>
@@ -97,14 +109,14 @@ impl<'de> Deserialize<'de> for XmlValue {
             {
                 XmlDoctypeVisitor::new()
                     .visit_doctype(value)
-                    .map(XmlValue::Doctype)
+                    .map(XmlValueWithoutSeq::Doctype)
             }
 
             fn visit_none<E>(self) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                Ok(XmlValue::None)
+                Ok(XmlValueWithoutSeq::None)
             }
         }
 
