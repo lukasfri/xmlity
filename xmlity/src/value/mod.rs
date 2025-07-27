@@ -106,6 +106,44 @@ impl From<XmlDoctype> for XmlValue {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+enum XmlValueWithoutSeq {
+    /// A text node.
+    Text(XmlText),
+    /// A CDATA section.
+    CData(XmlCData),
+    /// An element.
+    Element(XmlElement),
+    /// A processing instruction.
+    PI(XmlProcessingInstruction),
+    /// A declaration.
+    Decl(XmlDecl),
+    /// A comment.
+    Comment(XmlComment),
+    /// A doctype.
+    Doctype(XmlDoctype),
+    /// Nothing.
+    #[default]
+    None,
+}
+
+impl From<XmlValueWithoutSeq> for XmlValue {
+    fn from(value: XmlValueWithoutSeq) -> Self {
+        match value {
+            XmlValueWithoutSeq::Text(xml_text) => XmlValue::Text(xml_text),
+            XmlValueWithoutSeq::CData(xml_cdata) => XmlValue::CData(xml_cdata),
+            XmlValueWithoutSeq::Element(xml_element) => XmlValue::Element(xml_element),
+            XmlValueWithoutSeq::PI(xml_processing_instruction) => {
+                XmlValue::PI(xml_processing_instruction)
+            }
+            XmlValueWithoutSeq::Decl(xml_decl) => XmlValue::Decl(xml_decl),
+            XmlValueWithoutSeq::Comment(xml_comment) => XmlValue::Comment(xml_comment),
+            XmlValueWithoutSeq::Doctype(xml_doctype) => XmlValue::Doctype(xml_doctype),
+            XmlValueWithoutSeq::None => XmlValue::None,
+        }
+    }
+}
+
 /// A text node in an XML document.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
