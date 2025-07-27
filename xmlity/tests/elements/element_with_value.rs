@@ -31,5 +31,17 @@ fn value() {
 
     let b = B::deserialize(&value).unwrap();
 
-    println!("{:?}", b);
+    assert_eq!(
+        b,
+        B {
+            c: vec![
+                C {
+                    value: XmlValue::Text("Fixed Assets".into())
+                },
+                C {
+                    value: XmlValue::Text("Change in Retained Earnings".into())
+                },
+            ],
+        }
+    )
 }
