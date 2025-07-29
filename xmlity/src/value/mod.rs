@@ -9,7 +9,13 @@ use core::{
     fmt::{self, Debug},
     str,
 };
-use std::{borrow::Cow, collections::VecDeque, fmt::Formatter, iter, ops::Deref};
+use std::{
+    borrow::Cow,
+    collections::VecDeque,
+    fmt::Formatter,
+    iter,
+    ops::{Deref, DerefMut},
+};
 
 use crate::{
     de,
@@ -352,13 +358,28 @@ impl<T> XmlSeq<T> {
         Self::from_vec_deque(VecDeque::new())
     }
 
-    fn from_vec_deque(values: VecDeque<T>) -> Self {
+    /// Creates a new sequence from a [`VecDeque<T>`].
+    pub fn from_vec_deque(values: VecDeque<T>) -> Self {
         Self { values }
     }
 
-    /// Pushes a value onto the sequence.
-    pub fn push(&mut self, value: T) {
-        self.values.push_back(value);
+    /// Gets the inner [`VecDeque<T>`] of the sequence.
+    pub fn into_inner(self) -> VecDeque<T> {
+        self.values
+    }
+}
+
+impl Deref for XmlSeq<XmlValue> {
+    type Target = VecDeque<XmlValue>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
+impl DerefMut for XmlSeq<XmlValue> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.values
     }
 }
 
