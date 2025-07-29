@@ -213,38 +213,85 @@ pub mod records {
         #[derive(FromAttributes, Clone)]
         #[darling(attributes(xelement))]
         pub struct RootElementOpts {
+            /// The name to serialize to and deserialize from.
+            ///
+            /// If not specified, the name of the struct or enum variant is used.
             #[darling(default)]
             pub name: Option<LocalName<'static>>,
+            /// The namespace of the element, defined as a string.
+            ///
+            /// This is exclusive with [`namespace_expr`].
+            ///
+            /// If none of these are specified, the absence of a namespace is assumed.
             #[darling(default)]
             pub namespace: Option<XmlNamespace<'static>>,
+            /// The namespace of the element given as an expression to an [`xmlity::XmlNamespace`] value.
+            ///
+            /// This is exclusive with [`namespace`].
+            ///
+            /// If none of these are specified, the absence of a namespace is assumed.
             #[darling(default)]
             pub namespace_expr: Option<Expr>,
+            /// The element is serialized with the given prefix.
+            ///
+            /// *Serialize only*
             #[darling(default)]
-            /// Serialize only
             pub preferred_prefix: Option<Prefix<'static>>,
+            /// Always set the prefix of the element to the prefix set in `preferred_prefix`.
+            ///
+            /// *Serialize only*
             #[darling(default)]
-            /// Serialize only
             pub enforce_prefix: bool,
+            /// Allow unknown children when deserializing.
+            /// - `Any`: Allow any unknown children.
+            /// - `AtEnd`: Allow unknown children only at the end of the element.
+            /// - `None`: Do not allow unknown children at all.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub allow_unknown_children: AllowUnknown,
+            /// Allow unknown attributes when deserializing.
+            /// - `Any`: Allow any unknown attributes.
+            /// - `AtEnd`: Allow unknown attributes only at the end of the element.
+            /// - `None`: Do not allow unknown attributes at all.
+            ///
+            /// Default is `AtEnd`.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub allow_unknown_attributes: AllowUnknown,
+            /// Allow any name for the element when deserializing.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub deserialize_any_name: bool,
+            /// Set if the order of attributes is important when serializing or deserializing.
+            /// - `Strict`: The order of attributes must match the order in the struct or enum variant.
+            /// - `None`: The order of attributes does not matter, but the attributes must be present.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub attribute_order: ElementOrder,
+            /// Set if the order of child elements is important when serializing or deserializing.
+            /// - `Strict`: The order of child elements must match the order in the struct or enum variant.
+            /// - `None`: The order of child elements does not matter, but the child elements must be present.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub children_order: ElementOrder,
+            /// Set if whitespace should be ignored when deserializing.
+            /// - `Any`: Ignore any whitespace.
+            /// - `None`: Do not ignore whitespace.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub ignore_whitespace: IgnoreWhitespace,
+            /// Set if comments should be ignored when deserializing.
+            /// - `Any`: Ignore any comments.
+            /// - `None`: Do not ignore comments.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub ignore_comments: IgnoreComments,
         }
 
@@ -281,20 +328,43 @@ pub mod records {
         #[derive(FromAttributes, Clone)]
         #[darling(attributes(xattribute))]
         pub struct RootAttributeOpts {
+            /// The name to serialize to and deserialize from.
+            ///
+            /// If not specified, the name of the struct is used.
             #[darling(default)]
             pub name: Option<LocalName<'static>>,
+            /// The namespace of the attribute, defined as a string.
+            ///
+            /// This is exclusive with [`namespace_expr`].
+            ///
+            /// If none of these are specified, the absence of a namespace is assumed.
             #[darling(default)]
             pub namespace: Option<XmlNamespace<'static>>,
+            /// The namespace of the attribute given as an expression to an [`xmlity::XmlNamespace`] value.
+            ///
+            /// This is exclusive with [`namespace`].
+            ///
+            /// If none of these are specified, the absence of a namespace is assumed.
             #[darling(default)]
             pub namespace_expr: Option<Expr>,
+            /// The preferred prefix for the attribute, defined as a string.
+            ///
+            /// This is exclusive with [`enforce_prefix`].
+            ///
+            /// If none of these are specified, the absence of a prefix is assumed.
+            ///
+            /// *Serialize only*
             #[darling(default)]
-            /// Serialize only
             pub preferred_prefix: Option<Prefix<'static>>,
+            /// Always set the prefix of the attribute to the prefix set in `preferred_prefix`.
+            ///
+            /// *Serialize only*
             #[darling(default)]
-            /// Serialize only
             pub enforce_prefix: bool,
+            /// Always set the prefix of the attribute to the prefix set in `preferred_prefix`.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub deserialize_any_name: bool,
         }
 
@@ -327,22 +397,50 @@ pub mod records {
         #[derive(Default, FromAttributes)]
         #[darling(attributes(xvalue))]
         pub struct RootValueOpts {
+            /// The text value to serialize to and deserialize from.
             pub value: Option<String>,
             #[darling(default)]
-            /// Deserialize only
+            /// Set if whitespace should be ignored when deserializing.
+            /// - `Any`: Ignore any whitespace.
+            /// - `None`: Do not ignore whitespace.
+            ///
+            /// *Deserialize only*
             pub ignore_whitespace: IgnoreWhitespace,
             #[darling(default)]
-            /// Deserialize only
+            /// Set if comments should be ignored when deserializing.
+            /// - `Any`: Ignore any comments.
+            /// - `None`: Do not ignore comments.
+            ///
+            /// *Deserialize only*
             pub ignore_comments: IgnoreComments,
+            /// Allow unknown values when deserializing.
+            /// - `Any`: Allow any unknown values.
+            /// - `AtEnd`: Allow unknown values only at the end of the element.
+            /// - `None`: Do not allow unknown values at all.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
-            /// Deserialize only
             pub allow_unknown: AllowUnknown,
+            /// Set if the order of values is important when serializing or deserializing.
+            /// - `Strict`: The order of values must match the order in the struct or enum variant.
+            /// - `None`: The order of values does not matter, but the values must be present.
+            ///
+            /// *Deserialize only*
             #[darling(default)]
             pub order: ElementOrder,
+            /// The path to the module that provides the serialization and deserialization functions.
+            ///
+            /// `::serialize` and `::deserialize` will be appended to this path and used as the `serialize_with` and `deserialize_with` functions.
             #[darling(default)]
             pub with: Option<Path>,
+            /// Use function to serialize the value.
+            ///
+            /// Should have signature like `pub fn serialize<S: xmlity::Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error>`
             #[darling(default)]
             pub serialize_with: Option<Expr>,
+            /// Use function to deserialize the value.
+            ///
+            /// Should have signature like `fn deserialize<'de, D: xmlity::Deserializer<'de>>(deserializer: D) -> Result<T, D::Error>`
             #[darling(default)]
             pub deserialize_with: Option<Expr>,
         }
