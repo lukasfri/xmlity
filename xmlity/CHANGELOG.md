@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.7...xmlity-v0.0.8) - 2025-07-29
+
+### Added
+
+- *(value)* [**breaking**] Adds functions to `XmlSeq` that give access to inner `VecDeque`. ([#126](https://github.com/lukasfri/xmlity/pull/126))
+- *(core)* Infallible error types. ([#122](https://github.com/lukasfri/xmlity/pull/122))
+- *(value)* Make visitors of XML value types public. ([#117](https://github.com/lukasfri/xmlity/pull/117))
+- Adds external data support to deserialization process. ([#116](https://github.com/lukasfri/xmlity/pull/116))
+- *(core)* Add `(De)serialize` impl for `isize`/`usize` non-zero types. ([#112](https://github.com/lukasfri/xmlity/pull/112))
+- *(core)* Add `(De)serialize` impls for non-zero primitives. ([#111](https://github.com/lukasfri/xmlity/pull/111))
+
+### Fixed
+
+- *(value)* Fix stack overflow for subvalue in struct from value. ([#125](https://github.com/lukasfri/xmlity/pull/125))
+- *(value)* Fixed `deserialize_seq` on most XML value types. ([#124](https://github.com/lukasfri/xmlity/pull/124))
+- *(core)* [**breaking**] Change `SerializeSeq` trait to return `()` for each individual element. ([#115](https://github.com/lukasfri/xmlity/pull/115))
+
 ## [0.0.7](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.6...xmlity-v0.0.7) - 2025-06-23
 
 ### Added
