@@ -8,6 +8,7 @@
 [docs.rs]: https://docs.rs/xmlity/latest/xmlity/
 [xmlity msrv]: https://img.shields.io/badge/rustc-1.82.0+-ab6000.svg
 [Rust 1.82]: https://blog.rust-lang.org/2023/06/01/Rust-1.82.0.html
+[examples]: ./xmlity-quick-xml/examples/
 
 XMLity is a (de)serialization library for XML, inspired by [Serde](https://serde.rs/) and improves upon XML (de)serialization libraries such as [yaserde](https://github.com/media-io/yaserde) and [quick-xml](https://github.com/tafia/quick-xml) by providing a more flexible API that is more powerful, utilising primairly a trial and error approach to parsing XML. This can inherently be a bit slower than other libraries, but it allows for more complex XML structures to be parsed.
 
@@ -15,7 +16,7 @@ XMLity is a (de)serialization library for XML, inspired by [Serde](https://serde
 
 ## Get started
 
-To get started, we recommend you check out the [XMLity book](https://xmlity.lukasfri.com) and [the documentation][docs.rs].
+To get started, we recommend you check out the [the documentation][docs.rs] and [the examples][examples].
 
 ## Example
 
@@ -63,6 +64,16 @@ let person: Person = xmlity_quick_xml::from_str(&xml).expect("Failed to deserial
 assert_eq!(person.name.0, "John");
 assert_eq!(person.age.0, 42);
 ```
+
+## Why use XMLity instead of other XML libraries?
+
+- `serde-xml-rs`: Lacking proper namespace support and other features.
+- `yaserde`: Lacking support for trial-and-error deserialization, a requirement for full coverage of XML schemas.
+- `quick-xml`(`serde` feature): Lacking support for namespaces.
+
+## Other resources
+
+- **The official XML schema generator**: Coming soon! It's already very feature-rich and is good enough to bootstrap itself by deserializing XML schemas using its own generated code, however it still requires some cleanup before its ready for public use.
 
 ## License
 
