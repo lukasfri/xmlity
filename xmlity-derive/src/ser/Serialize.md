@@ -47,7 +47,7 @@ namespace
 <code>String</code>
 </td>
 <td>
-Must be a valid namespace string. Exclusive with `namespace_expr`.
+The namespace of the element, defined as a string. This is exclusive with <code>namespace_expr</code>. If none of these are specified, the absence of a namespace is assumed. Must be a valid namespace string.
 </td>
 </tr>
 <!--=================================================-->
@@ -59,7 +59,7 @@ namespace_expr
 <code>Expr</code>
 </td>
 <td>
-Element namespace expression. This should be a value of type `xmlity::XmlNamespace`. Exclusive with `namespace`.
+The namespace of the element given as an expression to an <code>xmlity::XmlNamespace</code> value. This is exclusive with <code>namespace</code>. If none of these are specified, the absence of a namespace is assumed.
 </td>
 </tr>
 <!--=================================================-->
@@ -71,7 +71,7 @@ preferred_prefix
 <code>String</code>
 </td>
 <td>
-Must be a valid XML prefix.
+The element is serialized with the given prefix. Must be a valid XML prefix.
 </td>
 </tr>
 <!--=================================================-->
@@ -83,86 +83,10 @@ enforce_prefix
 <code>bool</code>
 </td>
 <td>
-Enforce the use of the preferred prefix. If this is set to `true`, the preferred prefix will be used even if it there is already a prefix bound to the namespace.
+Always set the prefix of the element to the prefix set in <code>preferred_prefix</code>. Enforce the use of the preferred prefix. If this is set to <code>true</code>, the preferred prefix will be used even if there is already a prefix bound to the namespace.
 </td>
 </tr>
 <!--=================================================-->
-</tbody>
-</table>
-
-#### Examples
-
-##### Simple element
-
-<table style="width:100%;">
-<thead>
-<tr>
-<th>XML</th>
-<th>Rust types</th>
-</tr>
-</thead>
-<tbody style="vertical-align:top;">
-<tr>
-<td>
-
-```xml
-<note>
-    <to>Tove</to>
-    <from>Jani</from>
-    <heading>Reminder</heading>
-    <body>Message...</body>
-</note>
-```
-
-</td>
-<td rowspan="3">
-
-```rust ignore
-#[derive(Serialize)]
-#[xelement(name = "to")]
-struct To(String);
-
-#[derive(Serialize)]
-#[xelement(name = "from")]
-struct From(String);
-
-#[derive(Serialize)]
-#[xelement(name = "heading")]
-struct Heading(String);
-
-#[derive(Serialize)]
-#[xelement(name = "body")]
-struct Body(String);
-
-#[derive(Serialize)]
-#[xelement(name = "note")]
-struct Note {
-    to: To,
-    from: From,
-    heading: Heading,
-    body: Body,
-}
-```
-
-</td>
-</tr>
-<tr>
-<th>Rust value</th>
-</tr>
-<tr>
-<td>
-
-```rust ignore
-Note {
-    to: To("Tove".to_string()),
-    from: From("Jani".to_string()),
-    heading: Heading("Reminder".to_string()),
-    body: Body("Message...".to_string()),
-}
-```
-
-</td>
-</tr>
 </tbody>
 </table>
 
@@ -259,67 +183,6 @@ If the type is a unit struct, this attribute can be used to specify a text value
 </tbody>
 </table>
 
-#### Examples
-
-##### Struct containing a sequence of elements and text
-
-<table style="width:100%;">
-<thead>
-<tr>
-<th>XML</th>
-<th>Rust types</th>
-</tr>
-</thead>
-<tbody style="vertical-align:top;">
-<tr>
-<td>
-
-```xml
-<name>Alice</name>
-<name>Bob</name>
-Text
-```
-
-</td>
-<td rowspan="3">
-
-```rust ignore
-#[derive(Serialize)]
-#[xelement(name = "name")]
-struct Name {
-    value: String,
-}
-
-#[derive(Serialize)]
-struct NamesAndText {
-    names: Vec<Name>,
-    text: String,
-}
-```
-
-</td>
-</tr>
-<tr>
-<th>Rust value</th>
-</tr>
-<tr>
-<td>
-
-```rust ignore
-NamesAndText {
-    names: vec![
-        Name { value: "Alice".to_string() },
-        Name { value: "Bob".to_string() }
-    ],
-    text: vec!["Text".to_string()],
-}
-```
-
-</td>
-</tr>
-</tbody>
-</table>
-
 <!--=================================================-->
 
 ### Serialize as one of several types - enums with `#[xvalue(...)]` on the root of a type or no root attribute
@@ -346,19 +209,43 @@ rename_all
 <code>"lowercase"</code>, <code>"UPPERCASE"</code>, <code>"PascalCase"</code>, <code>"camelCase"</code>, <code>"snake_case"</code>, <code>"SCREAMING_SNAKE_CASE"</code>, <code>"kebab-case"</code>, <code>"SCREAMING-KEBAB-CASE"</code>
 </td>
 <td>
-Decides what format to use for the serialized unit variants if they don't have values specified. 
+The text casing to use for unit variants when serializing if they don't have values specified.
 </td>
 </tr>
 <!--=================================================-->
 <tr>
 <th>
-serialization_format
+with
 </th>
 <td>
-<code>text</code>, <code>cdata</code>
+<code>Path</code>
 </td>
 <td>
-Decides to what form the value should be serialized.
+The path to the module that provides the serialization and deserialization functions. <code>::serialize</code> and <code>::deserialize</code> will be appended to this path and used as the <code>serialize_with</code> and <code>deserialize_with</code> functions.
+</td>
+</tr>
+<!--=================================================-->
+<tr>
+<th>
+serialize_with
+</th>
+<td>
+<code>Expr</code>
+</td>
+<td>
+Use function to serialize the value. Should have signature like <code>pub fn serialize&lt;S: xmlity::Serializer&gt;(value: &T, serializer: S) -> Result&lt;S::Ok, S::Error&gt;</code>
+</td>
+</tr>
+<!--=================================================-->
+<tr>
+<th>
+deserialize_with
+</th>
+<td>
+<code>Expr</code>
+</td>
+<td>
+Use function to deserialize the value. Should have signature like <code>fn deserialize&lt;'de, D: xmlity::Deserializer&lt;'de&gt;&gt;(deserializer: D) -> Result&lt;T, D::Error&gt;</code>
 </td>
 </tr>
 <!--=================================================-->
@@ -368,112 +255,3 @@ Decides to what form the value should be serialized.
 #### Variant options
 
 Variants have the same options as struct roots, and indeed work the same way.
-
-#### Examples
-
-##### Enum with just text values
-
-<table style="width:100%;">
-<thead>
-<tr>
-<th>XML</th>
-<th>Rust types</th>
-</tr>
-</thead>
-<tbody style="vertical-align:top;">
-<tr>
-<td>
-
-```xml
-Jani
-```
-
-</td>
-<td rowspan="3">
-
-```rust ignore
-#[derive(Serialize)]
-enum Name {
-    #[xvalue(value = "Jani")]
-    Jani,
-    #[xvalue(value = "Tove")]
-    Tove,
-}
-```
-
-</td>
-</tr>
-<tr>
-<th>Rust value</th>
-</tr>
-<tr>
-<td>
-
-```rust ignore
-Name::Jani
-```
-
-</td>
-</tr>
-</tbody>
-</table>
-
-<!--=================================================-->
-
-##### Enum that is either a float or a string
-
-<table style="width:100%;">
-<thead>
-<tr>
-<th>XML</th>
-<th>Rust value</th>
-<th>Rust types</th>
-</tr>
-</thead>
-<tbody style="vertical-align:top;">
-<tr>
-<td>
-
-```xml
-1.0
-```
-
-</td>
-<td>
-
-```rust ignore
-FloatOrString::Float(1.0)
-```
-
-</td>
-<td rowspan="3">
-
-```rust ignore
-#[derive(Serialize)]
-enum FloatOrString {
-    Float(f64),
-    String(String),
-}
-```
-
-</td>
-</tr>
-<tr>
-<td>
-
-```xml
-Not float
-```
-
-</td>
-<td>
-
-```rust ignore
-FloatOrString::String("Not float".to_string())
-```
-
-</td>
-</tr>
-</tbody>
-</table>
-<!--=================================================-->

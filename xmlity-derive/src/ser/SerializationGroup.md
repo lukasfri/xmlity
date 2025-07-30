@@ -11,7 +11,7 @@ To configure the serialization, use the `#[xgroup(...)]` attribute on the root o
 
 ## Configuration
 
-### Deserialize a part of an element - `#[xgroup(...)]` on the root of a type
+### Serialize a part of an element - `#[xgroup(...)]` on the root of a type
 
 #### Root Options
 
