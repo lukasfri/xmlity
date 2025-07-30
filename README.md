@@ -10,13 +10,13 @@
 [Rust 1.82]: https://blog.rust-lang.org/2023/06/01/Rust-1.82.0.html
 [examples]: ./xmlity-quick-xml/examples/
 
-XMLity is a (de)serialization library for XML, inspired by [Serde](https://serde.rs/) and improves upon XML (de)serialization libraries such as [yaserde](https://github.com/media-io/yaserde) and [quick-xml](https://github.com/tafia/quick-xml) by providing a more flexible API that is more powerful, utilising primairly a trial and error approach to parsing XML. This can inherently be a bit slower than other libraries, but it allows for more complex XML structures to be parsed.
+XMLity is a (de)serialization library for XML, inspired by [Serde](https://serde.rs/) and improves upon XML (de)serialization libraries such as [yaserde](https://github.com/media-io/yaserde) and [quick-xml](https://github.com/tafia/quick-xml) by providing a more flexible API that is more powerful, utilising primarily a trial and error approach to parsing XML. This can inherently be a bit slower than other libraries, but it allows for more complex XML structures to be parsed.
 
 ---
 
 ## Get started
 
-To get started, we recommend you check out the [the documentation][docs.rs] and [the examples][examples].
+To get started, we recommend you check out [the documentation][docs.rs] and [the examples][examples].
 
 ## Example
 
