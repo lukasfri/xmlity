@@ -188,7 +188,13 @@ impl<'a> NamespaceScopeContainer<'a> {
             let existing_prefix = self.find_matching_namespace(namespace);
 
             if let Some(existing_prefix) = existing_prefix {
-                return (existing_prefix.clone(), None);
+                if (always_declare == IncludePrefix::WhenNecessaryForPreferredPrefix
+                    && preferred_prefix
+                        .is_none_or(|preferred_prefix| preferred_prefix == existing_prefix))
+                    || always_declare == IncludePrefix::Never
+                {
+                    return (existing_prefix.clone(), None);
+                }
             }
         }
 

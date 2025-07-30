@@ -223,7 +223,9 @@ impl<T: Fn(syn::Expr) -> syn::Expr> SerializeBuilder for RecordSerializeElementB
         let preferred_prefix_setting = preferred_prefix.as_ref().map::<Stmt, _>(|preferred_prefix| parse_quote! {
               ::xmlity::ser::SerializeElement::preferred_prefix(&mut #ser_element_ident, ::core::option::Option::Some(#preferred_prefix))?;
           });
-        let enforce_prefix_setting = Some(*enforce_prefix).filter(|&enforce_prefix| enforce_prefix).map::<Stmt, _>(|enforce_prefix| parse_quote! {
+        let enforce_prefix_setting = enforce_prefix.then(|| parse_quote!(
+                ::xmlity::ser::IncludePrefix::WhenNecessaryForPreferredPrefix
+        )).map::<Stmt, _>(|enforce_prefix: syn::Expr| parse_quote! {
               ::xmlity::ser::SerializeElement::include_prefix(&mut #ser_element_ident, #enforce_prefix)?;
           });
 
