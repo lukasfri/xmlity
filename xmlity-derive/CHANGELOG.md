@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.7...xmlity-derive-v0.0.8) - 2025-07-30
+
+### Added
+
+- *(derive)* Adds `ignore_comments` option to easily ignore comments in elements and values. ([#120](https://github.com/lukasfri/xmlity/pull/120))
+- Adds external data support to deserialization process. ([#116](https://github.com/lukasfri/xmlity/pull/116))
+- *(derive)* Adds `serialize_with`/`deserialize_with`/`with` for easy `(De)serialize` implementations. ([#109](https://github.com/lukasfri/xmlity/pull/109))
+
+### Fixed
+
+- Fixes broken `enforce_prefix` option. ([#129](https://github.com/lukasfri/xmlity/pull/129))
+- *(derive)* Support serialization of enums with no arms. ([#113](https://github.com/lukasfri/xmlity/pull/113))
+
+### Other
+
+- Updates documentation and examples to bring it up to date with 0.0.8 ([#128](https://github.com/lukasfri/xmlity/pull/128))
+
 ## [0.0.7](https://github.com/lukasfri/xmlity/compare/xmlity-derive-v0.0.6...xmlity-derive-v0.0.7) - 2025-06-23
 
 ### Added
