@@ -21,10 +21,14 @@ use crate::{xml_namespace_from_resolve_result, HasQuickXmlAlternative, OwnedQuic
 
 /// Errors that can occur when using this crate.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// Error from the `quick-xml` crate.
     #[error("Quick XML error: {0}")]
     QuickXml(#[from] quick_xml::Error),
+    /// Error from the `quick-xml` crate when decoding references.
+    #[error("Encoding error: {0}")]
+    EncodingError(#[from] quick_xml::encoding::EncodingError),
     /// Error from the `quick-xml` crate when handling attributes.
     #[error("Attribute error: {0}")]
     AttrError(#[from] quick_xml::events::attributes::AttrError),
@@ -838,6 +842,36 @@ impl<'de> XmlText<'de> for DataWithD<'_, BytesText<'de>> {
     }
 }
 
+impl<'de> XmlText<'de> for DataWithD<'_, Cow<'de, str>> {
+    type DeserializeContext<'a>
+        = &'a Deserializer<'a>
+    where
+        Self: 'a;
+
+    fn into_bytes(self) -> Cow<'de, [u8]> {
+        match self.data {
+            Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+            Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+        }
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        self.data.as_bytes()
+    }
+
+    fn into_string(self) -> Cow<'de, str> {
+        self.data
+    }
+
+    fn as_str(&self) -> &str {
+        self.data.as_ref()
+    }
+
+    fn context(&self) -> Self::DeserializeContext<'_> {
+        self.deserializer
+    }
+}
+
 impl<'de> XmlCData<'de> for DataWithD<'_, BytesCData<'de>> {
     type DeserializeContext<'a>
         = &'a Deserializer<'a>
@@ -1045,6 +1079,9 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
             Event::PI(bytes_pi) => visitor.visit_pi(DataWithD::new(bytes_pi, self)),
             Event::DocType(bytes_text) => visitor.visit_doctype(DataWithD::new(bytes_text, self)),
             Event::Eof => Err(Error::custom("Unexpected EOF")),
+            Event::GeneralRef(bytes_ref) => {
+                visitor.visit_text(DataWithD::new(bytes_ref.decode()?, self))
+            }
         }
     }
 
