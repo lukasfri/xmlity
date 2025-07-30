@@ -14,7 +14,7 @@ exclude.workspace = true
 [dependencies]
 thiserror.workspace = true
 xmlity.workspace = true
-quick-xml = { version = "0.37.4" }
+quick-xml = { version = "0.38.0" }
 
 
 [dev-dependencies]
@@ -23,7 +23,7 @@ rstest.workspace = true
 xmlity = { workspace = true, features = ["derive"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 serde = { version = "1.0.210", features = ["derive"] }
-quick-xml = { version = "0.37.4", features = ["serialize"] }
+quick-xml = { version = "0.38.0", features = ["serialize"] }
 yaserde = { version = "0.12.0", features = ["derive"] }
 ntest = "0.9.3"
 
