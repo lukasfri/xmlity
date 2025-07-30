@@ -581,7 +581,7 @@ pub mod fields {
         /// Should have signature like `pub fn default_value() -> T`.
         pub default_with: Option<Path>,
         /// Use function to skip serializing the field if it is not set.
-        /// 
+        ///
         /// Should have signature like `pub fn skip_serializing_if(value: &T) -> bool`.
         pub skip_serializing_if: Option<Path>,
         /// If the field is an [`Option<T>`], it will not be serialized if it is not set.
@@ -623,7 +623,7 @@ pub mod fields {
         /// *Serialize only*
         pub enforce_prefix: bool,
         /// Use function to skip serializing the field if it is not set.
-        /// 
+        ///
         /// Should have signature like `pub fn skip_serializing_if(value: &T) -> bool`.
         pub skip_serializing_if: Option<Path>,
         /// If the field is an [`Option<T>`], it will not be serialized if it is not set.
