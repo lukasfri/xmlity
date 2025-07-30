@@ -47,7 +47,7 @@ namespace
 <code>String</code>
 </td>
 <td>
-Must be a valid namespace string. Exclusive with `namespace_expr`.
+The namespace of the element, defined as a string. This is exclusive with <code>namespace_expr</code>. If none of these are specified, the absence of a namespace is assumed. Must be a valid namespace string.
 </td>
 </tr>
 <!--=================================================-->
@@ -59,7 +59,7 @@ namespace_expr
 <code>Expr</code>
 </td>
 <td>
-Element namespace expression. This should be a value of type `xmlity::XmlNamespace`. Exclusive with `namespace`.
+The namespace of the element given as an expression to an <code>xmlity::XmlNamespace</code> value. This is exclusive with <code>namespace</code>. If none of these are specified, the absence of a namespace is assumed.
 </td>
 </tr>
 <!--=================================================-->
@@ -71,7 +71,7 @@ preferred_prefix
 <code>String</code>
 </td>
 <td>
-Must be a valid XML prefix.
+The element is serialized with the given prefix. Must be a valid XML prefix.
 </td>
 </tr>
 <!--=================================================-->
@@ -83,7 +83,7 @@ enforce_prefix
 <code>bool</code>
 </td>
 <td>
-Enforce the use of the preferred prefix. If this is set to `true`, the preferred prefix will be used even if it there is already a prefix bound to the namespace.
+Always set the prefix of the element to the prefix set in <code>preferred_prefix</code>. Enforce the use of the preferred prefix. If this is set to <code>true</code>, the preferred prefix will be used even if there is already a prefix bound to the namespace.
 </td>
 </tr>
 <!--=================================================-->
@@ -346,19 +346,43 @@ rename_all
 <code>"lowercase"</code>, <code>"UPPERCASE"</code>, <code>"PascalCase"</code>, <code>"camelCase"</code>, <code>"snake_case"</code>, <code>"SCREAMING_SNAKE_CASE"</code>, <code>"kebab-case"</code>, <code>"SCREAMING-KEBAB-CASE"</code>
 </td>
 <td>
-Decides what format to use for the serialized unit variants if they don't have values specified. 
+The text casing to use for unit variants when serializing if they don't have values specified.
 </td>
 </tr>
 <!--=================================================-->
 <tr>
 <th>
-serialization_format
+with
 </th>
 <td>
-<code>text</code>, <code>cdata</code>
+<code>Path</code>
 </td>
 <td>
-Decides to what form the value should be serialized.
+The path to the module that provides the serialization and deserialization functions. <code>::serialize</code> and <code>::deserialize</code> will be appended to this path and used as the <code>serialize_with</code> and <code>deserialize_with</code> functions.
+</td>
+</tr>
+<!--=================================================-->
+<tr>
+<th>
+serialize_with
+</th>
+<td>
+<code>Expr</code>
+</td>
+<td>
+Use function to serialize the value. Should have signature like <code>pub fn serialize&lt;S: xmlity::Serializer&gt;(value: &T, serializer: S) -> Result&lt;S::Ok, S::Error&gt;</code>
+</td>
+</tr>
+<!--=================================================-->
+<tr>
+<th>
+deserialize_with
+</th>
+<td>
+<code>Expr</code>
+</td>
+<td>
+Use function to deserialize the value. Should have signature like <code>fn deserialize&lt;'de, D: xmlity::Deserializer&lt;'de&gt;&gt;(deserializer: D) -> Result&lt;T, D::Error&gt;</code>
 </td>
 </tr>
 <!--=================================================-->

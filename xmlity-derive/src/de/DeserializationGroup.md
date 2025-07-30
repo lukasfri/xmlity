@@ -11,7 +11,7 @@ To configure the deserialization, use the `#[xgroup(...)]` attribute on the root
 
 ## Configuration
 
-### Serialize a part of an element - `#[xgroup(...)]` on the root of a type
+### Deserialize a part of an element - `#[xgroup(...)]` on the root of a type
 
 #### Root Options
 
@@ -33,10 +33,10 @@ attribute_order
 <code>"strict"</code>, <code>"loose"</code>, <code>"none"</code>
 </td>
 <td>
-The accepted order of attributes.
-- <code>"strict"</code> - The attributes must be in the same order as the fields with no fields between them.
-- <code>"loose"</code> - The attributes must be in the same order as the fields, but there can be fields between them.
-- <code>"none"</code> - The attributes can be in any order.
+Set if the order of attributes is important when deserializing.<br/>
+- <code>"strict"</code>: The attributes must come directly after each other, and this group will try to deserialize them in one go.<br/>
+- <code>"loose"</code>: The order of attributes must come relative to each other, but they can be separated by other attributes outside this group.<br/>
+- <code>"none"</code> (default): The order of attributes is not important.
 </td>
 </tr>
 <!--=================================================-->
@@ -48,10 +48,10 @@ children_order
 <code>"strict"</code>, <code>"loose"</code>, <code>"none"</code>
 </td>
 <td>
-The accepted order of children.
-- <code>"strict"</code> - The children must be in the same order as the fields with no fields between them.
-- <code>"loose"</code> - The children must be in the same order as the fields, but there can be fields between them.
-- <code>"none"</code> - The children can be in any order.
+Set if the order of children is important when deserializing.<br/>
+- <code>"strict"</code>: The children must come directly after each other, and this group will try to deserialize them in one go.<br/>
+- <code>"loose"</code>: The order of children must come relative to each other, but they can be separated by other children outside this group.<br/>
+- <code>"none"</code> (default): The order of children is not important.
 </td>
 </tr>
 <!--=================================================-->
