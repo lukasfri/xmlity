@@ -591,7 +591,7 @@ mod tests {
         let local_name = LocalName::from_str(local_name_text).unwrap();
         let expanded_name = ExpandedName::new(local_name.clone(), namespace.clone());
         assert_eq!(expanded_name.local_name(), &local_name);
-        assert_eq!(expanded_name.namespace(), namespace.as_ref());
+        assert_eq!(expanded_name.namespace(), &namespace);
         assert_eq!(expanded_name.to_string(), local_name_text);
         assert_eq!(expanded_name.into_owned().to_string(), local_name_text);
     }

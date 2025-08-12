@@ -567,7 +567,7 @@ impl Drop for SubAttributesAccess<'_, '_> {
 }
 
 fn key_is_declaration(key: &ExpandedName) -> bool {
-    key.namespace() == Some(&XmlNamespace::XMLNS)
+    *key.namespace() == Some(XmlNamespace::XMLNS)
         || (key.local_name() == &LocalName::new_dangerous("xmlns") && key.namespace().is_none())
 }
 
