@@ -136,13 +136,23 @@ impl<'a> ExpandedName<'a> {
     }
 
     /// Returns the local name of this [`ExpandedName`].
-    pub fn local_name(&self) -> &LocalName<'_> {
+    pub fn local_name(&self) -> &LocalName<'a> {
         &self.local_name
     }
 
+    /// Returns a mutable reference to the local name of this [`ExpandedName`].
+    pub fn local_name_mut(&mut self) -> &mut LocalName<'a> {
+        &mut self.local_name
+    }
+
     /// Returns the namespace of this [`ExpandedName`].
-    pub fn namespace(&self) -> Option<&XmlNamespace<'_>> {
-        self.namespace.as_ref()
+    pub fn namespace(&self) -> &Option<XmlNamespace<'a>> {
+        &self.namespace
+    }
+
+    /// Returns a mutable reference to the namespace of this [`ExpandedName`].
+    pub fn namespace_mut(&mut self) -> &mut Option<XmlNamespace<'a>> {
+        &mut self.namespace
     }
 
     /// Converts this [`ExpandedName`] into a [`QName`] name using the given [`Prefix`].
@@ -210,13 +220,23 @@ impl<'a> QName<'a> {
     }
 
     /// Returns the [`Prefix`] of this [`QName`].
-    pub fn prefix(&self) -> Option<&Prefix<'a>> {
-        self.prefix.as_ref()
+    pub fn prefix(&self) -> &Option<Prefix<'a>> {
+        &self.prefix
+    }
+
+    /// Returns a mutable reference to the [`Prefix`] of this [`QName`].
+    pub fn prefix_mut(&mut self) -> &mut Option<Prefix<'a>> {
+        &mut self.prefix
     }
 
     /// Returns the [`LocalName`] of this [`QName`].
     pub fn local_name(&self) -> &LocalName<'a> {
         &self.local_name
+    }
+
+    /// Returns a mutable reference to the [`LocalName`] of this [`QName`].
+    pub fn local_name_mut(&mut self) -> &mut LocalName<'a> {
+        &mut self.local_name
     }
 }
 
