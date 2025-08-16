@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["xmlity", "xmlity-derive", "xmlity-quick-xml"]
+members = ["xmlity", "xmlity-derive", "xmlity-quick-xml", "xmlity-xml-rs"]
 
 [workspace.package]
 version = "0.0.8"
