@@ -28,9 +28,8 @@ impl<'s> Serializer for &'s mut &mut XmlSeq<XmlValue> {
         self,
         name: &'_ ExpandedName<'_>,
     ) -> Result<Self::SerializeElement, Self::Error> {
-        self.values.push_back(XmlValue::Element(XmlElement::new(
-            name.clone().into_owned(),
-        )));
+        self.values
+            .push_back(XmlValue::Element(XmlElement::new(name.into_owned())));
 
         let XmlValue::Element(element) = self.values.back_mut().expect("just push_backed") else {
             unreachable!()
@@ -102,7 +101,7 @@ impl<'s> Serializer for &'s mut XmlValue {
         self,
         name: &'_ ExpandedName<'_>,
     ) -> Result<Self::SerializeElement, Self::Error> {
-        *self = XmlValue::Element(XmlElement::new(name.clone().into_owned()));
+        *self = XmlValue::Element(XmlElement::new(name.into_owned()));
 
         let XmlValue::Element(element) = self else {
             unreachable!()
@@ -175,9 +174,8 @@ impl<'s> Serializer for &'s mut &mut XmlSeq<XmlChild> {
         self,
         name: &'_ ExpandedName<'_>,
     ) -> Result<Self::SerializeElement, Self::Error> {
-        self.values.push_back(XmlChild::Element(XmlElement::new(
-            name.clone().into_owned(),
-        )));
+        self.values
+            .push_back(XmlChild::Element(XmlElement::new(name.into_owned())));
 
         let XmlChild::Element(element) = self.values.back_mut().expect("just push_backed") else {
             unreachable!()
@@ -241,15 +239,15 @@ impl ser::SerializeAttributes for &mut XmlElement {
 
 /// Builder used when serializing to an [`XmlAttribute``].
 pub struct XmlAttributeBuilder<'a> {
-    name: ExpandedName<'static>,
+    name: ExpandedNameBuf,
     write_to: &'a mut VecDeque<XmlAttribute>,
     should_enforce: IncludePrefix,
-    preferred_prefix: Option<Prefix<'static>>,
+    preferred_prefix: Option<PrefixBuf>,
 }
 
 impl<'a> XmlAttributeBuilder<'a> {
     /// Creates a new [`XmlAttributeBuilder`].
-    pub fn new(name: ExpandedName<'static>, write_to: &'a mut VecDeque<XmlAttribute>) -> Self {
+    pub fn new(name: ExpandedNameBuf, write_to: &'a mut VecDeque<XmlAttribute>) -> Self {
         Self {
             name,
             write_to,
@@ -273,7 +271,7 @@ impl ser::AttributeSerializer for &mut &mut XmlElement {
         name: &'_ ExpandedName<'_>,
     ) -> Result<Self::SerializeAttribute<'_>, Self::Error> {
         Ok(XmlAttributeBuilder {
-            name: name.clone().into_owned(),
+            name: name.into_owned(),
             write_to: &mut self.attributes,
             should_enforce: IncludePrefix::default(),
             preferred_prefix: None,
@@ -312,9 +310,9 @@ impl<'s> ser::SerializeElement for &'s mut XmlElement {
 
     fn preferred_prefix(
         &mut self,
-        preferred_prefix: Option<crate::Prefix<'_>>,
+        preferred_prefix: Option<&crate::Prefix>,
     ) -> Result<Self::Ok, Self::Error> {
-        self.preferred_prefix = preferred_prefix.map(Prefix::into_owned);
+        self.preferred_prefix = preferred_prefix.map(Prefix::to_owned);
         Ok(())
     }
 
@@ -374,9 +372,9 @@ impl SerializeAttributeAccess for XmlAttributeBuilder<'_> {
 
     fn preferred_prefix(
         &mut self,
-        preferred_prefix: Option<crate::Prefix<'_>>,
+        preferred_prefix: Option<&crate::Prefix>,
     ) -> Result<Self::Ok, Self::Error> {
-        self.preferred_prefix = preferred_prefix.map(|p| p.into_owned());
+        self.preferred_prefix = preferred_prefix.map(|p| p.to_owned());
         Ok(())
     }
 

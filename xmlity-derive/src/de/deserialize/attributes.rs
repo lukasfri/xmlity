@@ -31,7 +31,7 @@ impl<'a, T: Fn(syn::Expr) -> syn::Expr> RecordDeserializeAttributeBuilder<'a, T>
         Self { opts, ast }
     }
 
-    pub fn to_builder(&self) -> Result<StructDeserializeAttributeBuilder, DeriveError> {
+    pub fn to_builder(&self) -> Result<StructDeserializeAttributeBuilder<'_>, DeriveError> {
         let RecordInput {
             impl_for_ident: ident,
             generics,
@@ -108,7 +108,7 @@ impl SimpleDeserializeAttributeBuilder<'_> {
         }
     }
 
-    pub fn to_builder(&self) -> StructDeserializeAttributeBuilder {
+    pub fn to_builder(&self) -> StructDeserializeAttributeBuilder<'_> {
         StructDeserializeAttributeBuilder {
             ident: self.ident,
             generics: self.generics,

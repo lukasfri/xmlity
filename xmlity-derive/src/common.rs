@@ -90,7 +90,7 @@ impl FromMeta for LocalName<'_> {
 impl ToTokens for LocalName<'_> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let name = &self.0;
-        tokens.extend(quote::quote! { <::xmlity::LocalName as ::core::str::FromStr>::from_str(#name).expect("XML name in derive macro is invalid. This is a bug in xmlity. Please report it.") })
+        tokens.extend(quote::quote! { ::xmlity::LocalName::new(#name).expect("XML name in derive macro is invalid. This is a bug in xmlity. Please report it.") })
     }
 }
 
@@ -113,7 +113,7 @@ impl FromMeta for XmlNamespace<'_> {
 impl ToTokens for XmlNamespace<'_> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let namespace = &self.0;
-        tokens.extend(quote::quote! { <::xmlity::XmlNamespace as ::core::str::FromStr>::from_str(#namespace).expect("XML namespace in derive macro is invalid. This is a bug in xmlity. Please report it.") })
+        tokens.extend(quote::quote! { ::xmlity::XmlNamespace::new(#namespace).expect("XML namespace in derive macro is invalid. This is a bug in xmlity. Please report it.") })
     }
 }
 

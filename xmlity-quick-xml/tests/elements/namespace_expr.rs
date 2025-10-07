@@ -6,11 +6,11 @@ use crate::utils::{
     clean_string, quick_xml_deserialize_test, quick_xml_serialize_test_with_default,
 };
 use rstest::rstest;
-use xmlity::{types::string::Trim, ExpandedName, XmlNamespace};
-use xmlity::{Deserialize, Serialize};
+use xmlity::{types::string::Trim, XmlNamespace};
+use xmlity::{Deserialize, ExpandedNameBuf, Serialize, XmlNamespaceBuf};
 
-const NAMESPACE: XmlNamespace =
-    XmlNamespace::new_dangerous("http://my.namespace.example.com/this/is/a/namespace");
+const NAMESPACE: &XmlNamespace =
+    unsafe { XmlNamespace::new_unchecked("http://my.namespace.example.com/this/is/a/namespace") };
 
 const SIMPLE_DEFAULT_NS_1D_STRUCT_TEST_XML: &str = r###"
   <to xmlns="http://my.namespace.example.com/this/is/a/namespace">Tove</to>
@@ -51,7 +51,9 @@ fn simple_ns_1d_struct_serialize(
 ) {
     let actual = quick_xml_serialize_test_with_default(
         simple_ns_1d_struct(),
-        default_namespace.map(XmlNamespace::new).map(Result::unwrap),
+        default_namespace
+            .map(XmlNamespaceBuf::from_str)
+            .map(Result::unwrap),
     )
     .unwrap();
 
@@ -82,21 +84,23 @@ fn simple_ns_1d_struct_wrong_ns_deserialize(#[case] test_xml: &str) {
 
     assert_eq!(
         actual,
-        Box::new(ExpandedName::new(
+        Box::new(ExpandedNameBuf::new(
             "to".parse().unwrap(),
             Some(
-                XmlNamespace::from_str("http://not.my.namespace.example.org/this/should/not/match")
-                    .expect("Valid namespace")
+                XmlNamespaceBuf::from_str(
+                    "http://not.my.namespace.example.org/this/should/not/match"
+                )
+                .expect("Valid namespace")
             )
         ))
     );
 
     assert_eq!(
         expected,
-        Box::new(ExpandedName::new(
+        Box::new(ExpandedNameBuf::new(
             "to".parse().unwrap(),
             Some(
-                XmlNamespace::from_str("http://my.namespace.example.com/this/is/a/namespace")
+                XmlNamespaceBuf::from_str("http://my.namespace.example.com/this/is/a/namespace")
                     .expect("Valid namespace")
             )
         ))
@@ -300,7 +304,9 @@ fn simple_3d_list_test_value() -> BreakfastMenu {
 fn simple_3d_struct_serialize(#[case] xml: &str, #[case] default_ns: Option<&'static str>) {
     let actual = quick_xml_serialize_test_with_default(
         simple_3d_list_test_value(),
-        default_ns.map(XmlNamespace::new).map(Result::unwrap),
+        default_ns
+            .map(XmlNamespaceBuf::from_str)
+            .map(Result::unwrap),
     )
     .unwrap();
     let expected = clean_string(xml);

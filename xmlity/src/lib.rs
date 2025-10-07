@@ -16,7 +16,7 @@
 //! The macro [`xml`] can be used to create [`XmlValues`](`XmlValue`) in a more ergonomic way. It is also possible to create [`XmlValues`](`XmlValue`) manually, but it is quite verbose.
 use core::{fmt, str};
 use fmt::Display;
-use std::{borrow::Cow, str::FromStr};
+use std::{borrow::Borrow, ops::Deref, str::FromStr};
 
 pub mod de;
 pub use de::{DeserializationGroup, Deserialize, DeserializeOwned, Deserializer};
@@ -99,65 +99,47 @@ pub use name_tokens::InvalidXmlNameError;
 
 /// # XML Expanded Name
 /// An [`ExpandedName`] is a [`LocalName`] together with its associated [`XmlNamespace`]. This can convert to and from a [`QName`] with a [`Prefix`] mapping.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ExpandedName<'a> {
-    local_name: LocalName<'a>,
-    namespace: Option<XmlNamespace<'a>>,
+    local_name: &'a LocalName,
+    namespace: Option<&'a XmlNamespace>,
 }
 
 impl<'a> ExpandedName<'a> {
     /// Creates a new [`ExpandedName`].
-    pub fn new(local_name: LocalName<'a>, namespace: Option<XmlNamespace<'a>>) -> Self {
+    pub fn new(local_name: &'a LocalName, namespace: Option<&'a XmlNamespace>) -> Self {
         Self {
             local_name,
             namespace,
         }
     }
 
+    /// Converts this [`ExpandedName`] into an owned version.
+    pub fn into_owned(self) -> ExpandedNameBuf {
+        ExpandedNameBuf::new(
+            self.local_name.to_owned(),
+            self.namespace.map(|n| n.to_owned()),
+        )
+    }
+
     /// Converts this [`ExpandedName`] into its parts.
-    pub fn into_parts(self) -> (LocalName<'a>, Option<XmlNamespace<'a>>) {
+    pub fn into_parts(self) -> (&'a LocalName, Option<&'a XmlNamespace>) {
         (self.local_name, self.namespace)
     }
 
-    /// Converts this [`ExpandedName`] into an owned version.
-    pub fn into_owned(self) -> ExpandedName<'static> {
-        ExpandedName::new(
-            self.local_name.into_owned(),
-            self.namespace.map(|n| n.into_owned()),
-        )
-    }
-
-    /// Returns this [`ExpandedName`] as a reference.
-    pub fn as_ref(&self) -> ExpandedName<'_> {
-        ExpandedName::new(
-            self.local_name.as_ref(),
-            self.namespace.as_ref().map(|n| n.as_ref()),
-        )
-    }
-
     /// Returns the local name of this [`ExpandedName`].
-    pub fn local_name(&self) -> &LocalName<'a> {
-        &self.local_name
-    }
-
-    /// Returns a mutable reference to the local name of this [`ExpandedName`].
-    pub fn local_name_mut(&mut self) -> &mut LocalName<'a> {
-        &mut self.local_name
+    pub fn local_name(&self) -> &'a LocalName {
+        self.local_name
     }
 
     /// Returns the namespace of this [`ExpandedName`].
-    pub fn namespace(&self) -> &Option<XmlNamespace<'a>> {
+    pub fn namespace(&self) -> &Option<&'a XmlNamespace> {
         &self.namespace
     }
 
-    /// Returns a mutable reference to the namespace of this [`ExpandedName`].
-    pub fn namespace_mut(&mut self) -> &mut Option<XmlNamespace<'a>> {
-        &mut self.namespace
-    }
-
     /// Converts this [`ExpandedName`] into a [`QName`] name using the given [`Prefix`].
-    pub fn to_q_name(self, resolved_prefix: Option<Prefix<'a>>) -> QName<'a> {
-        QName::new(resolved_prefix, self.local_name.clone())
+    pub fn to_q_name(self, resolved_prefix: Option<&'a Prefix>) -> QName<'a> {
+        QName::new(resolved_prefix, self.local_name)
     }
 }
 
@@ -167,12 +149,58 @@ impl Display for ExpandedName<'_> {
     }
 }
 
+/// An owned version of [`ExpandedName`].
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ExpandedNameBuf {
+    local_name: LocalNameBuf,
+    namespace: Option<XmlNamespaceBuf>,
+}
+
+impl ExpandedNameBuf {
+    /// Creates a new [`ExpandedNameBuf`].
+    pub fn new(local_name: LocalNameBuf, namespace: Option<XmlNamespaceBuf>) -> Self {
+        Self {
+            local_name,
+            namespace,
+        }
+    }
+
+    /// Returns a reference to this [`ExpandedNameBuf`] as an [`ExpandedName`].
+    pub fn as_ref(&self) -> ExpandedName<'_> {
+        ExpandedName::new(
+            self.local_name.borrow(),
+            self.namespace.as_ref().map(|n| n.borrow()),
+        )
+    }
+
+    /// Converts this [`ExpandedNameBuf`] into its parts.
+    pub fn into_parts(self) -> (LocalNameBuf, Option<XmlNamespaceBuf>) {
+        (self.local_name, self.namespace)
+    }
+
+    /// Returns the [`XmlNamespace`] of this [`ExpandedNameBuf`].
+    pub fn namespace(&self) -> Option<&XmlNamespace> {
+        self.namespace.as_deref()
+    }
+
+    /// Returns the [`LocalName`] of this [`ExpandedNameBuf`].
+    pub fn local_name(&self) -> &LocalName {
+        &self.local_name
+    }
+}
+
+impl From<ExpandedName<'_>> for ExpandedNameBuf {
+    fn from(value: ExpandedName<'_>) -> Self {
+        value.into_owned()
+    }
+}
+
 /// # XML Qualified Name
 /// A [`QName`] is a [`LocalName`] together with a namespace [`Prefix`], indicating it belongs to a specific declared [`XmlNamespace`].
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct QName<'a> {
-    prefix: Option<Prefix<'a>>,
-    local_name: LocalName<'a>,
+    prefix: Option<&'a Prefix>,
+    local_name: &'a LocalName,
 }
 
 /// An error that can occur when parsing a [`QName`].
@@ -188,55 +216,31 @@ pub enum QNameParseError {
 
 impl<'a> QName<'a> {
     /// Creates a new [`QName`].
-    pub fn new<P: Into<Option<Prefix<'a>>>, L: Into<LocalName<'a>>>(
-        prefix: P,
-        local_name: L,
-    ) -> Self {
-        QName {
-            prefix: prefix.into(),
-            local_name: local_name.into(),
-        }
+    pub fn new(prefix: Option<&'a Prefix>, local_name: &'a LocalName) -> Self {
+        QName { prefix, local_name }
     }
 
     /// Converts this [`QName`] into its parts.
-    pub fn into_parts(self) -> (Option<Prefix<'a>>, LocalName<'a>) {
+    pub fn into_parts(self) -> (Option<&'a Prefix>, &'a LocalName) {
         (self.prefix, self.local_name)
     }
 
-    /// Converts this [`QName`] into being owned.
-    pub fn into_owned(self) -> QName<'static> {
-        QName {
-            prefix: self.prefix.map(|prefix| prefix.into_owned()),
-            local_name: self.local_name.into_owned(),
-        }
-    }
-
-    /// Returns this [`QName`] as a reference.
-    pub fn as_ref(&self) -> QName<'_> {
-        QName {
-            prefix: self.prefix.as_ref().map(|prefix| prefix.as_ref()),
-            local_name: self.local_name.as_ref(),
-        }
-    }
-
     /// Returns the [`Prefix`] of this [`QName`].
-    pub fn prefix(&self) -> &Option<Prefix<'a>> {
+    pub fn prefix(&self) -> &Option<&'a Prefix> {
         &self.prefix
     }
 
-    /// Returns a mutable reference to the [`Prefix`] of this [`QName`].
-    pub fn prefix_mut(&mut self) -> &mut Option<Prefix<'a>> {
-        &mut self.prefix
-    }
-
     /// Returns the [`LocalName`] of this [`QName`].
-    pub fn local_name(&self) -> &LocalName<'a> {
-        &self.local_name
+    pub fn local_name(&self) -> &LocalName {
+        self.local_name
     }
 
-    /// Returns a mutable reference to the [`LocalName`] of this [`QName`].
-    pub fn local_name_mut(&mut self) -> &mut LocalName<'a> {
-        &mut self.local_name
+    /// Converts this [`QName`] into an owned version.
+    pub fn into_owned(self) -> QNameBuf {
+        QNameBuf::new(
+            self.prefix.map(|p| p.to_owned()),
+            self.local_name.to_owned(),
+        )
     }
 }
 
@@ -249,61 +253,81 @@ impl Display for QName<'_> {
         }
     }
 }
-impl FromStr for QName<'_> {
+
+/// An owned version of [`QName`].
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct QNameBuf {
+    prefix: Option<PrefixBuf>,
+    local_name: LocalNameBuf,
+}
+
+impl QNameBuf {
+    /// Creates a new [`QNameBuf`].
+    pub fn new(prefix: Option<PrefixBuf>, local_name: LocalNameBuf) -> Self {
+        Self { prefix, local_name }
+    }
+
+    /// Returns a reference to this [`QNameBuf`] as a [`QName`].
+    pub fn as_ref(&self) -> QName<'_> {
+        QName::new(
+            self.prefix.as_ref().map(|p| p.borrow()),
+            self.local_name.borrow(),
+        )
+    }
+}
+
+impl FromStr for QNameBuf {
     type Err = QNameParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (prefix, local_name) = s.split_once(':').unwrap_or(("", s));
 
-        let prefix = Prefix::from_str(prefix)?;
-        let local_name = LocalName::from_str(local_name)?;
+        let prefix = if prefix.is_empty() {
+            None
+        } else {
+            Some(PrefixBuf::from_str(prefix)?)
+        };
+        let local_name = LocalNameBuf::from_str(local_name)?;
 
-        Ok(QName::new(prefix, local_name))
+        Ok(QNameBuf::new(prefix, local_name))
     }
 }
 
-impl<'a> From<QName<'a>> for Option<Prefix<'a>> {
-    fn from(value: QName<'a>) -> Self {
-        value.prefix
+impl Display for QNameBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_ref().fmt(f)
     }
 }
 
-impl<'a> From<QName<'a>> for LocalName<'a> {
-    fn from(value: QName<'a>) -> Self {
-        value.local_name
+impl From<QName<'_>> for QNameBuf {
+    fn from(value: QName<'_>) -> Self {
+        value.into_owned()
     }
 }
 
 /// # XML Namespace
 /// A namespace URI, to which [`LocalNames`](`LocalName`) are scoped under.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct XmlNamespace<'a>(Cow<'a, str>);
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct XmlNamespace(str);
 
 /// An error that can occur when parsing a [`XmlNamespace`].
 #[derive(Debug, thiserror::Error)]
 pub enum XmlNamespaceParseError {}
 
-impl<'a> XmlNamespace<'a> {
-    /// Creates a new [`XmlNamespace`] from a string.
-    pub fn new<T: Into<Cow<'a, str>>>(value: T) -> Result<Self, XmlNamespaceParseError> {
-        Ok(Self(value.into()))
-    }
-
-    /// Creates a new [`XmlNamespace`] from a string without validating it, but it works in a const context.
+impl XmlNamespace {
+    /// Creates a new [`XmlNamespace`] from a string slice without validating it.
     ///
     /// # Safety
-    /// This function does not validate the input value due to const context limitations involving the validation function. While this cannot create a memory safety issue, it can create a logical one.
-    pub const fn new_dangerous(value: &'a str) -> Self {
-        Self(Cow::Borrowed(value))
+    /// The caller must ensure that the value is a valid URI.
+    pub const unsafe fn new_unchecked(value: &str) -> &Self {
+        // SAFETY: The caller must ensure that the value is a valid URI.
+        unsafe { &*(value as *const str as *const XmlNamespace) }
     }
 
-    /// Converts this [`XmlNamespace`] into an owned version.
-    pub fn into_owned(self) -> XmlNamespace<'static> {
-        XmlNamespace(Cow::Owned(self.0.into_owned()))
-    }
-
-    /// Returns this [`XmlNamespace`] as a reference.
-    pub fn as_ref(&self) -> XmlNamespace<'_> {
-        XmlNamespace(Cow::Borrowed(&self.0))
+    /// Creates a new [`XmlNamespace`] from a string.
+    pub fn new(value: &str) -> Result<&Self, XmlNamespaceParseError> {
+        //TODO: Validate URI
+        // SAFETY: The value has been validated.
+        Ok(unsafe { Self::new_unchecked(value) })
     }
 
     /// Returns this [`XmlNamespace`] as a string slice.
@@ -312,37 +336,34 @@ impl<'a> XmlNamespace<'a> {
     }
 
     /// The namespace for XML namespace declarations.
-    pub const XMLNS: XmlNamespace<'static> =
-        XmlNamespace::new_dangerous("http://www.w3.org/2000/xmlns/");
+    pub const XMLNS: &'static XmlNamespace =
+        //SAFETY: Hardcoded valid URI.
+        unsafe { XmlNamespace::new_unchecked("http://www.w3.org/2000/xmlns/") };
     /// The namespace for built-in XML attributes.
-    pub const XML: XmlNamespace<'static> =
-        XmlNamespace::new_dangerous("http://www.w3.org/XML/1998/namespace");
+    pub const XML: &'static XmlNamespace =
+        //SAFETY: Hardcoded valid URI.
+        unsafe { XmlNamespace::new_unchecked("http://www.w3.org/XML/1998/namespace") };
     /// The namespace for XHTML.
-    pub const XHTML: XmlNamespace<'static> =
-        XmlNamespace::new_dangerous("http://www.w3.org/1999/xhtml");
+    pub const XHTML: &'static XmlNamespace =
+        //SAFETY: Hardcoded valid URI.
+        unsafe { XmlNamespace::new_unchecked("http://www.w3.org/1999/xhtml") };
     /// The namespace for XML Schema.
-    pub const XS: XmlNamespace<'static> =
-        XmlNamespace::new_dangerous("http://www.w3.org/2001/XMLSchema");
+    pub const XS: &'static XmlNamespace =
+        //SAFETY: Hardcoded valid URI.
+        unsafe { XmlNamespace::new_unchecked("http://www.w3.org/2001/XMLSchema") };
     /// The namespace for XML Schema Instance.
-    pub const XSI: XmlNamespace<'static> =
-        XmlNamespace::new_dangerous("http://www.w3.org/2001/XMLSchema-instance");
+    pub const XSI: &'static XmlNamespace =
+        //SAFETY: Hardcoded valid URI.
+        unsafe { XmlNamespace::new_unchecked("http://www.w3.org/2001/XMLSchema-instance") };
 }
 
-impl FromStr for XmlNamespace<'_> {
-    type Err = XmlNamespaceParseError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value.to_owned())
-    }
-}
-
-impl Display for XmlNamespace<'_> {
+impl Display for XmlNamespace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl Serialize for XmlNamespace<'_> {
+impl Serialize for XmlNamespace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -351,7 +372,40 @@ impl Serialize for XmlNamespace<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for XmlNamespace<'_> {
+/// An owned version of [`XmlNamespace`].
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct XmlNamespaceBuf(String);
+
+impl Borrow<XmlNamespace> for XmlNamespaceBuf {
+    fn borrow(&self) -> &XmlNamespace {
+        // SAFETY: All XmlNamespaceBufs are valid XmlNamespaces.
+        unsafe { XmlNamespace::new_unchecked(&self.0) }
+    }
+}
+
+impl Deref for XmlNamespaceBuf {
+    type Target = XmlNamespace;
+    fn deref(&self) -> &Self::Target {
+        self.borrow()
+    }
+}
+
+impl ToOwned for XmlNamespace {
+    type Owned = XmlNamespaceBuf;
+    fn to_owned(&self) -> Self::Owned {
+        XmlNamespaceBuf(self.0.to_owned())
+    }
+}
+
+impl FromStr for XmlNamespaceBuf {
+    type Err = XmlNamespaceParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        XmlNamespace::new(value).map(ToOwned::to_owned)
+    }
+}
+
+impl<'de> Deserialize<'de> for XmlNamespaceBuf {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -362,8 +416,8 @@ impl<'de> Deserialize<'de> for XmlNamespace<'_> {
 
 /// # XML Prefix
 /// A namespace [`Prefix`] used to map a [`LocalName`] to a [`XmlNamespace`] within an XML document.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct Prefix<'a>(Cow<'a, str>);
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Prefix(str);
 
 /// An error that can occur when parsing a [`Prefix`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -373,32 +427,28 @@ pub enum PrefixParseError {
     InvalidXmlName(#[from] name_tokens::InvalidXmlNameError),
 }
 
-impl<'a> Prefix<'a> {
-    /// Creates a new [`Prefix`] from a string.
-    pub fn new<T: Into<Cow<'a, str>>>(value: T) -> Result<Self, PrefixParseError> {
-        let value = value.into();
-
-        name_tokens::is_valid_name(&value)?;
-
-        Ok(Self(value))
-    }
-
-    /// Creates a new [`Prefix`] from a string without validating it, but it works in a const context.
+impl Prefix {
+    /// Creates a new [`Prefix`] from a string without validating it.
     ///
     /// # Safety
-    /// This function does not validate the input value due to const context limitations involving the validation function. While this cannot create a memory safety issue, it can create a logical one.
-    pub const fn new_dangerous(value: &'a str) -> Self {
-        Self(Cow::Borrowed(value))
+    /// The caller must ensure that the value is a valid XML name.
+    pub const unsafe fn new_unchecked(value: &str) -> &Self {
+        // SAFETY: The caller must ensure that the value is a valid XML name.
+        unsafe { &*(value as *const str as *const Prefix) }
     }
 
-    /// Converts this [`Prefix`] into an owned version.
-    pub fn into_owned(self) -> Prefix<'static> {
-        Prefix(Cow::Owned(self.0.into_owned()))
+    /// Creates a new [`Prefix`] from a string.
+    pub fn new(value: &str) -> Result<&Self, PrefixParseError> {
+        name_tokens::is_valid_name(value)?;
+
+        // SAFETY: The value has been validated.
+        Ok(unsafe { Self::new_unchecked(value) })
     }
 
-    /// Returns this [`Prefix`] as a reference.
-    pub fn as_ref(&self) -> Prefix<'_> {
-        Prefix(Cow::Borrowed(&self.0))
+    /// Converts this [`Prefix`] into [`PrefixBuf`].
+    pub fn into_owned(&self) -> PrefixBuf {
+        // SAFETY: All Prefixes are valid PrefixBufs.
+        unsafe { PrefixBuf::new_unchecked(self.0.to_owned()) }
     }
 
     /// Returns this [`Prefix`] as a string slice.
@@ -407,46 +457,103 @@ impl<'a> Prefix<'a> {
     }
 
     /// Returns this [`Prefix`] as a [`QName`] with the `xmlns` prefix. This is useful for serializing namespaces.
-    pub fn xmlns(&'a self) -> QName<'a> {
-        QName::new(
-            Prefix::new("xmlns").expect("xmlns is a valid prefix"),
-            LocalName::from(self.clone()),
-        )
+    pub fn xmlns(&self) -> QName<'_> {
+        QName::new(Some(Prefix::XMLNS), <&LocalName>::from(self))
     }
 
     /// Returns `true` if this [`Prefix`] is the default prefix.
     pub fn is_default(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// The blank (default) prefix.
+    pub const BLANK: &'static Prefix =
+        //SAFETY: Hardcoded valid prefix.
+        unsafe { Prefix::new_unchecked("") };
+
+    /// The `xmlns` prefix used for XML namespace declarations.
+    pub const XMLNS: &'static Prefix =
+        //SAFETY: Hardcoded valid prefix.
+        unsafe { Prefix::new_unchecked("xmlns") };
 }
 
-impl<'a> From<Prefix<'a>> for LocalName<'a> {
-    fn from(value: Prefix<'a>) -> Self {
-        LocalName(value.0)
+/// An owned version of [`Prefix`].
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PrefixBuf(String);
+
+impl Default for PrefixBuf {
+    fn default() -> Self {
+        Prefix::BLANK.to_owned()
     }
 }
 
-impl<'a> From<Option<Prefix<'a>>> for Prefix<'a> {
-    fn from(value: Option<Prefix<'a>>) -> Self {
-        value.unwrap_or_default()
+impl PrefixBuf {
+    /// Creates a new [`PrefixBuf`] from a string without validating it.
+    ///
+    /// # Safety
+    /// The caller must ensure that the value is a valid XML name.
+    pub const unsafe fn new_unchecked(value: String) -> Self {
+        Self(value)
+    }
+
+    /// Creates a new [`PrefixBuf`] from a string.
+    pub fn new(value: String) -> Result<Self, PrefixParseError> {
+        // Validate the value
+        Prefix::new(&value)?;
+
+        // SAFETY: The value has been validated.
+        Ok(unsafe { Self::new_unchecked(value) })
     }
 }
 
-impl FromStr for Prefix<'_> {
+impl Borrow<Prefix> for PrefixBuf {
+    fn borrow(&self) -> &Prefix {
+        // SAFETY: All PrefixBufs are valid Prefixes.
+        unsafe { Prefix::new_unchecked(&self.0) }
+    }
+}
+
+impl Deref for PrefixBuf {
+    type Target = Prefix;
+    fn deref(&self) -> &Self::Target {
+        self.borrow()
+    }
+}
+
+impl ToOwned for Prefix {
+    type Owned = PrefixBuf;
+    fn to_owned(&self) -> Self::Owned {
+        PrefixBuf(self.0.to_owned())
+    }
+}
+
+impl FromStr for PrefixBuf {
     type Err = PrefixParseError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value.to_owned())
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Prefix::new(s).map(ToOwned::to_owned)
     }
 }
 
-impl Display for Prefix<'_> {
+impl<'a> From<&'a Prefix> for &'a LocalName {
+    fn from(value: &'a Prefix) -> Self {
+        // SAFETY: All Prefixes are valid LocalNames.
+        unsafe { LocalName::new_unchecked(value.as_str()) }
+    }
+}
+
+impl<'a> From<Option<&'a Prefix>> for &'a Prefix {
+    fn from(value: Option<&'a Prefix>) -> Self {
+        value.unwrap_or(Prefix::BLANK)
+    }
+}
+
+impl Display for Prefix {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl Serialize for Prefix<'_> {
+impl Serialize for Prefix {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -455,7 +562,7 @@ impl Serialize for Prefix<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for Prefix<'_> {
+impl<'de> Deserialize<'de> for PrefixBuf {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -468,8 +575,8 @@ impl<'de> Deserialize<'de> for Prefix<'_> {
 /// A local name of an XML element or attribute within a [`XmlNamespace`].
 ///
 /// Together with a [`XmlNamespace`], it forms an [`ExpandedName`].
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LocalName<'a>(Cow<'a, str>);
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LocalName(str);
 
 /// An error that can occur when parsing a [`LocalName`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -479,49 +586,42 @@ pub enum LocalNameParseError {
     InvalidXmlName(#[from] name_tokens::InvalidXmlNameError),
 }
 
-impl<'a> LocalName<'a> {
-    /// Creates a new [`LocalName`] from a string.
-    pub fn new<T: Into<Cow<'a, str>>>(value: T) -> Result<Self, LocalNameParseError> {
-        let value = value.into();
-
-        name_tokens::is_valid_name(&value)?;
-
-        Ok(Self(value))
-    }
-
-    /// Creates a new [`LocalName`] from a string without validating it, but it works in a const context.
+impl LocalName {
+    /// Creates a new [`LocalName`] from a string without validating it.
     ///
     /// # Safety
-    /// This function does not validate the input value due to const context limitations involving the validation function. While this cannot create a memory safety issue, it can create a logical one.
-    pub const fn new_dangerous(value: &'a str) -> Self {
-        Self(Cow::Borrowed(value))
+    /// The caller must ensure that the value is a valid XML name.
+    pub const unsafe fn new_unchecked(value: &str) -> &Self {
+        // SAFETY: The caller must ensure that the value is a valid XML name.
+        unsafe { &*(value as *const str as *const LocalName) }
     }
 
-    /// Converts this [`LocalName`] into an owned version.
-    pub fn into_owned(self) -> LocalName<'static> {
-        LocalName(Cow::Owned(self.0.into_owned()))
+    /// Creates a new [`LocalName`] from a string.
+    pub fn new(value: &str) -> Result<&Self, LocalNameParseError> {
+        name_tokens::is_valid_name(value)?;
+
+        // SAFETY: The value has been validated.
+        Ok(unsafe { Self::new_unchecked(value) })
     }
 
-    /// Returns this [`LocalName`] as a reference.
-    pub fn as_ref(&self) -> LocalName<'_> {
-        LocalName(Cow::Borrowed(&self.0))
+    /// Returns this [`LocalName`] as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
+
+    /// The local name for XML namespace declarations with no prefix.
+    pub const XMLNS: &'static LocalName =
+        //SAFETY: Hardcoded valid local name.
+        unsafe { LocalName::new_unchecked("xmlns") };
 }
 
-impl FromStr for LocalName<'_> {
-    type Err = LocalNameParseError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(s.to_owned())
-    }
-}
-
-impl Display for LocalName<'_> {
+impl Display for LocalName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl Serialize for LocalName<'_> {
+impl Serialize for LocalName {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -530,7 +630,67 @@ impl Serialize for LocalName<'_> {
     }
 }
 
-impl<'de> Deserialize<'de> for LocalName<'_> {
+/// An owned version of [`LocalName`].
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LocalNameBuf(String);
+
+impl LocalNameBuf {
+    /// Creates a new [`LocalNameBuf`] from a string without validating it.
+    ///
+    /// # Safety
+    /// The caller must ensure that the value is a valid XML name.
+    pub const unsafe fn new_unchecked(value: String) -> Self {
+        Self(value)
+    }
+
+    /// Creates a new [`LocalNameBuf`] from a string.
+    pub fn new(value: String) -> Result<Self, LocalNameParseError> {
+        // Validate the value
+        LocalName::new(&value)?;
+
+        // SAFETY: The value has been validated.
+        Ok(unsafe { Self::new_unchecked(value) })
+    }
+}
+
+impl Borrow<LocalName> for LocalNameBuf {
+    fn borrow(&self) -> &LocalName {
+        // SAFETY: All LocalNameBufs are valid LocalNames.
+        unsafe { LocalName::new_unchecked(&self.0) }
+    }
+}
+
+impl Deref for LocalNameBuf {
+    type Target = LocalName;
+    fn deref(&self) -> &Self::Target {
+        self.borrow()
+    }
+}
+
+impl ToOwned for LocalName {
+    type Owned = LocalNameBuf;
+    fn to_owned(&self) -> Self::Owned {
+        LocalNameBuf(self.0.to_owned())
+    }
+}
+
+impl FromStr for LocalNameBuf {
+    type Err = LocalNameParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        LocalName::new(s).map(ToOwned::to_owned)
+    }
+}
+
+impl Serialize for LocalNameBuf {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.deref().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for LocalNameBuf {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -549,9 +709,9 @@ mod tests {
     #[rstest]
     #[case::basic("prefix")]
     fn test_prefix(#[case] prefix_text: &str) {
-        let prefix = Prefix::from_str(prefix_text).unwrap();
+        let prefix = Prefix::new(prefix_text).unwrap();
         assert_eq!(prefix.to_string(), prefix_text);
-        assert_eq!(prefix.into_owned().to_string(), prefix_text);
+        assert_eq!(prefix.as_str().to_string(), prefix_text);
     }
 
     #[rstest]
@@ -561,16 +721,15 @@ mod tests {
         #[case] prefix: &str,
         #[case] expected_error: PrefixParseError,
     ) {
-        let error = Prefix::from_str(prefix).unwrap_err();
+        let error = Prefix::new(prefix).unwrap_err();
         assert_eq!(error, expected_error);
     }
 
     #[rstest]
     #[case::basic("localName")]
     fn test_local_name(#[case] local_name_text: &str) {
-        let local_name = LocalName::from_str(local_name_text).unwrap();
+        let local_name = LocalNameBuf::from_str(local_name_text).unwrap();
         assert_eq!(local_name.to_string(), local_name_text);
-        assert_eq!(local_name.into_owned().to_string(), local_name_text);
     }
 
     #[rstest]
@@ -580,28 +739,27 @@ mod tests {
         #[case] local_name: &str,
         #[case] expected_error: LocalNameParseError,
     ) {
-        let error = LocalName::from_str(local_name).unwrap_err();
+        let error = LocalNameBuf::from_str(local_name).unwrap_err();
         assert_eq!(error, expected_error);
     }
 
     #[rstest]
     #[case::basic("localName", None)]
     #[case::with_namespace("localName", Some(XmlNamespace::new("http://example.com").unwrap()))]
-    fn test_expanded_name(#[case] local_name_text: &str, #[case] namespace: Option<XmlNamespace>) {
-        let local_name = LocalName::from_str(local_name_text).unwrap();
-        let expanded_name = ExpandedName::new(local_name.clone(), namespace.clone());
-        assert_eq!(expanded_name.local_name(), &local_name);
+    fn test_expanded_name(#[case] local_name_text: &str, #[case] namespace: Option<&XmlNamespace>) {
+        let local_name = LocalName::new(local_name_text).unwrap();
+        let expanded_name = ExpandedName::new(local_name, namespace.clone());
+        assert_eq!(expanded_name.local_name(), local_name);
         assert_eq!(expanded_name.namespace(), &namespace);
         assert_eq!(expanded_name.to_string(), local_name_text);
-        assert_eq!(expanded_name.into_owned().to_string(), local_name_text);
+        assert_eq!(expanded_name.local_name.as_str(), local_name_text);
     }
 
     #[rstest]
     #[case::basic("prefix:localName")]
     fn test_qname(#[case] qname_text: &str) {
-        let qname = QName::from_str(qname_text).unwrap();
+        let qname = QNameBuf::from_str(qname_text).unwrap();
         assert_eq!(qname.to_string(), qname_text);
-        assert_eq!(qname.into_owned().to_string(), qname_text);
     }
 
     #[rstest]
@@ -610,7 +768,7 @@ mod tests {
         #[case] qname: &str,
         #[case] expected_error: QNameParseError,
     ) {
-        let error = QName::from_str(qname).unwrap_err();
+        let error = QNameBuf::from_str(qname).unwrap_err();
         assert_eq!(error, expected_error);
     }
 }

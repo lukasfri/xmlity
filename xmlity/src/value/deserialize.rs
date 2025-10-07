@@ -168,11 +168,11 @@ impl<'v> crate::de::Visitor<'v> for XmlTextVisitor<'v> {
 }
 
 impl DeserializeContext for () {
-    fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
+    fn default_namespace(&self) -> Option<&XmlNamespace> {
         None
     }
 
-    fn resolve_prefix(&self, _prefix: Prefix<'_>) -> Option<XmlNamespace<'_>> {
+    fn resolve_prefix(&self, _prefix: &Prefix) -> Option<&XmlNamespace> {
         None
     }
 
@@ -359,7 +359,7 @@ impl<'v> crate::de::Visitor<'v> for XmlElementVisitor<'v> {
     where
         A: de::ElementAccess<'v>,
     {
-        let name = element.name().clone().into_owned();
+        let name = element.name().into_owned();
         let attributes = iter::from_fn(|| match element.next_attribute::<XmlAttribute>() {
             Ok(Some(attr)) => Some(Ok(attr)),
             Ok(None) => None,
@@ -429,7 +429,7 @@ impl<'v> crate::de::Visitor<'v> for XmlAttributeVisitor<'v> {
         A: de::AttributeAccess<'v>,
     {
         Ok(XmlAttribute {
-            name: attribute.name().clone().into_owned(),
+            name: attribute.name().into_owned(),
             value: attribute.value()?,
         })
     }
@@ -439,7 +439,7 @@ impl<'a> de::AttributeAccess<'a> for &'a XmlAttribute {
     type Error = XmlValueDeserializerError;
 
     fn name(&self) -> ExpandedName<'_> {
-        self.name.clone()
+        self.name.as_ref()
     }
 
     fn value<T>(self) -> Result<T, Self::Error>

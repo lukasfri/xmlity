@@ -82,10 +82,10 @@ pub enum Unexpected {
 /// Trait that lets you access the namespaces declared on an XML node.
 pub trait DeserializeContext {
     /// Get the default namespace.
-    fn default_namespace(&self) -> Option<XmlNamespace<'_>>;
+    fn default_namespace(&self) -> Option<&XmlNamespace>;
 
     /// Resolve a prefix to a namespace.
-    fn resolve_prefix(&self, prefix: Prefix<'_>) -> Option<XmlNamespace<'_>>;
+    fn resolve_prefix(&self, prefix: &Prefix) -> Option<&XmlNamespace>;
 
     /// Get a reference to external data associated with this context.
     fn external_data<T>(&self) -> Option<&T>

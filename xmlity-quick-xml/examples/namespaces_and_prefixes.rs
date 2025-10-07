@@ -21,7 +21,7 @@ struct Book {
 
 // Using namespace expressions
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-#[xelement(name = "library", namespace_expr = XmlNamespace::new_dangerous("http://example.com/library"))]
+#[xelement(name = "library", namespace_expr = XmlNamespace::new("http://example.com/library").unwrap())]
 struct Library {
     #[xattribute(name = "name")]
     name: String,

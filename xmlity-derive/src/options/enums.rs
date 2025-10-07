@@ -34,7 +34,7 @@ pub mod roots {
                 return Ok(None);
             };
 
-            let opts = Self::from_attributes(&[attr.clone()])?;
+            let opts = Self::from_attributes(std::slice::from_ref(attr))?;
             Ok(Some(opts))
         }
 
@@ -140,7 +140,7 @@ pub mod variants {
                 return Ok(None);
             };
 
-            let opts = Self::from_attributes(&[attr.clone()])?;
+            let opts = Self::from_attributes(std::slice::from_ref(attr))?;
             Ok(Some(opts))
         }
     }

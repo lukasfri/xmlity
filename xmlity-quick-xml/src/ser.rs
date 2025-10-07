@@ -1,5 +1,5 @@
 use core::str;
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::ops::DerefMut;
@@ -7,11 +7,11 @@ use std::ops::DerefMut;
 use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer as QuickXmlWriter;
 
-use xmlity::NoopDeSerializer;
 use xmlity::{
     ser::{self, Error as _, IncludePrefix, Unexpected},
-    ExpandedName, LocalName, Prefix, QName, Serialize, XmlNamespace,
+    ExpandedName, Prefix, QName, Serialize, XmlNamespace,
 };
+use xmlity::{ExpandedNameBuf, NoopDeSerializer, PrefixBuf, QNameBuf, XmlNamespaceBuf};
 
 use crate::{OwnedQuickName, XmlnsDeclaration};
 
@@ -75,36 +75,37 @@ where
     )
 }
 
-struct NamespaceScope<'a> {
-    pub defined_namespaces: BTreeMap<Prefix<'a>, XmlNamespace<'a>>,
+struct NamespaceScope {
+    pub defined_namespaces: BTreeMap<Cow<'static, Prefix>, Cow<'static, XmlNamespace>>,
 }
 
-impl<'a> NamespaceScope<'a> {
+impl NamespaceScope {
     pub fn new() -> Self {
         Self {
             defined_namespaces: BTreeMap::new(),
         }
     }
 
-    const XML_PREFIX: Prefix<'static> = Prefix::new_dangerous("xml");
-    const XML_NAMESPACE: XmlNamespace<'static> =
-        XmlNamespace::new_dangerous("http://www.w3.org/XML/1998/namespace");
+    const XML_PREFIX: &'static Prefix = unsafe { Prefix::new_unchecked("xml") };
+    const XML_NAMESPACE: &'static XmlNamespace =
+        unsafe { XmlNamespace::new_unchecked("http://www.w3.org/XML/1998/namespace") };
 
     pub fn top_scope() -> Self {
         let mut scope = Self::new();
-        scope
-            .defined_namespaces
-            .insert(Self::XML_PREFIX, Self::XML_NAMESPACE);
+        scope.defined_namespaces.insert(
+            Cow::Borrowed(Self::XML_PREFIX),
+            Cow::Borrowed(Self::XML_NAMESPACE),
+        );
         scope
     }
 
-    pub fn get_namespace<'b>(&'b self, prefix: &'b Prefix<'b>) -> Option<&'b XmlNamespace<'a>> {
-        self.defined_namespaces.get(prefix)
+    pub fn get_namespace<'b>(&'b self, prefix: &'b Prefix) -> Option<&'b XmlNamespace> {
+        self.defined_namespaces.get(prefix).map(|v| &**v)
     }
 }
 
-struct NamespaceScopeContainer<'a> {
-    scopes: Vec<NamespaceScope<'a>>,
+struct NamespaceScopeContainer {
+    scopes: Vec<NamespaceScope>,
     prefix_generator: PrefixGenerator,
 }
 
@@ -113,7 +114,7 @@ struct PrefixGenerator {
 }
 
 impl PrefixGenerator {
-    pub fn index_to_name(index: usize) -> Prefix<'static> {
+    pub fn index_to_name(index: usize) -> PrefixBuf {
         // 0 = a0
         // 1 = a1
         // 26 = b0
@@ -127,21 +128,21 @@ impl PrefixGenerator {
         let mut name = String::with_capacity(2);
         name.push(letter as char);
         name.push(number as char);
-        Prefix::new(name).expect("Invalid prefix generated")
+        PrefixBuf::new(name).expect("Invalid prefix generated")
     }
 
     pub fn new() -> Self {
         Self { count: 0 }
     }
 
-    pub fn new_prefix(&mut self) -> Prefix<'static> {
+    pub fn new_prefix(&mut self) -> PrefixBuf {
         let name = Self::index_to_name(self.count);
         self.count += 1;
         name
     }
 }
 
-impl<'a> NamespaceScopeContainer<'a> {
+impl NamespaceScopeContainer {
     pub fn new() -> Self {
         Self {
             scopes: vec![NamespaceScope::top_scope()],
@@ -157,7 +158,7 @@ impl<'a> NamespaceScopeContainer<'a> {
         self.scopes.pop()
     }
 
-    pub fn get_namespace<'b>(&'b self, prefix: &'b Prefix<'b>) -> Option<&'b XmlNamespace<'a>> {
+    pub fn get_namespace<'b>(&'b self, prefix: &'b Prefix) -> Option<&'b XmlNamespace> {
         self.scopes
             .iter()
             .rev()
@@ -165,25 +166,22 @@ impl<'a> NamespaceScopeContainer<'a> {
     }
 
     /// Find matching prefix
-    pub fn find_matching_namespace<'b>(
-        &'b self,
-        namespace: &'_ XmlNamespace<'_>,
-    ) -> Option<&'b Prefix<'a>> {
+    pub fn find_matching_namespace<'b>(&'b self, namespace: &XmlNamespace) -> Option<&'b Prefix> {
         self.scopes.iter().rev().find_map(|a| {
             a.defined_namespaces
                 .iter()
-                .find(|(_, found_namespace)| namespace == *found_namespace)
-                .map(|(prefix, _)| prefix)
+                .find(|(_, found_namespace)| *namespace == ***found_namespace)
+                .map(|(prefix, _)| &**prefix)
         })
     }
 
     /// This function takes in a namespace and tries to resolve it in different ways depending on the options provided. Unless `always_declare` is true, it will try to use an existing declaration. Otherwise, or if the namespace has not yet been declared, it will provide a declaration.
     pub fn resolve_namespace<'b>(
         &'b mut self,
-        namespace: &'_ XmlNamespace<'b>,
-        preferred_prefix: Option<&'b Prefix<'b>>,
+        namespace: &'_ XmlNamespace,
+        preferred_prefix: Option<&Prefix>,
         always_declare: IncludePrefix,
-    ) -> (Prefix<'a>, Option<XmlnsDeclaration<'a>>) {
+    ) -> (&'b Prefix, Option<XmlnsDeclaration<'b>>) {
         if always_declare != IncludePrefix::Always {
             let existing_prefix = self.find_matching_namespace(namespace);
 
@@ -193,7 +191,8 @@ impl<'a> NamespaceScopeContainer<'a> {
                         .is_none_or(|preferred_prefix| preferred_prefix == existing_prefix))
                     || always_declare == IncludePrefix::Never
                 {
-                    return (existing_prefix.clone(), None);
+                    let existing_prefix = self.find_matching_namespace(namespace).unwrap();
+                    return (existing_prefix, None);
                 }
             }
         }
@@ -208,37 +207,38 @@ impl<'a> NamespaceScopeContainer<'a> {
                     // ...if it is not already used and not the same as the existing prefix.
                     .filter(|p| self.get_namespace(p).is_none_or(|n| n == namespace))
             })
-            .cloned()
+            .map(|p| p.to_owned())
             // If the preferred namespace prefix is not available, use a random prefix.
-            .unwrap_or_else(|| self.prefix_generator.new_prefix())
-            .into_owned();
+            .unwrap_or_else(|| self.prefix_generator.new_prefix());
 
         let scope = self
             .scopes
             .last_mut()
             .expect("There should be at least one scope");
 
+        //TODO: This currently requires one more allocation than necessary. It requires https://github.com/rust-lang/rust/issues/65225 to be stabilized.
         scope
             .defined_namespaces
-            .insert(prefix.clone(), namespace.clone().into_owned());
+            .insert(Cow::Owned(prefix.clone()), Cow::Owned(namespace.to_owned()));
 
         let (prefix, namespace) = scope
             .defined_namespaces
-            .get_key_value(&prefix)
+            .get_key_value(Borrow::<Prefix>::borrow(&prefix))
             .expect("The namespace should be defined as it was just added");
 
-        let xmlns = XmlnsDeclaration::new(prefix.clone(), namespace.clone());
+        let xmlns = XmlnsDeclaration::new(prefix.as_ref(), namespace.as_ref());
 
-        (prefix.clone(), Some(xmlns))
+        (prefix.as_ref(), Some(xmlns))
     }
 
-    pub fn resolve_name<'c>(
-        &'c mut self,
-        local_name: LocalName<'c>,
-        namespace: &Option<XmlNamespace<'c>>,
-        preferred_prefix: Option<&'c Prefix<'c>>,
+    pub fn resolve_name<'a>(
+        &'a mut self,
+        local_name: ExpandedName<'a>,
+        preferred_prefix: Option<&'a Prefix>,
         always_declare: IncludePrefix,
     ) -> (QName<'a>, Option<XmlnsDeclaration<'a>>) {
+        let (local_name, namespace) = local_name.into_parts();
+
         let (prefix, declaration) = namespace
             .as_ref()
             .map(|namespace| self.resolve_namespace(namespace, preferred_prefix, always_declare))
@@ -246,7 +246,7 @@ impl<'a> NamespaceScopeContainer<'a> {
 
         let declaration = declaration.flatten();
 
-        let name = QName::new(prefix, local_name.into_owned());
+        let name = QName::new(prefix, local_name);
         (name, declaration)
     }
 }
@@ -254,8 +254,8 @@ impl<'a> NamespaceScopeContainer<'a> {
 /// The [`xmlity::Deserializer`] for the `quick-xml` crate.
 pub struct Serializer<W: Write> {
     writer: QuickXmlWriter<W>,
-    preferred_namespace_prefixes: BTreeMap<XmlNamespace<'static>, Prefix<'static>>,
-    namespace_scopes: NamespaceScopeContainer<'static>,
+    preferred_namespace_prefixes: BTreeMap<XmlNamespaceBuf, PrefixBuf>,
+    namespace_scopes: NamespaceScopeContainer,
     buffered_bytes_start: BytesStart<'static>,
     buffered_bytes_start_empty: bool,
 }
@@ -269,7 +269,7 @@ impl<W: Write> Serializer<W> {
     /// Create a new serializer with preferred namespace prefixes.
     pub fn new_with_namespaces(
         writer: QuickXmlWriter<W>,
-        preferred_namespace_prefixes: BTreeMap<XmlNamespace<'static>, Prefix<'static>>,
+        preferred_namespace_prefixes: BTreeMap<XmlNamespaceBuf, PrefixBuf>,
     ) -> Self {
         Self {
             writer,
@@ -292,23 +292,6 @@ impl<W: Write> Serializer<W> {
     fn pop_namespace_scope(&mut self) {
         self.namespace_scopes.pop_scope();
     }
-
-    fn resolve_name<'b>(
-        &mut self,
-        name: ExpandedName<'b>,
-        preferred_prefix: Option<&Prefix<'b>>,
-        always_declare: IncludePrefix,
-    ) -> (QName<'static>, Option<XmlnsDeclaration<'static>>) {
-        let (local_name, namespace) = name.into_parts();
-
-        let namespace_ref = namespace.as_ref();
-
-        let preferred_prefix = preferred_prefix
-            .or_else(|| namespace_ref.and_then(|a| self.preferred_namespace_prefixes.get(a)));
-
-        self.namespace_scopes
-            .resolve_name(local_name, &namespace, preferred_prefix, always_declare)
-    }
 }
 
 impl<W: Write> From<QuickXmlWriter<W>> for Serializer<W> {
@@ -326,29 +309,16 @@ impl<W: Write> From<W> for Serializer<W> {
 /// The main element serializer for the `quick-xml` crate.
 pub struct SerializeElement<'s, W: Write> {
     serializer: &'s mut Serializer<W>,
-    name: ExpandedName<'static>,
+    name: ExpandedNameBuf,
     include_prefix: IncludePrefix,
-    preferred_prefix: Option<Prefix<'static>>,
-}
-
-impl<W: Write> SerializeElement<'_, W> {
-    fn resolve_name_or_declare<'a>(
-        name: ExpandedName<'a>,
-        preferred_prefix: Option<&Prefix<'a>>,
-        enforce_prefix: IncludePrefix,
-        serializer: &mut Serializer<W>,
-    ) -> (QName<'a>, Option<XmlnsDeclaration<'a>>) {
-        let (qname, decl) = serializer.resolve_name(name, preferred_prefix, enforce_prefix);
-
-        (qname, decl)
-    }
+    preferred_prefix: Option<PrefixBuf>,
 }
 
 /// The attribute serializer for the `quick-xml` crate.
 pub struct AttributeSerializer<'t, W: Write> {
-    name: ExpandedName<'static>,
+    name: ExpandedNameBuf,
     serializer: &'t mut Serializer<W>,
-    preferred_prefix: Option<Prefix<'static>>,
+    preferred_prefix: Option<PrefixBuf>,
     enforce_prefix: IncludePrefix,
 }
 
@@ -465,34 +435,42 @@ impl<W: Write> ser::SerializeAttributeAccess for AttributeSerializer<'_, W> {
 
     fn preferred_prefix(
         &mut self,
-        preferred_prefix: Option<xmlity::Prefix<'_>>,
+        preferred_prefix: Option<&Prefix>,
     ) -> Result<Self::Ok, Self::Error> {
-        self.preferred_prefix = preferred_prefix.map(Prefix::into_owned);
+        self.preferred_prefix = preferred_prefix.map(Prefix::to_owned);
         Ok(())
     }
 
     fn end<S: Serialize>(self, value: &S) -> Result<Self::Ok, Self::Error> {
-        let (qname, decl) = SerializeElement::resolve_name_or_declare(
-            self.name,
-            self.preferred_prefix.as_ref(),
+        let preferred_prefix = self.preferred_prefix.as_deref().or_else(|| {
+            self.name
+                .namespace()
+                .and_then(|a| self.serializer.preferred_namespace_prefixes.get(a))
+                .map(|p| &**p)
+        });
+
+        let (qname, decl) = self.serializer.namespace_scopes.resolve_name(
+            self.name.as_ref(),
+            preferred_prefix,
             self.enforce_prefix,
-            self.serializer,
         );
 
         if let Some(decl) = decl {
-            self.serializer.push_decl_attr(decl);
+            self.serializer.buffered_bytes_start.push_declaration(decl);
         }
 
         let mut text_ser = TextSerializer { value: None };
 
         value.serialize(&mut text_ser)?;
 
-        self.serializer.push_attr(
+        self.serializer.buffered_bytes_start.push_attribute_xmlity(
             qname,
-            text_ser
-                .value
-                .expect("TextSerializer should have a value")
-                .into_bytes(),
+            Cow::Owned(
+                text_ser
+                    .value
+                    .expect("TextSerializer should have a value")
+                    .into_bytes(),
+            ),
         );
 
         Ok(())
@@ -510,10 +488,10 @@ impl<W: Write> ser::AttributeSerializer for &mut SerializeElementAttributes<'_, 
 
     fn serialize_attribute(
         &mut self,
-        name: &'_ ExpandedName<'_>,
+        name: &'_ ExpandedName,
     ) -> Result<Self::SerializeAttribute<'_>, Self::Error> {
         Ok(Self::SerializeAttribute {
-            name: name.clone().into_owned(),
+            name: name.into_owned(),
             serializer: self.serializer.deref_mut(),
             preferred_prefix: None,
             enforce_prefix: IncludePrefix::default(),
@@ -526,7 +504,7 @@ impl<W: Write> ser::AttributeSerializer for &mut SerializeElementAttributes<'_, 
 }
 
 impl<'s, W: Write> SerializeElement<'s, W> {
-    fn finish_start(self) -> (QName<'static>, &'s mut Serializer<W>) {
+    fn finish_start(self) -> (QNameBuf, &'s mut Serializer<W>) {
         let Self {
             name,
             include_prefix,
@@ -541,18 +519,26 @@ impl<'s, W: Write> SerializeElement<'s, W> {
 
         serializer.buffered_bytes_start.clear_attributes();
 
-        let (qname, decl) = SerializeElement::resolve_name_or_declare(
-            name.clone(),
-            preferred_prefix.as_ref(),
+        let preferred_prefix = preferred_prefix.as_deref().or_else(|| {
+            name.as_ref()
+                .namespace()
+                .and_then(|a| serializer.preferred_namespace_prefixes.get(a))
+                .map(|p| &**p)
+        });
+
+        let (qname, decl) = serializer.namespace_scopes.resolve_name(
+            name.as_ref(),
+            preferred_prefix,
             include_prefix,
-            serializer,
         );
+        let qname = qname.into_owned();
+
         serializer
             .buffered_bytes_start
             .set_name(qname.to_string().as_bytes());
 
         if let Some(decl) = decl {
-            serializer.push_decl_attr(decl);
+            serializer.buffered_bytes_start.push_declaration(decl);
         }
         serializer.buffered_bytes_start_empty = false;
 
@@ -580,7 +566,7 @@ impl<'s, W: Write> SerializeElement<'s, W> {
 /// Provides the implementation of [`ser::SerializeElement`] for the `quick-xml` crate.
 pub struct SerializeElementAttributes<'s, W: Write> {
     serializer: &'s mut Serializer<W>,
-    end_name: QName<'static>,
+    end_name: QNameBuf,
 }
 
 impl<W: Write> ser::SerializeAttributes for SerializeElementAttributes<'_, W> {
@@ -622,9 +608,9 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
     }
     fn preferred_prefix(
         &mut self,
-        preferred_prefix: Option<Prefix<'_>>,
+        preferred_prefix: Option<&Prefix>,
     ) -> Result<Self::Ok, Self::Error> {
-        self.preferred_prefix = preferred_prefix.map(Prefix::into_owned);
+        self.preferred_prefix = preferred_prefix.map(Prefix::to_owned);
         Ok(())
     }
 
@@ -662,7 +648,7 @@ impl<'s, W: Write> ser::SerializeElement for SerializeElement<'s, W> {
 ///Provides the implementation of `SerializeSeq` trait for element children for the `quick-xml` crate.
 pub struct ChildrenSerializeSeq<'s, W: Write> {
     serializer: &'s mut Serializer<W>,
-    end_name: QName<'static>,
+    end_name: QNameBuf,
 }
 
 impl<W: Write> ser::SerializeSeq for ChildrenSerializeSeq<'_, W> {
@@ -682,7 +668,7 @@ impl<W: Write> ser::SerializeSeq for ChildrenSerializeSeq<'_, W> {
                 .map_err(Error::Io)?;
             self.serializer.buffered_bytes_start_empty = true;
         } else {
-            let end_name = OwnedQuickName::new(&self.end_name);
+            let end_name = OwnedQuickName::new(&self.end_name.as_ref());
 
             let bytes_end = BytesEnd::from(end_name.as_ref());
 
@@ -716,6 +702,29 @@ impl<W: Write> ser::SerializeSeq for SerializeSeq<'_, W> {
     }
 }
 
+trait BytesStartExt<'a> {
+    fn push_attribute_xmlity(&mut self, qname: QName<'_>, value: Cow<'a, [u8]>);
+
+    fn push_declaration(&mut self, decl: XmlnsDeclaration<'_>);
+}
+
+impl<'a> BytesStartExt<'a> for BytesStart<'a> {
+    fn push_attribute_xmlity(&mut self, qname: QName<'_>, value: Cow<'a, [u8]>) {
+        self.push_attribute(quick_xml::events::attributes::Attribute {
+            key: quick_xml::name::QName(qname.to_string().as_bytes()),
+            value,
+        });
+    }
+
+    fn push_declaration(&mut self, decl: XmlnsDeclaration<'_>) {
+        let XmlnsDeclaration { namespace, prefix } = decl;
+
+        let key = XmlnsDeclaration::xmlns_qname(prefix);
+
+        self.push_attribute_xmlity(key, Cow::Owned(namespace.as_str().as_bytes().to_vec()));
+    }
+}
+
 impl<W: Write> Serializer<W> {
     fn try_start(&mut self) -> Result<(), Error> {
         if !self.buffered_bytes_start_empty {
@@ -725,22 +734,6 @@ impl<W: Write> Serializer<W> {
             self.buffered_bytes_start_empty = true;
         }
         Ok(())
-    }
-
-    fn push_attr(&mut self, qname: QName<'_>, value: Vec<u8>) {
-        self.buffered_bytes_start
-            .push_attribute(quick_xml::events::attributes::Attribute {
-                key: quick_xml::name::QName(qname.to_string().as_bytes()),
-                value: Cow::Owned(value),
-            });
-    }
-
-    fn push_decl_attr(&mut self, decl: XmlnsDeclaration<'_>) {
-        let XmlnsDeclaration { namespace, prefix } = decl;
-
-        let key = XmlnsDeclaration::xmlns_qname(prefix);
-
-        self.push_attr(key, namespace.as_str().as_bytes().to_vec());
     }
 }
 
@@ -772,7 +765,7 @@ impl<'s, W: Write> xmlity::Serializer for &'s mut Serializer<W> {
 
         Ok(SerializeElement {
             serializer: self,
-            name: name.clone().into_owned(),
+            name: name.into_owned(),
             include_prefix: IncludePrefix::default(),
             preferred_prefix: None,
         })

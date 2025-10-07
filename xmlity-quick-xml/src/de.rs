@@ -14,10 +14,10 @@ use xmlity::{
         self, DeserializeContext, Error as _, Visitor, XmlCData, XmlComment, XmlDeclaration,
         XmlDoctype, XmlProcessingInstruction, XmlText,
     },
-    Deserialize, ExpandedName, LocalName, XmlNamespace,
+    Deserialize, ExpandedName, ExpandedNameBuf, LocalName, XmlNamespace,
 };
 
-use crate::{xml_namespace_from_resolve_result, HasQuickXmlAlternative, OwnedQuickName};
+use crate::{xml_namespace_from_resolve_result, HasQuickXmlAlternative};
 
 /// Errors that can occur when using this crate.
 #[derive(Debug, thiserror::Error)]
@@ -42,9 +42,9 @@ pub enum Error {
     #[error("Wrong name: expected {expected:?}, got {actual:?}")]
     WrongName {
         /// The actual name.
-        actual: Box<ExpandedName<'static>>,
+        actual: Box<ExpandedNameBuf>,
         /// The expected name.
-        expected: Box<ExpandedName<'static>>,
+        expected: Box<ExpandedNameBuf>,
     },
     /// Unknown child.
     #[error("Unknown child")]
@@ -93,8 +93,8 @@ impl xmlity::de::Error for Error {
 
     fn wrong_name(actual: &ExpandedName<'_>, expected: &ExpandedName<'_>) -> Self {
         Error::WrongName {
-            actual: Box::new(actual.as_ref().into_owned()),
-            expected: Box::new(expected.as_ref().into_owned()),
+            actual: Box::new(actual.into_owned()),
+            expected: Box::new(expected.into_owned()),
         }
     }
 
@@ -187,18 +187,20 @@ impl<'i> Reader<'i> {
     }
 
     pub fn resolve_qname<'a>(&'a self, qname: QuickName<'a>, attribute: bool) -> ExpandedName<'a> {
+        let namespace = self.resolve_namespace(qname, attribute);
+
+        ExpandedName::new(<&LocalName>::from_quick_xml(qname.local_name()), namespace)
+    }
+
+    pub fn resolve_namespace<'a>(
+        &'a self,
+        qname: QuickName<'_>,
+        attribute: bool,
+    ) -> Option<&'a XmlNamespace> {
         let (resolve_result, _) = self.reader.resolve(qname, attribute);
         let namespace = xml_namespace_from_resolve_result(resolve_result);
 
-        ExpandedName::new(LocalName::from_quick_xml(qname.local_name()), namespace)
-    }
-
-    pub fn resolve_bytes_start<'a>(&'a self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
-        self.resolve_qname(bytes_start.name(), false)
-    }
-
-    pub fn resolve_attribute<'a>(&'a self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
-        self.resolve_qname(attribute.key, true)
+        namespace
     }
 
     pub fn current_depth(&self) -> i16 {
@@ -337,19 +339,19 @@ impl<'i> Deserializer<'i> {
         self.reader.resolve_qname(qname, attribute)
     }
 
-    fn resolve_bytes_start<'a>(&'a self, bytes_start: &'a BytesStart<'a>) -> ExpandedName<'a> {
-        self.reader.resolve_bytes_start(bytes_start)
-    }
-
-    fn resolve_attribute<'a>(&'a self, attribute: &'a Attribute<'a>) -> ExpandedName<'a> {
-        self.reader.resolve_attribute(attribute)
+    fn resolve_namespace<'a>(
+        &'a self,
+        qname: QuickName<'_>,
+        attribute: bool,
+    ) -> Option<&'a XmlNamespace> {
+        self.reader.resolve_namespace(qname, attribute)
     }
 }
 
 struct ElementAccess<'a, 'de> {
     deserializer: Option<&'a mut Deserializer<'de>>,
     attribute_index: usize,
-    bytes_start: Option<BytesStart<'de>>,
+    bytes_start: Option<&'a BytesStart<'de>>,
     start_depth: i16,
     empty: bool,
 }
@@ -365,21 +367,19 @@ impl<'r> ElementAccess<'_, 'r> {
 const PLACEHOLDER_ELEMENT_NAME: &str = "a";
 
 impl DeserializeContext for &Deserializer<'_> {
-    fn default_namespace(&self) -> Option<XmlNamespace<'_>> {
+    fn default_namespace(&self) -> Option<&XmlNamespace> {
         let (_, namespace) = self
             .resolve_qname(QuickName(PLACEHOLDER_ELEMENT_NAME.as_bytes()), false)
             .into_parts();
 
-        namespace.map(XmlNamespace::into_owned)
+        namespace
     }
 
-    fn resolve_prefix(&self, prefix: xmlity::Prefix<'_>) -> Option<XmlNamespace<'_>> {
+    fn resolve_prefix(&self, prefix: &xmlity::Prefix) -> Option<&XmlNamespace> {
         let name = format!("{prefix}:{PLACEHOLDER_ELEMENT_NAME}");
-        let (_, namespace) = self
-            .resolve_qname(QuickName(name.as_bytes()), false)
-            .into_parts();
+        let namespace = self.resolve_namespace(QuickName(name.as_bytes()), false);
 
-        namespace.map(XmlNamespace::into_owned)
+        namespace
     }
 
     fn external_data<T>(&self) -> Option<&T>
@@ -391,7 +391,7 @@ impl DeserializeContext for &Deserializer<'_> {
 }
 
 struct AttributeAccess<'a, 'v> {
-    name: ExpandedName<'v>,
+    name: ExpandedName<'a>,
     value: Cow<'v, [u8]>,
     deserializer: &'a Deserializer<'a>,
 }
@@ -399,8 +399,8 @@ struct AttributeAccess<'a, 'v> {
 impl<'de> de::AttributeAccess<'de> for AttributeAccess<'_, 'de> {
     type Error = Error;
 
-    fn name(&self) -> ExpandedName<'de> {
-        self.name.clone()
+    fn name(&self) -> ExpandedName<'_> {
+        self.name
     }
 
     /// Deserializes the value of the attribute.
@@ -526,7 +526,7 @@ impl<'de> de::Deserializer<'de> for TextDeserializer<'_, 'de> {
 }
 
 struct AttributeDeserializer<'a, 'v> {
-    name: ExpandedName<'v>,
+    name: ExpandedName<'a>,
     value: Cow<'v, [u8]>,
     deserializer: &'a Deserializer<'a>,
 }
@@ -566,27 +566,27 @@ impl Drop for SubAttributesAccess<'_, '_> {
     }
 }
 
-fn key_is_declaration(key: &ExpandedName) -> bool {
+fn key_is_declaration(key: ExpandedName) -> bool {
     *key.namespace() == Some(XmlNamespace::XMLNS)
-        || (key.local_name() == &LocalName::new_dangerous("xmlns") && key.namespace().is_none())
+        || (key.local_name() == LocalName::XMLNS && key.namespace().is_none())
 }
 
 fn next_attribute<'a, 'de, T: Deserialize<'de>>(
-    deserializer: &'a Deserializer<'_>,
-    bytes_start: &'a BytesStart<'_>,
+    deserializer: &'a Deserializer<'de>,
+    bytes_start: &'a BytesStart<'de>,
     attribute_index: &'a mut usize,
 ) -> Result<Option<T>, Error> {
     while let Some(attribute) = bytes_start.attributes().nth(*attribute_index) {
-        let attribute = attribute?;
+        let attribute: Attribute<'_> = attribute?;
 
-        let key = deserializer.resolve_attribute(&attribute).into_owned();
+        let key: ExpandedName<'_> = deserializer.resolve_qname(attribute.key, true);
 
-        if key_is_declaration(&key) {
+        if key_is_declaration(key) {
             *attribute_index += 1;
             continue;
         }
 
-        let deserializer: AttributeDeserializer<'_, 'static> = AttributeDeserializer {
+        let deserializer: AttributeDeserializer<'_, 'de> = AttributeDeserializer {
             name: key,
             value: Cow::Owned(attribute.value.into_owned()),
             deserializer,
@@ -679,10 +679,12 @@ impl<'a, 'de> de::ElementAccess<'de> for ElementAccess<'a, 'de> {
         Self: 'b;
 
     fn name(&self) -> ExpandedName<'_> {
-        self.deserializer().resolve_bytes_start(
+        self.deserializer().resolve_qname(
             self.bytes_start
                 .as_ref()
-                .expect("bytes_start should be set"),
+                .expect("bytes_start should be set")
+                .name(),
+            false,
         )
     }
 
@@ -1021,12 +1023,10 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
 
         match event {
             Event::Start(bytes_start) => {
-                let element_name = OwnedQuickName(bytes_start.name().0.to_owned());
-
                 let mut sub = self.sub_deserializer(self.reader.current_depth());
 
                 let element = ElementAccess {
-                    bytes_start: Some(bytes_start),
+                    bytes_start: Some(&bytes_start),
                     start_depth: self.reader.current_depth(),
                     deserializer: Some(&mut sub),
                     empty: false,
@@ -1042,28 +1042,27 @@ impl<'r> xmlity::Deserializer<'r> for &mut Deserializer<'r> {
                 let end_event = self
                     .next_event()
                     .ok_or_else(|| Error::StartElementWithoutEnd {
-                        name: String::from_utf8_lossy(element_name.0.as_slice()).to_string(),
+                        name: String::from_utf8_lossy(bytes_start.name().0).to_string(),
                     })?;
 
                 if let Event::End(bytes_end) = &end_event {
-                    if bytes_end.name() == element_name.as_ref() {
+                    if bytes_end.name() == bytes_start.name() {
                         Ok(value)
                     } else {
                         Err(Error::NoMatchingEndElement {
-                            start_name: String::from_utf8_lossy(element_name.0.as_slice())
-                                .to_string(),
+                            start_name: String::from_utf8_lossy(bytes_start.name().0).to_string(),
                             end_name: String::from_utf8_lossy(bytes_end.name().0).to_string(),
                         })
                     }
                 } else {
                     Err(Error::StartElementWithoutEnd {
-                        name: String::from_utf8_lossy(element_name.0.as_slice()).to_string(),
+                        name: String::from_utf8_lossy(bytes_start.name().0).to_string(),
                     })
                 }
             }
             Event::End(_bytes_end) => Err(Error::custom("Unexpected end element")),
             Event::Empty(bytes_start) => visitor.visit_element(ElementAccess {
-                bytes_start: Some(bytes_start),
+                bytes_start: Some(&bytes_start),
                 start_depth: self.reader.current_depth(),
                 deserializer: Some(self),
                 empty: true,

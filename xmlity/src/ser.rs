@@ -111,7 +111,7 @@ pub trait SerializeElement {
     /// Set the preferred prefix for this element.
     fn preferred_prefix(
         &mut self,
-        preferred_prefix: Option<Prefix<'_>>,
+        preferred_prefix: Option<&Prefix>,
     ) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize the attributes of this element.
@@ -252,7 +252,7 @@ pub trait SerializeAttributeAccess: Sized {
     /// Set the preferred prefix to use when serializing.
     fn preferred_prefix(
         &mut self,
-        preferred_prefix: Option<Prefix<'_>>,
+        preferred_prefix: Option<&Prefix>,
     ) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize the attribute.

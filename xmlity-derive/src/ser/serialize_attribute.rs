@@ -24,7 +24,7 @@ impl<'a> SerializeAttributeStructUnnamedSingleFieldBuilder<'a> {
         Self { ast, opts }
     }
 
-    pub fn to_builder(&self) -> DeriveResult<StructSerializeAttributeBuilder> {
+    pub fn to_builder(&self) -> DeriveResult<StructSerializeAttributeBuilder<'_>> {
         let DeriveInput {
             ident, generics, ..
         } = &self.ast;
