@@ -16,7 +16,7 @@ exclude = ["xmlity-book/"]
 [workspace.dependencies]
 thiserror = "^2.0.4"
 pretty_assertions = "^1.4.1"
-rstest = "^0.25.0"
+rstest = "^0.26.1"
 xmlity-derive = { version = "^0.0.8", path = "./xmlity-derive" }
 xmlity = { version = "^0.0.8", path = "./xmlity" }
 xmlity-quick-xml = { version = "^0.0.8", path = "./xmlity-quick-xml" }
