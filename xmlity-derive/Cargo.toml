@@ -13,7 +13,7 @@ exclude.workspace = true
 
 [dependencies]
 syn = { version = "2.0.65", features = ["parsing", "visit", "extra-traits"] }
-proc-macro2 = "^1.0.80"
+proc-macro2 = "^1.0.103"
 quote = "^1.0.35"
 darling = "0.20.3"
 
