@@ -9,3 +9,19 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    ignore:
+        # We don't need to upgrade patch versions - they will work regardless.
+      - dependency-name: "proc-macro2"
+        update-types: ["version-update:semver-patch"]
+      - dependency-name: "thiserror"
+        update-types: ["version-update:semver-patch"]
+      - dependency-name: "quick-xml"
+        update-types: ["version-update:semver-patch"]
+      - dependency-name: "darling"
+        update-types: ["version-update:semver-patch"]
+        # Only used for dev. It doesn't need to be updated except for security critical patches.
+      - dependency-name: "rstest"
+      - dependency-name: "pretty_assertions"
+      - dependency-name: "criterion"
+      - dependency-name: "ntest"
+      
