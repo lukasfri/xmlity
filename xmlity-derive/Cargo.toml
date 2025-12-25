@@ -15,7 +15,7 @@ exclude.workspace = true
 syn = { version = "2.0.65", features = ["parsing", "visit", "extra-traits"] }
 proc-macro2 = "^1.0.80"
 quote = "^1.0.35"
-darling = "0.20.3"
+darling = "0.23.0"
 
 [lib]
 proc-macro = true
