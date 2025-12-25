@@ -14,7 +14,7 @@ license = "MIT OR Apache-2.0"
 exclude = ["xmlity-book/"]
 
 [workspace.dependencies]
-thiserror = "^2.0.4"
+thiserror = "^2.0.17"
 pretty_assertions = "^1.4.1"
 rstest = "^0.25.0"
 xmlity-derive = { version = "^0.0.8", path = "./xmlity-derive" }
