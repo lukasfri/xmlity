@@ -1,5 +1,5 @@
 use xmlity::{
-    DeserializationGroup, Deserialize, LocalName, SerializationGroup, Serialize, XmlNamespace,
+    DeserializationGroup, Deserialize, LocalNameBuf, SerializationGroup, Serialize, XmlNamespace,
 };
 
 #[test]
@@ -239,7 +239,7 @@ fn top_level_xs_wrapped_element_equals_element() {
     #[xgroup(children_order = "strict")]
     struct TopLevelElement {
         #[xattribute(name = "name")]
-        pub name: LocalName<'static>,
+        pub name: LocalNameBuf,
         // #[xvalue(default)]
         // pub annotation: Option<Anno>,
         #[xvalue(default)]

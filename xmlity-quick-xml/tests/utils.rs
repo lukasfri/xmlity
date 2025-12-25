@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
-use xmlity::{Prefix, XmlNamespace};
+use xmlity::{PrefixBuf, XmlNamespaceBuf};
 
 pub fn quick_xml_serialize_test<T: xmlity::Serialize + std::fmt::Debug>(
     input: T,
@@ -12,17 +12,18 @@ pub fn quick_xml_serialize_test<T: xmlity::Serialize + std::fmt::Debug>(
 
 pub fn quick_xml_serialize_test_with_default<T: xmlity::Serialize + std::fmt::Debug>(
     input: T,
-    default_namespace: Option<XmlNamespace<'static>>,
+    default_namespace: Option<XmlNamespaceBuf>,
 ) -> Result<String, xmlity_quick_xml::ser::Error> {
     let serializer = quick_xml::Writer::new(Vec::new());
     let mut serializer = xmlity_quick_xml::Serializer::new_with_namespaces(serializer, {
         let mut map = BTreeMap::new();
         map.insert(
-            XmlNamespace::new("http://my.namespace.example.com/this/is/a/namespace").unwrap(),
-            Prefix::new("testns").expect("testns is a valid prefix"),
+            XmlNamespaceBuf::from_str("http://my.namespace.example.com/this/is/a/namespace")
+                .unwrap(),
+            PrefixBuf::from_str("testns").expect("testns is a valid prefix"),
         );
         if let Some(default_namespace) = default_namespace {
-            map.insert(default_namespace, Prefix::default());
+            map.insert(default_namespace, PrefixBuf::default());
         }
         map
     });

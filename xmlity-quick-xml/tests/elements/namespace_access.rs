@@ -1,11 +1,12 @@
 use xmlity::de::DeserializeContext;
 
 use crate::define_deserialize_test;
-use xmlity::XmlNamespace;
+use std::str::FromStr;
 use xmlity::{Deserialize, Prefix};
+use xmlity::{XmlNamespace, XmlNamespaceBuf};
 
 #[derive(Debug, PartialEq)]
-pub struct InternalReference(pub XmlNamespace<'static>);
+pub struct InternalReference(pub XmlNamespaceBuf);
 
 impl<'de> Deserialize<'de> for InternalReference {
     fn deserialize<D: xmlity::Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
@@ -25,9 +26,9 @@ impl<'de> Deserialize<'de> for InternalReference {
 
                 let namespace = value
                     .context()
-                    .resolve_prefix(prefix.as_ref())
+                    .resolve_prefix(prefix)
                     .ok_or_else(|| E::custom(format!("Prefix {prefix:?} is not defined")))?
-                    .into_owned();
+                    .to_owned();
 
                 Ok(InternalReference(namespace))
             }
@@ -52,12 +53,12 @@ pub struct PrefixElement(InternalReference);
 define_deserialize_test!(
     element_with_internal_reference,
     [(PrefixElement(
-       InternalReference(XmlNamespace::new_dangerous("http://my.namespace.example.com/this/is/a/namespace"))
+       InternalReference(XmlNamespaceBuf::from_str("http://my.namespace.example.com/this/is/a/namespace").unwrap())
     ), "<myns:prefix xmlns:myns=\"http://my.namespace.example.com/this/is/a/namespace\">myns</myns:prefix>")]
 );
 
 #[derive(Debug, PartialEq)]
-pub struct DefaultNamespace(pub Option<XmlNamespace<'static>>);
+pub struct DefaultNamespace(pub Option<XmlNamespaceBuf>);
 
 impl<'de> Deserialize<'de> for DefaultNamespace {
     fn deserialize<D: xmlity::Deserializer<'de>>(reader: D) -> Result<Self, D::Error> {
@@ -74,7 +75,7 @@ impl<'de> Deserialize<'de> for DefaultNamespace {
                 let namespace = value
                     .context()
                     .default_namespace()
-                    .map(XmlNamespace::into_owned);
+                    .map(XmlNamespace::to_owned);
 
                 Ok(DefaultNamespace(namespace))
             }
@@ -98,9 +99,10 @@ pub struct NamespaceElement(DefaultNamespace);
 define_deserialize_test!(
     element_with_default_namespace,
     [(
-        NamespaceElement(DefaultNamespace(Some(XmlNamespace::new_dangerous(
-            "http://my.namespace.example.com/this/is/a/namespace"
-        )))),
+        NamespaceElement(DefaultNamespace(Some(
+            XmlNamespaceBuf::from_str("http://my.namespace.example.com/this/is/a/namespace")
+                .unwrap()
+        ))),
         "<default xmlns=\"http://my.namespace.example.com/this/is/a/namespace\">Abcde</default>"
     )]
 );

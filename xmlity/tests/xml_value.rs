@@ -1,9 +1,11 @@
 #![cfg(feature = "derive")]
+use std::str::FromStr;
+
 use pretty_assertions::assert_eq;
 
 use xmlity::{
     value::{XmlChild, XmlElement, XmlText, XmlValue},
-    Deserialize, ExpandedName, LocalName, Serialize,
+    Deserialize, ExpandedNameBuf, LocalNameBuf, Serialize,
 };
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -16,8 +18,11 @@ fn xml_value_1d_struct() -> To {
 
 fn xml_value_1d_struct_value() -> XmlValue {
     XmlValue::Element(
-        XmlElement::new(ExpandedName::new(LocalName::new("to").unwrap(), None))
-            .with_children(vec![XmlChild::Text(XmlText::new("Tove"))]),
+        XmlElement::new(ExpandedNameBuf::new(
+            LocalNameBuf::from_str("to").unwrap(),
+            None,
+        ))
+        .with_children(vec![XmlChild::Text(XmlText::new("Tove"))]),
     )
 }
 
@@ -74,18 +79,32 @@ fn xml_value_2d_struct() -> Note {
 
 fn xml_value_2d_struct_value() -> XmlValue {
     XmlValue::Element(
-        XmlElement::new(ExpandedName::new(LocalName::new("note").unwrap(), None)).with_children(
-            vec![
-                XmlElement::new(ExpandedName::new(LocalName::new("to").unwrap(), None))
-                    .with_child(XmlChild::Text(XmlText::new("Tove"))),
-                XmlElement::new(ExpandedName::new(LocalName::new("from").unwrap(), None))
-                    .with_child(XmlText::new("Jani")),
-                XmlElement::new(ExpandedName::new(LocalName::new("heading").unwrap(), None))
-                    .with_child(XmlText::new("Reminder")),
-                XmlElement::new(ExpandedName::new(LocalName::new("body").unwrap(), None))
-                    .with_child(XmlText::new("Don't forget me this weekend!")),
-            ],
-        ),
+        XmlElement::new(ExpandedNameBuf::new(
+            LocalNameBuf::from_str("note").unwrap(),
+            None,
+        ))
+        .with_children(vec![
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("to").unwrap(),
+                None,
+            ))
+            .with_child(XmlChild::Text(XmlText::new("Tove"))),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("from").unwrap(),
+                None,
+            ))
+            .with_child(XmlText::new("Jani")),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("heading").unwrap(),
+                None,
+            ))
+            .with_child(XmlText::new("Reminder")),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("body").unwrap(),
+                None,
+            ))
+            .with_child(XmlText::new("Don't forget me this weekend!")),
+        ]),
     )
 }
 
@@ -192,91 +211,151 @@ fn xml_value_3d_list() -> BreakfastMenu {
 
 fn xml_value_3d_list_value() -> XmlValue {
     XmlValue::Element(
-        XmlElement::new(ExpandedName::new(
-            LocalName::new("breakfast_menu").unwrap(),
+        XmlElement::new(ExpandedNameBuf::new(
+            LocalNameBuf::from_str("breakfast_menu").unwrap(),
             None,
         ))
         .with_children(vec![
-            XmlElement::new(ExpandedName::new(LocalName::new("food").unwrap(), None))
-                .with_children(vec![
-                    XmlElement::new(ExpandedName::new(LocalName::new("name").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("Belgian Waffles"))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("price").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("$5.95"))),
-                    XmlElement::new(ExpandedName::new(
-                        LocalName::new("description").unwrap(),
-                        None,
-                    ))
-                    .with_child(XmlChild::Text(XmlText::new(
-                        "Two of our famous Belgian Waffles with plenty of real maple syrup",
-                    ))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("calories").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("650"))),
-                ]),
-            XmlElement::new(ExpandedName::new(LocalName::new("food").unwrap(), None))
-                .with_children(vec![
-                    XmlElement::new(ExpandedName::new(LocalName::new("name").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("Strawberry Belgian Waffles"))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("price").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("$7.95"))),
-                    XmlElement::new(ExpandedName::new(
-                        LocalName::new("description").unwrap(),
-                        None,
-                    ))
-                    .with_child(XmlChild::Text(XmlText::new(
-                        "Light Belgian waffles covered with strawberries and whipped cream",
-                    ))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("calories").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("900"))),
-                ]),
-            XmlElement::new(ExpandedName::new(LocalName::new("food").unwrap(), None))
-                .with_children(vec![
-                    XmlElement::new(ExpandedName::new(LocalName::new("name").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("Berry-Berry Belgian Waffles"))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("price").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("$8.95"))),
-                    XmlElement::new(ExpandedName::new(
-                        LocalName::new("description").unwrap(),
-                        None,
-                    ))
-                    .with_child(XmlChild::Text(XmlText::new(
-                        "Belgian waffles covered with assorted fresh berries and whipped cream",
-                    ))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("calories").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("900"))),
-                ]),
-            XmlElement::new(ExpandedName::new(LocalName::new("food").unwrap(), None))
-                .with_children(vec![
-                    XmlElement::new(ExpandedName::new(LocalName::new("name").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("French Toast"))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("price").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("$4.50"))),
-                    XmlElement::new(ExpandedName::new(
-                        LocalName::new("description").unwrap(),
-                        None,
-                    ))
-                    .with_child(XmlChild::Text(XmlText::new(
-                        "Thick slices made from our homemade sourdough bread",
-                    ))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("calories").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("600"))),
-                ]),
-            XmlElement::new(ExpandedName::new(LocalName::new("food").unwrap(), None))
-                .with_children(vec![
-                    XmlElement::new(ExpandedName::new(LocalName::new("name").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("Homestyle Breakfast"))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("price").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("$6.95"))),
-                    XmlElement::new(ExpandedName::new(
-                        LocalName::new("description").unwrap(),
-                        None,
-                    ))
-                    .with_child(XmlChild::Text(XmlText::new(
-                        "Two eggs, bacon or sausage, toast, and our ever-popular hash browns",
-                    ))),
-                    XmlElement::new(ExpandedName::new(LocalName::new("calories").unwrap(), None))
-                        .with_child(XmlChild::Text(XmlText::new("950"))),
-                ]),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("food").unwrap(),
+                None,
+            ))
+            .with_children(vec![
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("name").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("Belgian Waffles"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("price").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("$5.95"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("description").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new(
+                    "Two of our famous Belgian Waffles with plenty of real maple syrup",
+                ))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("calories").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("650"))),
+            ]),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("food").unwrap(),
+                None,
+            ))
+            .with_children(vec![
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("name").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("Strawberry Belgian Waffles"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("price").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("$7.95"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("description").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new(
+                    "Light Belgian waffles covered with strawberries and whipped cream",
+                ))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("calories").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("900"))),
+            ]),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("food").unwrap(),
+                None,
+            ))
+            .with_children(vec![
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("name").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("Berry-Berry Belgian Waffles"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("price").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("$8.95"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("description").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new(
+                    "Belgian waffles covered with assorted fresh berries and whipped cream",
+                ))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("calories").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("900"))),
+            ]),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("food").unwrap(),
+                None,
+            ))
+            .with_children(vec![
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("name").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("French Toast"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("price").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("$4.50"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("description").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new(
+                    "Thick slices made from our homemade sourdough bread",
+                ))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("calories").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("600"))),
+            ]),
+            XmlElement::new(ExpandedNameBuf::new(
+                LocalNameBuf::from_str("food").unwrap(),
+                None,
+            ))
+            .with_children(vec![
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("name").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("Homestyle Breakfast"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("price").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("$6.95"))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("description").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new(
+                    "Two eggs, bacon or sausage, toast, and our ever-popular hash browns",
+                ))),
+                XmlElement::new(ExpandedNameBuf::new(
+                    LocalNameBuf::from_str("calories").unwrap(),
+                    None,
+                ))
+                .with_child(XmlChild::Text(XmlText::new("950"))),
+            ]),
         ]),
     )
 }

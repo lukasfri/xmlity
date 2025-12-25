@@ -21,7 +21,7 @@ use crate::{
     de,
     ser::{self, IncludePrefix},
     types::iterator::IteratorVisitor,
-    ExpandedName, Prefix,
+    ExpandedName, ExpandedNameBuf, PrefixBuf,
 };
 
 pub mod deserialize;
@@ -246,7 +246,7 @@ impl From<XmlComment> for XmlChild {
 #[non_exhaustive]
 pub struct XmlElement {
     /// The name of the element.
-    pub name: ExpandedName<'static>,
+    pub name: ExpandedNameBuf,
     /// The attributes of the element.
     pub attributes: VecDeque<XmlAttribute>,
     /// The children of the element.
@@ -254,12 +254,12 @@ pub struct XmlElement {
     /// Whether to enforce the prefix of the element.
     pub enforce_prefix: IncludePrefix,
     /// The preferred prefix of the element.
-    pub preferred_prefix: Option<Prefix<'static>>,
+    pub preferred_prefix: Option<PrefixBuf>,
 }
 
 impl XmlElement {
     /// Creates a new XML element.
-    pub fn new<T: Into<ExpandedName<'static>>>(name: T) -> Self {
+    pub fn new<T: Into<ExpandedNameBuf>>(name: T) -> Self {
         Self {
             name: name.into(),
             attributes: VecDeque::new(),
@@ -308,14 +308,14 @@ impl XmlElement {
 #[non_exhaustive]
 pub struct XmlAttribute {
     /// The name of the attribute.
-    pub name: ExpandedName<'static>,
+    pub name: ExpandedNameBuf,
     /// The value of the attribute.
     pub value: XmlText,
 }
 
 impl XmlAttribute {
     /// Creates a new XML attribute.
-    pub fn new<T: Into<ExpandedName<'static>>, U: Into<XmlText>>(name: T, value: U) -> Self {
+    pub fn new<T: Into<ExpandedNameBuf>, U: Into<XmlText>>(name: T, value: U) -> Self {
         Self {
             name: name.into(),
             value: value.into(),
@@ -491,9 +491,9 @@ pub enum XmlValueDeserializerError {
     #[error("Wrong name: {actual:?}, expected: {expected:?}")]
     WrongName {
         /// The actual name that was encountered.
-        actual: Box<ExpandedName<'static>>,
+        actual: Box<ExpandedNameBuf>,
         /// The expected name.
-        expected: Box<ExpandedName<'static>>,
+        expected: Box<ExpandedNameBuf>,
     },
     /// Error for when a field is missing.
     #[error("Missing field: {0}")]
@@ -525,8 +525,8 @@ impl de::Error for XmlValueDeserializerError {
 
     fn wrong_name(name: &ExpandedName<'_>, expected: &ExpandedName<'_>) -> Self {
         Self::WrongName {
-            actual: Box::new(name.clone().into_owned()),
-            expected: Box::new(expected.clone().into_owned()),
+            actual: Box::new(name.into_owned()),
+            expected: Box::new(expected.into_owned()),
         }
     }
 

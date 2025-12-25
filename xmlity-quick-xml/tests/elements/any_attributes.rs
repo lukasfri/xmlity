@@ -1,7 +1,9 @@
+use std::str::FromStr;
 use xmlity::{
     de::DeserializationGroupBuilder,
     value::{XmlAttribute, XmlText},
-    DeserializationGroup, Deserialize, ExpandedName, LocalName, SerializationGroup, Serialize,
+    DeserializationGroup, Deserialize, ExpandedNameBuf, LocalNameBuf, SerializationGroup,
+    Serialize,
 };
 
 use crate::define_test;
@@ -79,7 +81,7 @@ define_test!(
         A {
             any_attributes: AnyAttributes {
                 attributes: vec![XmlAttribute::new(
-                    ExpandedName::new(LocalName::new_dangerous("test"), None),
+                    ExpandedNameBuf::new(LocalNameBuf::from_str("test").unwrap(), None),
                     XmlText::new("testVal")
                 )],
             }
@@ -108,7 +110,7 @@ define_test!(
             b: B {
                 any_attributes: AnyAttributes {
                     attributes: vec![XmlAttribute::new(
-                        ExpandedName::new(LocalName::new_dangerous("test"), None),
+                        ExpandedNameBuf::new(LocalNameBuf::from_str("test").unwrap(), None),
                         XmlText::new("testVal")
                     )],
                 }

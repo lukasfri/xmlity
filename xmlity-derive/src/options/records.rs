@@ -99,7 +99,7 @@ pub mod roots {
                 return Ok(None);
             };
 
-            let opts = Self::from_attributes(&[attr.clone()])?;
+            let opts = Self::from_attributes(std::slice::from_ref(attr))?;
             if opts.namespace_expr.is_some() && opts.namespace.is_some() {
                 return Err(DeriveError::custom(
                     "Cannot specify both `namespace` and `namespace_expr`",
@@ -172,7 +172,7 @@ pub mod roots {
                 return Ok(None);
             };
 
-            let opts = Self::from_attributes(&[attr.clone()])?;
+            let opts = Self::from_attributes(std::slice::from_ref(attr))?;
             Ok(Some(opts))
         }
     }
@@ -248,7 +248,7 @@ pub mod roots {
                 return Ok(None);
             };
 
-            let opts = Self::from_attributes(&[attr.clone()])?;
+            let opts = Self::from_attributes(std::slice::from_ref(attr))?;
             Ok(Some(opts))
         }
 
@@ -314,7 +314,7 @@ pub mod roots {
                 return Ok(None);
             };
 
-            let opts = Self::from_attributes(&[attr.clone()])?;
+            let opts = Self::from_attributes(std::slice::from_ref(attr))?;
             Ok(Some(opts))
         }
     }

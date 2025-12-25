@@ -65,7 +65,7 @@ impl<Ok, Err: ser::Error> crate::ser::SerializeElement for NoopDeSerializer<Ok, 
 
     fn preferred_prefix(
         &mut self,
-        _preferred_prefix: Option<crate::Prefix<'_>>,
+        _preferred_prefix: Option<&crate::Prefix>,
     ) -> Result<Self::Ok, Self::Error> {
         unreachable!("Self has infallible child - cannot be constructed and thus cannot be used.")
     }

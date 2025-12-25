@@ -35,25 +35,27 @@ impl<'a> HasQuickXmlAlternative for QName<'a> {
 
     fn from_quick_xml(quick_xml: Self::QuickXmlAlternative) -> Self {
         QName::new(
-            quick_xml.prefix().map(Prefix::from_quick_xml),
-            LocalName::from_quick_xml(quick_xml.local_name()),
+            quick_xml.prefix().map(<&Prefix>::from_quick_xml),
+            <&LocalName>::from_quick_xml(quick_xml.local_name()),
         )
     }
 }
 
-impl<'a> HasQuickXmlAlternative for Prefix<'a> {
+impl<'a> HasQuickXmlAlternative for &'a Prefix {
     type QuickXmlAlternative = QuickPrefix<'a>;
     fn from_quick_xml(quick_xml: Self::QuickXmlAlternative) -> Self {
-        Self::new(str::from_utf8(quick_xml.into_inner()).expect("prefix should be valid utf8"))
+        Prefix::new(str::from_utf8(quick_xml.into_inner()).expect("prefix should be valid utf8"))
             .expect("A quick xml prefix should be valid")
     }
 }
 
-impl<'a> HasQuickXmlAlternative for LocalName<'a> {
+impl<'a> HasQuickXmlAlternative for &'a LocalName {
     type QuickXmlAlternative = QuickLocalName<'a>;
     fn from_quick_xml(quick_xml: Self::QuickXmlAlternative) -> Self {
-        Self::new(str::from_utf8(quick_xml.into_inner()).expect("local name should be valid utf8"))
-            .expect("A quick xml local name should be valid")
+        LocalName::new(
+            str::from_utf8(quick_xml.into_inner()).expect("local name should be valid utf8"),
+        )
+        .expect("A quick xml local name should be valid")
     }
 }
 
@@ -69,7 +71,7 @@ impl OwnedQuickName {
     }
 }
 
-fn xml_namespace_from_resolve_result(value: ResolveResult<'_>) -> Option<XmlNamespace<'_>> {
+fn xml_namespace_from_resolve_result(value: ResolveResult<'_>) -> Option<&XmlNamespace> {
     match value {
         ResolveResult::Bound(namespace) => Some(
             XmlNamespace::new(str::from_utf8(namespace.0).expect("namespace should be valid utf8"))
@@ -82,17 +84,17 @@ fn xml_namespace_from_resolve_result(value: ResolveResult<'_>) -> Option<XmlName
 /// An XML namespace declaration/singular mapping from a prefix to a namespace.
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct XmlnsDeclaration<'a> {
-    pub prefix: Prefix<'a>,
-    pub namespace: XmlNamespace<'a>,
+    pub prefix: &'a Prefix,
+    pub namespace: &'a XmlNamespace,
 }
 
 impl<'a> XmlnsDeclaration<'a> {
-    pub fn new(prefix: Prefix<'a>, namespace: XmlNamespace<'a>) -> Self {
+    pub fn new(prefix: &'a Prefix, namespace: &'a XmlNamespace) -> Self {
         Self { prefix, namespace }
     }
 
     /// Returns the QName for the XML namespace declaration.
-    pub fn xmlns_qname(prefix: Prefix<'_>) -> QName<'_> {
+    pub fn xmlns_qname(prefix: &Prefix) -> QName<'_> {
         if prefix.is_default() {
             QName::new(
                 None,
@@ -101,7 +103,7 @@ impl<'a> XmlnsDeclaration<'a> {
         } else {
             QName::new(
                 Some(Prefix::new("xmlns").expect("xmlns is a valid prefix")),
-                LocalName::from(prefix),
+                <&LocalName>::from(prefix),
             )
         }
     }

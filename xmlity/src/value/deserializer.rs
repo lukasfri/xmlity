@@ -385,7 +385,7 @@ impl<'de> ElementAccess<'de> for XmlElementAccess<'de, '_> {
         Self: 'a;
 
     fn name(&self) -> ExpandedName<'_> {
-        self.element.name.clone()
+        self.element.name.as_ref()
     }
 
     fn children(self) -> Result<Self::ChildrenAccess, Self::Error> {

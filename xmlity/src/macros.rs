@@ -74,21 +74,21 @@ macro_rules! xml_internal {
     // Element adding attribute with namespace
     (@seqelem $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] $element_name:literal {$element_namespace:expr} [$($attributes:expr),*] $attribute_name:literal:$attribute_namespace:literal = $attribute_value:literal $($rest:tt)*) => {
         $crate::xml_internal!(@seqelem $unwrapped_if_single $element_type [$($seq_elements),*] $element_name {$element_namespace} [$($attributes,)* $crate::value::XmlAttribute::new(
-            $crate::ExpandedName::new(<$crate::LocalName as std::str::FromStr>::from_str($attribute_name).unwrap(), Some(<$crate::XmlNamespace as std::str::FromStr>::from_str($attribute_namespace).unwrap())),
+            $crate::ExpandedNameBuf::new(<$crate::LocalNameBuf as std::str::FromStr>::from_str($attribute_name).unwrap(), Some(<$crate::XmlNamespaceBuf as std::str::FromStr>::from_str($attribute_namespace).unwrap())),
             $attribute_value
         )] $($rest)*)
     };
     // Element adding attribute without namespace
     (@seqelem $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] $element_name:literal {$element_namespace:expr} [$($attributes:expr),*] $attribute_name:literal = $attribute_value:literal $($rest:tt)*) => {
         $crate::xml_internal!(@seqelem $unwrapped_if_single $element_type [$($seq_elements),*] $element_name {$element_namespace} [$($attributes,)* $crate::value::XmlAttribute::new(
-            $crate::ExpandedName::new(<$crate::LocalName as std::str::FromStr>::from_str($attribute_name).unwrap(), $element_namespace),
+            $crate::ExpandedNameBuf::new(<$crate::LocalNameBuf as std::str::FromStr>::from_str($attribute_name).unwrap(), $element_namespace),
             $attribute_value
         )] $($rest)*)
     };
     // Element end without children
     (@seqelem $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] $element_name:literal {$element_namespace:expr} [$($attributes:expr),*] /> $($rest:tt)*) => {
         $crate::xml_internal!(@seq $unwrapped_if_single $element_type [$($seq_elements,)* $crate::value::XmlElement::new(
-            $crate::ExpandedName::new(<$crate::LocalName as std::str::FromStr>::from_str($element_name).unwrap(), $element_namespace),
+            $crate::ExpandedNameBuf::new(<$crate::LocalNameBuf as std::str::FromStr>::from_str($element_name).unwrap(), $element_namespace),
         ).with_attributes::<$crate::value::XmlAttribute, _>(vec![$($attributes),*])] $($rest)*)
     };
     // Element end with children
@@ -96,7 +96,7 @@ macro_rules! xml_internal {
         $crate::xml_internal!(@seq $unwrapped_if_single $element_type [$($seq_elements,)* {
             assert_eq!($element_name, $name2, "Starting and ending element names must match");
             $crate::value::XmlElement::new(
-                $crate::ExpandedName::new(<$crate::LocalName as std::str::FromStr>::from_str($element_name).unwrap(), $element_namespace),
+                $crate::ExpandedNameBuf::new(<$crate::LocalNameBuf as std::str::FromStr>::from_str($element_name).unwrap(), $element_namespace),
             ).with_attributes::<$crate::value::XmlAttribute, _>(vec![$($attributes),*])
             .with_children::<$crate::value::XmlChild, _>($crate::xml_internal!(@seq false "child" [] $($children)*))
         }] $($rest)*)
@@ -105,7 +105,7 @@ macro_rules! xml_internal {
     // Element start
     //With namespace
     (@seq $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] <$element_name:literal : $element_namespace:literal $($rest:tt)*) => {
-        $crate::xml_internal!(@seqelem $unwrapped_if_single $element_type [$($seq_elements),*] $element_name {Some(<$crate::XmlNamespace as std::str::FromStr>::from_str($element_namespace).unwrap())} [] $($rest)*)
+        $crate::xml_internal!(@seqelem $unwrapped_if_single $element_type [$($seq_elements),*] $element_name {Some(<$crate::XmlNamespaceBuf as std::str::FromStr>::from_str($element_namespace).unwrap())} [] $($rest)*)
     };
     //Without namespace
     (@seq $unwrapped_if_single:tt $element_type:tt [$($seq_elements:expr),*] <$element_name:literal $($rest:tt)*) => {

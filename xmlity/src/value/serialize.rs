@@ -60,7 +60,7 @@ impl Serialize for XmlElement {
     where
         S: Serializer,
     {
-        let element = serializer.serialize_element(&self.name)?;
+        let element = serializer.serialize_element(&self.name.as_ref())?;
 
         let mut attributes = element.serialize_attributes()?;
         for attr in &self.attributes {
@@ -134,7 +134,7 @@ impl SerializeAttribute for XmlAttribute {
     where
         S: AttributeSerializer,
     {
-        let attr = serializer.serialize_attribute(&self.name)?;
+        let attr = serializer.serialize_attribute(&self.name.as_ref())?;
 
         attr.end(&self.value)
     }

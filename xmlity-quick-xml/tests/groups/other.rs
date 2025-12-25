@@ -1,6 +1,8 @@
+use std::str::FromStr;
+
 use pretty_assertions::assert_eq;
 use xmlity::{
-    value::XmlText, DeserializationGroup, Deserialize, LocalName, SerializationGroup, Serialize,
+    value::XmlText, DeserializationGroup, Deserialize, LocalNameBuf, SerializationGroup, Serialize,
     XmlValue,
 };
 
@@ -31,7 +33,7 @@ pub struct C {
 #[xgroup(children_order = "strict")]
 pub struct FGroup {
     #[xattribute(name = "name", optional, default)]
-    pub name: Option<LocalName<'static>>,
+    pub name: Option<LocalNameBuf>,
     #[xattribute(name = "type", optional, default)]
     pub type_: Option<String>,
     #[xvalue(default)]
@@ -104,7 +106,7 @@ fn total_test() {
         b: Some(B),
         h: Box::new(H {
             attribute: vec![E::F(Box::new(FGroup {
-                name: Some(LocalName::new_dangerous("mixed")),
+                name: Some(LocalNameBuf::from_str("mixed").unwrap()),
                 type_: Some("boolean".to_string()),
                 c: Some(Box::new(C {
                     id: None,
