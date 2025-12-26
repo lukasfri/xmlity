@@ -25,9 +25,9 @@ To get started, we recommend you check out [the documentation][docs.rs] and [the
 ```toml
 [dependencies]
 
-xmlity = { version = "0.0.8", features = ["derive"] }
+xmlity = { version = "0.0.9", features = ["derive"] }
 
-xmlity-quick-xml = "0.0.8"
+xmlity-quick-xml = "0.0.9"
 ```
 
 2. Write defintions and use:
