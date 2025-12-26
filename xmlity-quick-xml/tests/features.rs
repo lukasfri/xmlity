@@ -1,3 +1,4 @@
+pub mod bugs;
 pub mod elements;
 pub mod groups;
 pub mod other;
