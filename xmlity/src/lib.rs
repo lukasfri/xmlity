@@ -199,6 +199,38 @@ impl From<ExpandedName<'_>> for ExpandedNameBuf {
     }
 }
 
+/// An error that can occur when parsing a [`QName`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ExpandedNameParseError {
+    /// The [`XmlNamespace`] is invalid.
+    #[error("Invalid namespace: {0}")]
+    InvalidNamespace(#[from] XmlNamespaceParseError),
+    /// The [`LocalName`] is invalid.
+    #[error("Invalid local name: {0}")]
+    InvalidLocalName(#[from] LocalNameParseError),
+}
+
+impl FromStr for ExpandedNameBuf {
+    type Err = ExpandedNameParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        if !s.starts_with('{') {
+            let local_name = s.parse()?;
+
+            return Ok(ExpandedNameBuf::new(local_name, None));
+        }
+
+        let closing_brace_index = s.find('}').ok_or_else(|| {
+            ExpandedNameParseError::InvalidLocalName(LocalNameParseError::InvalidXmlName(
+                InvalidXmlNameError::Empty,
+            ))
+        })?;
+        let namespace = s[1..closing_brace_index].parse()?;
+        let local_name = s[(closing_brace_index + 1)..].parse()?;
+        Ok(ExpandedNameBuf::new(local_name, Some(namespace)))
+    }
+}
+
 impl Display for ExpandedNameBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.as_ref().fmt(f)
@@ -211,17 +243,6 @@ impl Display for ExpandedNameBuf {
 pub struct QName<'a> {
     prefix: Option<&'a Prefix>,
     local_name: &'a LocalName,
-}
-
-/// An error that can occur when parsing a [`QName`].
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum QNameParseError {
-    /// The [`Prefix`] is invalid.
-    #[error("Invalid prefix: {0}")]
-    InvalidPrefix(#[from] PrefixParseError),
-    /// The [`LocalName`] is invalid.
-    #[error("Invalid local name: {0}")]
-    InvalidLocalName(#[from] LocalNameParseError),
 }
 
 impl<'a> QName<'a> {
@@ -286,6 +307,17 @@ impl QNameBuf {
     }
 }
 
+/// An error that can occur when parsing a [`QName`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum QNameParseError {
+    /// The [`Prefix`] is invalid.
+    #[error("Invalid prefix: {0}")]
+    InvalidPrefix(#[from] PrefixParseError),
+    /// The [`LocalName`] is invalid.
+    #[error("Invalid local name: {0}")]
+    InvalidLocalName(#[from] LocalNameParseError),
+}
+
 impl FromStr for QNameBuf {
     type Err = QNameParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -332,7 +364,7 @@ impl PartialEq<QNameBuf> for QName<'_> {
 pub struct XmlNamespace(str);
 
 /// An error that can occur when parsing a [`XmlNamespace`].
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum XmlNamespaceParseError {}
 
 impl XmlNamespace {
