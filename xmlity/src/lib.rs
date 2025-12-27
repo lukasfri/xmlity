@@ -205,6 +205,9 @@ pub enum ExpandedNameParseError {
     /// The [`XmlNamespace`] is invalid.
     #[error("Invalid namespace: {0}")]
     InvalidNamespace(#[from] XmlNamespaceParseError),
+    /// The expanded name is missing a closing brace.
+    #[error("Missing closing brace in expanded name")]
+    MissingClosingBrace,
     /// The [`LocalName`] is invalid.
     #[error("Invalid local name: {0}")]
     InvalidLocalName(#[from] LocalNameParseError),
@@ -220,11 +223,9 @@ impl FromStr for ExpandedNameBuf {
             return Ok(ExpandedNameBuf::new(local_name, None));
         }
 
-        let closing_brace_index = s.find('}').ok_or_else(|| {
-            ExpandedNameParseError::InvalidLocalName(LocalNameParseError::InvalidXmlName(
-                InvalidXmlNameError::Empty,
-            ))
-        })?;
+        let closing_brace_index = s
+            .find('}')
+            .ok_or(ExpandedNameParseError::MissingClosingBrace)?;
         let namespace = s[1..closing_brace_index].parse()?;
         let local_name = s[(closing_brace_index + 1)..].parse()?;
         Ok(ExpandedNameBuf::new(local_name, Some(namespace)))
