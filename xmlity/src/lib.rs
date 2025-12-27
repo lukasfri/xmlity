@@ -146,7 +146,7 @@ impl<'a> ExpandedName<'a> {
 impl Display for ExpandedName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(namespace) = &self.namespace {
-            write!(f, "{}:{}", namespace, self.local_name)
+            write!(f, "{{{}}}{}", namespace, self.local_name)
         } else {
             write!(f, "{}", self.local_name)
         }
@@ -839,21 +839,18 @@ mod tests {
     }
 
     #[rstest]
-    #[case::basic("localName", None)]
-    #[case::with_namespace("localName", Some(XmlNamespace::new("http://example.com").unwrap()))]
-    fn test_expanded_name(#[case] local_name_text: &str, #[case] namespace: Option<&XmlNamespace>) {
+    #[case::basic("localName", None, "localName")]
+    #[case::with_namespace("localName", Some(XmlNamespace::new("http://example.com").unwrap()), "{http://example.com}localName")]
+    fn test_expanded_name(
+        #[case] local_name_text: &str,
+        #[case] namespace: Option<&XmlNamespace>,
+        #[case] expanded_name_text: &str,
+    ) {
         let local_name = LocalName::new(local_name_text).unwrap();
         let expanded_name = ExpandedName::new(local_name, namespace.clone());
         assert_eq!(expanded_name.local_name(), local_name);
         assert_eq!(expanded_name.namespace(), &namespace);
-        if namespace.is_some() {
-            assert_eq!(
-                expanded_name.to_string(),
-                format!("{}:{}", namespace.unwrap(), local_name_text)
-            );
-        } else {
-            assert_eq!(expanded_name.to_string(), local_name_text.to_string());
-        }
+        assert_eq!(expanded_name.to_string(), expanded_name_text);
         assert_eq!(expanded_name.local_name.as_str(), local_name_text);
     }
 
