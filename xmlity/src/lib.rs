@@ -145,7 +145,11 @@ impl<'a> ExpandedName<'a> {
 
 impl Display for ExpandedName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.local_name.fmt(f)
+        if let Some(namespace) = &self.namespace {
+            write!(f, "{{{}}}{}", namespace, self.local_name)
+        } else {
+            write!(f, "{}", self.local_name)
+        }
     }
 }
 
@@ -195,23 +199,63 @@ impl From<ExpandedName<'_>> for ExpandedNameBuf {
     }
 }
 
+/// An error that can occur when parsing an [`ExpandedNameBuf`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ExpandedNameParseError {
+    /// The [`XmlNamespace`] is invalid.
+    #[error("Invalid namespace: {0}")]
+    InvalidNamespace(#[from] XmlNamespaceParseError),
+    /// The expanded name is missing a closing brace.
+    #[error("Missing closing brace in expanded name")]
+    MissingClosingBrace,
+    /// The [`LocalName`] is invalid.
+    #[error("Invalid local name: {0}")]
+    InvalidLocalName(#[from] LocalNameParseError),
+}
+
+impl FromStr for ExpandedNameBuf {
+    type Err = ExpandedNameParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        if !s.starts_with('{') {
+            let local_name = s.parse()?;
+
+            return Ok(ExpandedNameBuf::new(local_name, None));
+        }
+
+        let closing_brace_index = s
+            .find('}')
+            .ok_or(ExpandedNameParseError::MissingClosingBrace)?;
+        let namespace = s[1..closing_brace_index].parse()?;
+        let local_name = s[(closing_brace_index + 1)..].parse()?;
+        Ok(ExpandedNameBuf::new(local_name, Some(namespace)))
+    }
+}
+
+impl Display for ExpandedNameBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_ref().fmt(f)
+    }
+}
+
+impl PartialEq<ExpandedName<'_>> for ExpandedNameBuf {
+    fn eq(&self, other: &ExpandedName<'_>) -> bool {
+        self.as_ref() == *other
+    }
+}
+
+impl PartialEq<ExpandedNameBuf> for ExpandedName<'_> {
+    fn eq(&self, other: &ExpandedNameBuf) -> bool {
+        *self == other.as_ref()
+    }
+}
+
 /// # XML Qualified Name
 /// A [`QName`] is a [`LocalName`] together with a namespace [`Prefix`], indicating it belongs to a specific declared [`XmlNamespace`].
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct QName<'a> {
     prefix: Option<&'a Prefix>,
     local_name: &'a LocalName,
-}
-
-/// An error that can occur when parsing a [`QName`].
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum QNameParseError {
-    /// The [`Prefix`] is invalid.
-    #[error("Invalid prefix: {0}")]
-    InvalidPrefix(#[from] PrefixParseError),
-    /// The [`LocalName`] is invalid.
-    #[error("Invalid local name: {0}")]
-    InvalidLocalName(#[from] LocalNameParseError),
 }
 
 impl<'a> QName<'a> {
@@ -276,9 +320,21 @@ impl QNameBuf {
     }
 }
 
+/// An error that can occur when parsing a [`QNameBuf`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum QNameParseError {
+    /// The [`Prefix`] is invalid.
+    #[error("Invalid prefix: {0}")]
+    InvalidPrefix(#[from] PrefixParseError),
+    /// The [`LocalName`] is invalid.
+    #[error("Invalid local name: {0}")]
+    InvalidLocalName(#[from] LocalNameParseError),
+}
+
 impl FromStr for QNameBuf {
     type Err = QNameParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
         let (prefix, local_name) = s.split_once(':').unwrap_or(("", s));
 
         let prefix = if prefix.is_empty() {
@@ -304,13 +360,25 @@ impl From<QName<'_>> for QNameBuf {
     }
 }
 
+impl PartialEq<QName<'_>> for QNameBuf {
+    fn eq(&self, other: &QName<'_>) -> bool {
+        self.as_ref() == *other
+    }
+}
+
+impl PartialEq<QNameBuf> for QName<'_> {
+    fn eq(&self, other: &QNameBuf) -> bool {
+        *self == other.as_ref()
+    }
+}
+
 /// # XML Namespace
 /// A namespace URI, to which [`LocalNames`](`LocalName`) are scoped under.
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct XmlNamespace(str);
 
 /// An error that can occur when parsing a [`XmlNamespace`].
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum XmlNamespaceParseError {}
 
 impl XmlNamespace {
@@ -376,6 +444,25 @@ impl Serialize for XmlNamespace {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct XmlNamespaceBuf(String);
 
+impl XmlNamespaceBuf {
+    /// Creates a new [`XmlNamespaceBuf`] from a string without validating it.
+    ///
+    /// # Safety
+    /// The caller must ensure that the value is a valid URI.
+    pub const unsafe fn new_unchecked(value: String) -> Self {
+        Self(value)
+    }
+
+    /// Creates a new [`XmlNamespaceBuf`] from a string.
+    pub fn new(value: String) -> Result<Self, XmlNamespaceParseError> {
+        // Validate the value
+        XmlNamespace::new(&value)?;
+
+        // SAFETY: The value has been validated.
+        Ok(unsafe { Self::new_unchecked(value) })
+    }
+}
+
 impl Borrow<XmlNamespace> for XmlNamespaceBuf {
     fn borrow(&self) -> &XmlNamespace {
         // SAFETY: All XmlNamespaceBufs are valid XmlNamespaces.
@@ -400,8 +487,8 @@ impl ToOwned for XmlNamespace {
 impl FromStr for XmlNamespaceBuf {
     type Err = XmlNamespaceParseError;
 
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        XmlNamespace::new(value).map(ToOwned::to_owned)
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        XmlNamespace::new(s.trim()).map(ToOwned::to_owned)
     }
 }
 
@@ -411,6 +498,24 @@ impl<'de> Deserialize<'de> for XmlNamespaceBuf {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+    }
+}
+
+impl Display for XmlNamespaceBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.deref().fmt(f)
+    }
+}
+
+impl PartialEq<XmlNamespace> for XmlNamespaceBuf {
+    fn eq(&self, other: &XmlNamespace) -> bool {
+        self.deref() == other
+    }
+}
+
+impl PartialEq<XmlNamespaceBuf> for XmlNamespace {
+    fn eq(&self, other: &XmlNamespaceBuf) -> bool {
+        self == other.deref()
     }
 }
 
@@ -530,7 +635,7 @@ impl ToOwned for Prefix {
 impl FromStr for PrefixBuf {
     type Err = PrefixParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Prefix::new(s).map(ToOwned::to_owned)
+        Prefix::new(s.trim()).map(ToOwned::to_owned)
     }
 }
 
@@ -568,6 +673,24 @@ impl<'de> Deserialize<'de> for PrefixBuf {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+    }
+}
+
+impl Display for PrefixBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.deref().fmt(f)
+    }
+}
+
+impl PartialEq<Prefix> for PrefixBuf {
+    fn eq(&self, other: &Prefix) -> bool {
+        self.deref() == other
+    }
+}
+
+impl PartialEq<PrefixBuf> for Prefix {
+    fn eq(&self, other: &PrefixBuf) -> bool {
+        self == other.deref()
     }
 }
 
@@ -677,7 +800,7 @@ impl ToOwned for LocalName {
 impl FromStr for LocalNameBuf {
     type Err = LocalNameParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        LocalName::new(s).map(ToOwned::to_owned)
+        LocalName::new(s.trim()).map(ToOwned::to_owned)
     }
 }
 
@@ -696,6 +819,24 @@ impl<'de> Deserialize<'de> for LocalNameBuf {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+    }
+}
+
+impl Display for LocalNameBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.deref().fmt(f)
+    }
+}
+
+impl PartialEq<LocalName> for LocalNameBuf {
+    fn eq(&self, other: &LocalName) -> bool {
+        self.deref() == other
+    }
+}
+
+impl PartialEq<LocalNameBuf> for LocalName {
+    fn eq(&self, other: &LocalNameBuf) -> bool {
+        self == other.deref()
     }
 }
 
@@ -744,14 +885,18 @@ mod tests {
     }
 
     #[rstest]
-    #[case::basic("localName", None)]
-    #[case::with_namespace("localName", Some(XmlNamespace::new("http://example.com").unwrap()))]
-    fn test_expanded_name(#[case] local_name_text: &str, #[case] namespace: Option<&XmlNamespace>) {
+    #[case::basic("localName", None, "localName")]
+    #[case::with_namespace("localName", Some(XmlNamespace::new("http://example.com").unwrap()), "{http://example.com}localName")]
+    fn test_expanded_name(
+        #[case] local_name_text: &str,
+        #[case] namespace: Option<&XmlNamespace>,
+        #[case] expanded_name_text: &str,
+    ) {
         let local_name = LocalName::new(local_name_text).unwrap();
         let expanded_name = ExpandedName::new(local_name, namespace.clone());
         assert_eq!(expanded_name.local_name(), local_name);
         assert_eq!(expanded_name.namespace(), &namespace);
-        assert_eq!(expanded_name.to_string(), local_name_text);
+        assert_eq!(expanded_name.to_string(), expanded_name_text);
         assert_eq!(expanded_name.local_name.as_str(), local_name_text);
     }
 
@@ -760,6 +905,17 @@ mod tests {
     fn test_qname(#[case] qname_text: &str) {
         let qname = QNameBuf::from_str(qname_text).unwrap();
         assert_eq!(qname.to_string(), qname_text);
+    }
+
+    #[rstest]
+    #[case::no_namespace("localName", ExpandedName::new(LocalName::new("localName").unwrap(), None))]
+    #[case::basic("{http://example.com}localName", ExpandedName::new(LocalName::new("localName").unwrap(), Some(XmlNamespace::new("http://example.com").unwrap())))]
+    fn test_expanded_name_from_str(
+        #[case] expanded_name_text: &str,
+        #[case] expected_expanded_name: ExpandedName<'static>,
+    ) {
+        let expanded_name = ExpandedNameBuf::from_str(expanded_name_text).unwrap();
+        assert_eq!(expanded_name.as_ref(), expected_expanded_name);
     }
 
     #[rstest]
