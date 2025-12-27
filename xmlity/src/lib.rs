@@ -846,7 +846,14 @@ mod tests {
         let expanded_name = ExpandedName::new(local_name, namespace.clone());
         assert_eq!(expanded_name.local_name(), local_name);
         assert_eq!(expanded_name.namespace(), &namespace);
-        assert_eq!(expanded_name.to_string(), local_name_text);
+        if namespace.is_some() {
+            assert_eq!(
+                expanded_name.to_string(),
+                format!("{}:{}", namespace.unwrap(), local_name_text)
+            );
+        } else {
+            assert_eq!(expanded_name.to_string(), local_name_text.to_string());
+        }
         assert_eq!(expanded_name.local_name.as_str(), local_name_text);
     }
 
