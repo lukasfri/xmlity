@@ -145,7 +145,11 @@ impl<'a> ExpandedName<'a> {
 
 impl Display for ExpandedName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.local_name.fmt(f)
+        if let Some(namespace) = &self.namespace {
+            write!(f, "{}:{}", namespace, self.local_name)
+        } else {
+            write!(f, "{}", self.local_name)
+        }
     }
 }
 
@@ -192,6 +196,12 @@ impl ExpandedNameBuf {
 impl From<ExpandedName<'_>> for ExpandedNameBuf {
     fn from(value: ExpandedName<'_>) -> Self {
         value.into_owned()
+    }
+}
+
+impl Display for ExpandedNameBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_ref().fmt(f)
     }
 }
 
@@ -304,6 +314,18 @@ impl From<QName<'_>> for QNameBuf {
     }
 }
 
+impl PartialEq<QName<'_>> for QNameBuf {
+    fn eq(&self, other: &QName<'_>) -> bool {
+        self.as_ref() == *other
+    }
+}
+
+impl PartialEq<QNameBuf> for QName<'_> {
+    fn eq(&self, other: &QNameBuf) -> bool {
+        *self == other.as_ref()
+    }
+}
+
 /// # XML Namespace
 /// A namespace URI, to which [`LocalNames`](`LocalName`) are scoped under.
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -376,6 +398,25 @@ impl Serialize for XmlNamespace {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct XmlNamespaceBuf(String);
 
+impl XmlNamespaceBuf {
+    /// Creates a new [`XmlNamespaceBuf`] from a string without validating it.
+    ///
+    /// # Safety
+    /// The caller must ensure that the value is a valid URI.
+    pub const unsafe fn new_unchecked(value: String) -> Self {
+        Self(value)
+    }
+
+    /// Creates a new [`XmlNamespaceBuf`] from a string.
+    pub fn new(value: String) -> Result<Self, XmlNamespaceParseError> {
+        // Validate the value
+        XmlNamespace::new(&value)?;
+
+        // SAFETY: The value has been validated.
+        Ok(unsafe { Self::new_unchecked(value) })
+    }
+}
+
 impl Borrow<XmlNamespace> for XmlNamespaceBuf {
     fn borrow(&self) -> &XmlNamespace {
         // SAFETY: All XmlNamespaceBufs are valid XmlNamespaces.
@@ -411,6 +452,24 @@ impl<'de> Deserialize<'de> for XmlNamespaceBuf {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+    }
+}
+
+impl Display for XmlNamespaceBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.deref().fmt(f)
+    }
+}
+
+impl PartialEq<XmlNamespace> for XmlNamespaceBuf {
+    fn eq(&self, other: &XmlNamespace) -> bool {
+        self.deref() == other
+    }
+}
+
+impl PartialEq<XmlNamespaceBuf> for XmlNamespace {
+    fn eq(&self, other: &XmlNamespaceBuf) -> bool {
+        self == other.deref()
     }
 }
 
@@ -571,6 +630,24 @@ impl<'de> Deserialize<'de> for PrefixBuf {
     }
 }
 
+impl Display for PrefixBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.deref().fmt(f)
+    }
+}
+
+impl PartialEq<Prefix> for PrefixBuf {
+    fn eq(&self, other: &Prefix) -> bool {
+        self.deref() == other
+    }
+}
+
+impl PartialEq<PrefixBuf> for Prefix {
+    fn eq(&self, other: &PrefixBuf) -> bool {
+        self == other.deref()
+    }
+}
+
 /// # XML Local Name
 /// A local name of an XML element or attribute within a [`XmlNamespace`].
 ///
@@ -696,6 +773,24 @@ impl<'de> Deserialize<'de> for LocalNameBuf {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_any(types::string::FromStrVisitor::default())
+    }
+}
+
+impl Display for LocalNameBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.deref().fmt(f)
+    }
+}
+
+impl PartialEq<LocalName> for LocalNameBuf {
+    fn eq(&self, other: &LocalName) -> bool {
+        self.deref() == other
+    }
+}
+
+impl PartialEq<LocalNameBuf> for LocalName {
+    fn eq(&self, other: &LocalNameBuf) -> bool {
+        self == other.deref()
     }
 }
 
