@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.9...xmlity-quick-xml-v0.0.10) - 2025-12-27
+
+### Other
+
+- updated the following local packages: xmlity, xmlity
+
 ## [0.0.9](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.8...xmlity-quick-xml-v0.0.9) - 2025-12-26
 
 ### Added
