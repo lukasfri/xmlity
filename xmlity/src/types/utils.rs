@@ -281,6 +281,28 @@ impl<T> XmlRoot<T> {
         );
         self
     }
+
+    /// Gets the first value element of the XML document, if any.
+    pub fn value(&self) -> Option<&T> {
+        self.elements.iter().find_map(|e| {
+            if let XmlRootTop::Value(v) = e {
+                Some(v)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Consumes the XML document and returns the first value element, if any.
+    pub fn into_value(self) -> Option<T> {
+        self.elements.into_iter().find_map(|e| {
+            if let XmlRootTop::Value(v) = e {
+                Some(v)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 impl<T> Default for XmlRoot<T> {
