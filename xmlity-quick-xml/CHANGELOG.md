@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.9...xmlity-quick-xml-v0.0.10) - 2026-01-16
+
+### Added
+
+- *(types)* Adds method `value` and `into_value` to easily get values from `XmlRoot<T>`. ([#153](https://github.com/lukasfri/xmlity/pull/153))
+
+### Other
+
+- *(deps)* bump quick-xml from 0.38.0 to 0.39.0 ([#152](https://github.com/lukasfri/xmlity/pull/152))
+
 ## [0.0.9](https://github.com/lukasfri/xmlity/compare/xmlity-quick-xml-v0.0.8...xmlity-quick-xml-v0.0.9) - 2025-12-26
 
 ### Added

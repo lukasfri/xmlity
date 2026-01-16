@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.10](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.9...xmlity-v0.0.10) - 2026-01-16
+
+### Added
+
+- *(types)* Adds method `value` and `into_value` to easily get values from `XmlRoot<T>`. ([#153](https://github.com/lukasfri/xmlity/pull/153))
+- [**breaking**] Implement `Display`, `PartialEq<...Buf>` and `FromStr` for basic name types ([#150](https://github.com/lukasfri/xmlity/pull/150))
+
 ## [0.0.9](https://github.com/lukasfri/xmlity/compare/xmlity-v0.0.8...xmlity-v0.0.9) - 2025-12-26
 
 ### Added

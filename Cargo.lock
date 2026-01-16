@@ -945,7 +945,7 @@ checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
 
 [[package]]
 name = "xmlity"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "pretty_assertions",
  "rstest",
@@ -955,7 +955,7 @@ dependencies = [
 
 [[package]]
 name = "xmlity-derive"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "xmlity-quick-xml"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "criterion",
  "ntest",
