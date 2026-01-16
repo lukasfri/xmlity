@@ -197,7 +197,7 @@ impl<'i> Reader<'i> {
         qname: QuickName<'_>,
         attribute: bool,
     ) -> Option<&'a XmlNamespace> {
-        let (resolve_result, _) = self.reader.resolve(qname, attribute);
+        let (resolve_result, _) = self.reader.resolver().resolve(qname, !attribute);
         let namespace = xml_namespace_from_resolve_result(resolve_result);
 
         namespace
